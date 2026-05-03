@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, StatusBar, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import useAuth from '@/auth/useAuth';
 
 // --- Import shared components and data ---
 import Chip from '@/features/onboarding/components/Chip';
@@ -26,7 +29,19 @@ const NavigationItem = ({ href, title }) => (
 
 const ProfileScreen = () => {
   const params = useLocalSearchParams();
+  const router = useRouter();
+  const auth = useAuth();
   const [userInterests, setUserInterests] = useState(new Set(initialUser.interests));
+
+  useFocusEffect(
+    useCallback(() => {
+      StatusBar.setBarStyle('dark-content');
+      if (Platform.OS === 'android') {
+        StatusBar.setBackgroundColor('#FFFFFF');
+        StatusBar.setTranslucent(false);
+      }
+    }, []),
+  );
 
   useEffect(() => {
     if (params.updatedInterests) {
@@ -41,7 +56,14 @@ const ProfileScreen = () => {
     setUserInterests(newInterests);
   };
 
+  const handleLogout = async () => {
+    await auth.logout();
+    router.replace('/(tabs)');
+  };
+
   return (
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Link href="/settings" asChild>
@@ -86,15 +108,21 @@ const ProfileScreen = () => {
         <NavigationItem href="/events/myEvents" title="My Events" />
         <NavigationItem href="/events/joinedEvents" title="Joined Events" />
         <NavigationItem href="/events/savedEvents" title="Saved Events" />
+        <TouchableOpacity style={styles.logoutItem} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Logout</Text>
+          <Feather name="log-out" size={20} color="#E65A3A" />
+        </TouchableOpacity>
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#fff' },
   container: { flex: 1, backgroundColor: '#fff' },
-  header: { alignItems: 'center', paddingTop: 70, paddingBottom: 30, backgroundColor: '#f8f9fa', paddingHorizontal: 30 },
-  settingsButton: { position: 'absolute', top: 60, right: 20, zIndex: 1 },
+  header: { alignItems: 'center', paddingTop: 24, paddingBottom: 30, backgroundColor: '#f8f9fa', paddingHorizontal: 30 },
+  settingsButton: { position: 'absolute', top: 12, right: 20, zIndex: 1 },
   profilePic: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
   name: { fontSize: 24, fontWeight: 'bold', marginTop: 15 },
   email: { fontSize: 16, color: '#888', marginTop: 4 },
@@ -136,6 +164,21 @@ const styles = StyleSheet.create({
   },
   navItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   navItemText: { fontSize: 18, fontWeight: '500' },
+  logoutItem: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#FFF4F1',
+  },
+  logoutText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#E65A3A',
+  },
 });
 
 export default ProfileScreen;

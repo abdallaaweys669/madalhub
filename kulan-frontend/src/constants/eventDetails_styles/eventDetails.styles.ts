@@ -1,183 +1,438 @@
 import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
-  // Main Layout
-  container: { 
-    flex: 1, 
-    backgroundColor: '#fff' 
-  },
-  contentContainer: { 
-    padding: 20, 
-    marginTop: -20, 
-    backgroundColor: '#fff', 
-    borderTopLeftRadius: 20, 
-    borderTopRightRadius: 20 
-  },
-
-  // Header
-  headerImage: { 
-    width: '100%', 
-    height: 280 
-  },
-  headerOverlay: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 16, 
-    paddingTop: 50 
-  },
-  iconButton: { 
-    backgroundColor: 'rgba(0,0,0,0.4)', 
-    borderRadius: 20, 
-    padding: 8 
-  },
-
-  // Info Box
-  title: { 
-    fontSize: 26, 
-    fontWeight: 'bold', 
-    color: '#212529', 
-    marginBottom: 20 
-  },
-  infoBox: { 
-    backgroundColor: '#f8f9fa', 
-    borderRadius: 12, 
-    padding: 16, 
-    marginBottom: 24 
-  },
-  infoRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginBottom: 16 
-  },
-  infoIconBg: { 
-    backgroundColor: '#e9ecef', 
-    padding: 8, 
-    borderRadius: 8 
-  },
-  infoText: { 
-    fontSize: 16, 
-    marginLeft: 16, 
-    color: '#343a40', 
-    fontWeight: '500' 
-  },
-
-  // About Section
-  sectionTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#000000', 
-    marginBottom: 12 
-  },
-  description: { 
-    fontSize: 16, 
-    color: '#6B7280', 
-    lineHeight: 24 
-  },
-  fadeEffect: { 
-    position: 'absolute', 
-    left: 0, 
-    right: 0, 
-    bottom: 0, 
-    height: '100%' 
-  },
-  readMore: { 
-    color: '#2563EB', 
-    fontWeight: 'bold', 
-    fontSize: 16, 
-    marginTop: 8 
-  },
-
-  // Actions & Attendees
-  joinButton: { 
-    backgroundColor: '#0047FF', 
-    paddingVertical: 16, 
-    borderRadius: 30, 
-    alignItems: 'center', 
-    marginVertical: 24 
-  },
-  joinButtonText: { 
-    color: '#fff', 
-    fontSize: 18, 
-    fontWeight: 'bold' 
-  },
-  attendeesContainer: { 
-    alignItems: 'flex-start', 
-    marginBottom: 24 
-  },
-  attendeeImages: { 
-    flexDirection: 'row', 
-    marginBottom: 10 
-  },
-  attendeeImage: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 20, 
-    borderWidth: 2, 
-    borderColor: '#fff' 
-  },
-  attendeesText: { 
-    fontSize: 14, 
-    color: '#6c757d', 
-    fontWeight: '500' 
-  },
-  divider: { 
-    height: 1, 
-    backgroundColor: '#e9ecef', 
-    marginVertical: 24 
-  },
-
-  // Comments Section
-  comment: { 
-    flexDirection: 'row', 
-    marginBottom: 20 
-  },
-  commenterImage: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 20 
-  },
-  commentBody: { 
-    marginLeft: 12, 
-    flex: 1 
-  },
-  commenterName: { 
-    fontWeight: 'bold', 
-    color: '#343a40' 
-  },
-  commentTime: { 
-    color: '#888', 
-    fontWeight: 'normal' 
-  },
-  commentText: { 
-    fontSize: 15, 
-    color: '#495057', 
-    marginTop: 4 
-  },
-  commentInputContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginTop: 10 
-  },
-  inputWrapper: {
+  container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  contentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 120,
+    backgroundColor: '#FFFFFF',
+  },
+  headerWrapper: {
+    height: 260,
+    position: 'relative',
+  },
+  headerActionsRow: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f1f2f6',
-    borderRadius: 25,
-    marginLeft: 12,
-    paddingRight: 8,
   },
-  commentInput: { 
-    flex: 1,
-    paddingVertical: 12, 
-    paddingHorizontal: 16,
-    fontSize: 15,
+  headerImage: {
+    width: '100%',
+    height: 260,
   },
-  sendButton: {
-    backgroundColor: '#0047FF',
+  headerGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(0,0,0,0.4)',
     borderRadius: 20,
-    padding: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  rightHeaderActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  infoBlock: {
+    marginBottom: 10,
+  },
+  typeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F2F3F5',
+    marginTop: 12,
+    marginBottom: 10,
+  },
+  typeBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  title: {
+    fontSize: 23,
+    lineHeight: 30,
+    fontWeight: '600',
+    color: '#111111',
+  },
+  descriptionWrap: {
+    marginTop: 8,
+  },
+  description: {
+    fontSize: 14,
+    color: '#666666',
+    lineHeight: 20,
+  },
+  readMore: {
+    color: '#FF7A00',
+    fontWeight: '600',
+    fontSize: 14,
+    marginTop: 10,
+  },
+  infoSpacing: {
+    height: 16,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  infoIconBg: {
+    padding: 10,
+    backgroundColor: '#F2F3F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    marginRight: 12,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#111111',
+    fontWeight: '600',
+  },
+  infoSubText: {
+    fontSize: 13,
+    color: '#666666',
+    marginTop: 2,
+  },
+  mapContainer: {
+    height: 114,
+    borderRadius: 16,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  mapImage: {
+    borderRadius: 16,
+    resizeMode: 'cover',
+    opacity: 0.22,
+  },
+  mapOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  mapButton: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  mapText: {
+    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FF7A00',
+  },
+  stickyMapButtonWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 84,
+    alignItems: 'center',
+    zIndex: 30,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111111',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  organizationCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  organizationLogo: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    marginRight: 12,
+  },
+  organizationLogoFallback: {
+    backgroundColor: '#FF8C42',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  organizationLogoFallbackText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  organizationTextWrap: {
+    flex: 1,
+  },
+  organizationNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  organizationName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111111',
+  },
+  verifiedBadge: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#22C55E',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  organizationCategory: {
+    fontSize: 13,
+    color: '#666666',
+    marginTop: 2,
+  },
+  speakersList: {
+    gap: 12,
+    paddingRight: 8,
+  },
+  speakerItem: {
+    width: 110,
+    alignItems: 'center',
+  },
+  speakerAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 8,
+  },
+  speakerName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111111',
+    textAlign: 'center',
+  },
+  speakerRole: {
+    marginTop: 3,
+    fontSize: 12,
+    color: '#666666',
+    textAlign: 'center',
+  },
+  sponsorsRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  sponsorCarouselList: {
+    paddingHorizontal: 16,
+    gap: 12,
+    paddingBottom: 2,
+  },
+  sponsorCarouselItem: {
+    width: 94,
+    height: 62,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  sponsorDotsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sponsorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D1D5DB',
+  },
+  sponsorDotActive: {
+    width: 16,
+    backgroundColor: '#FF7A00',
+  },
+  sponsorsRowCentered: {
+    justifyContent: 'center',
+    flexWrap: 'nowrap',
+  },
+  sponsorsRowGrid: {
+    justifyContent: 'center',
+  },
+  sponsorLogoWrap: {
+    width: '22%',
+    minWidth: 88,
+    maxWidth: 104,
+    height: 76,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 0,
+    overflow: 'hidden',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  sponsorLogoWrapCentered: {
+    width: 104,
+    minWidth: 104,
+    maxWidth: 104,
+  },
+  sponsorLogo: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+  },
+  sponsorLogoWrapGrid: {
+    width: '22%',
+    minWidth: 88,
+    maxWidth: 104,
+  },
+  actionsSection: {
+    marginTop: 6,
+  },
+  attendeesContainer: {
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  attendeeImages: {
+    flexDirection: 'row',
+    marginRight: 12,
+  },
+  attendeeImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+  },
+  attendeeFallback: {
+    backgroundColor: '#9CA3AF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attendeesText: {
+    fontSize: 14,
+    color: '#111111',
+    fontWeight: '600',
+  },
+  attendeesArrow: {
+    marginLeft: 'auto',
+    opacity: 0.6,
+  },
+  bottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bottomPriceLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  bottomPriceValue: {
+    fontSize: 26,
+    color: '#111111',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  bottomJoinButton: {
+    minWidth: 164,
+    height: 48,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#FF7A00',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.26,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  bottomJoinButtonGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bottomJoinButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  bottomJoinedActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  bottomGoingButton: {
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FFD7BC',
+    paddingHorizontal: 16,
+    backgroundColor: '#FFF8F2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bottomGoingButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FF7A00',
+  },
+  bottomShareButton: {
+    height: 44,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomShareButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

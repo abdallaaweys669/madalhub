@@ -9,6 +9,6 @@ import { MemberProfile } from 'src/database/entities/member-profile.entity';
   imports: [TypeOrmModule.forFeature([User, MemberProfile])],
   controllers: [MemberController],
   providers: [MemberService],
-  exports: [MemberService],// Export the service so it can be used in other modules (like AuthModule)
+  exports: [MemberService], // Export the service so it can be used in other modules (like AuthModule)
 })
 export class MemberModule {}

@@ -26,14 +26,19 @@ export class Event {
   @Column({ name: 'end_datetime' })
   endDatetime!: Date;
 
-  @Column({ name: 'location_name', nullable: true })
-  locationName!: string;
+  @Column({
+    name: 'location_name',
+    nullable: true,
+    type: 'varchar',
+    length: 255,
+  })
+  locationName!: string | null;
 
-  @Column({ name: 'location_address', nullable: true })
-  locationAddress!: string;
+  @Column({ name: 'location_address', nullable: true, type: 'text' })
+  locationAddress!: string | null;
 
-  @Column({ name: 'cover_image', nullable: true })
-  coverImage!: string;
+  @Column({ name: 'cover_image', nullable: true, type: 'varchar', length: 500 })
+  coverImage!: string | null;
 
   @Column({ name: 'total_price', default: 0 })
   totalPrice!: number;

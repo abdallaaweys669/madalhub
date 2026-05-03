@@ -1,19 +1,26 @@
 import React, { useEffect, useRef } from "react";
 import { View, Animated, StyleSheet, Dimensions, Easing } from "react-native";
 import { useRouter } from "expo-router";
+import useAuth from "@/auth/useAuth";
+import organizerApi from "@/api/organizer";
+import { isOrganizerSubmissionReadyForReview } from "@/utils/organizerVerification";
 import KulanLogo from "../src/assets/kulan_logo.svg";
 
 const { width, height } = Dimensions.get("window");
 
+const ROLE_MEMBER = 1;
+const ROLE_ORGANIZER = 2;
+
 export default function Splash() {
   const router = useRouter();
+  const { user, profileCompleted, isHydrated, userRole, organizerStatus } = useAuth();
 
-  // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Step 1 — Fade + scale-in the circle + logo
+    if (!isHydrated) return;
+
     Animated.parallel([
       Animated.timing(circleScale, {
         toValue: 1,
@@ -28,22 +35,52 @@ export default function Splash() {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      // Step 2 — Expand ONLY the circle (logo stays the same size)
       Animated.timing(circleScale, {
-        toValue: 12, // Large scale to fill screen
+        toValue: 12,
         duration: 900,
         easing: Easing.in(Easing.exp),
         useNativeDriver: true,
       }).start(() => {
-        // Step 3 — Navigate to welcome screen (slide from top animation there)
-        router.replace("/(auth)/welcome");
+        if (!user) {
+          router.replace("/(tabs)/");
+          return;
+        }
+
+        if (userRole === ROLE_ORGANIZER) {
+          if (organizerStatus === 'approved') {
+            router.replace("/(organizer)/dashboard");
+          } else if (organizerStatus === 'rejected') {
+            router.replace("/(organizer-status)/verification-failed");
+          } else {
+            (async () => {
+              try {
+                const detail = await organizerApi.getOrganizerStatus();
+                const ready = isOrganizerSubmissionReadyForReview(detail);
+                router.replace(
+                  ready
+                    ? "/(organizer-status)/pending-verification"
+                    : "/(organizer-status)/resubmit-verification"
+                );
+              } catch {
+                router.replace("/(organizer-status)/resubmit-verification");
+              }
+            })();
+          }
+          return;
+        }
+
+        if (profileCompleted === false) {
+          router.replace("/onboarding/WelcomeIntro");
+          return;
+        }
+
+        router.replace("/(tabs)/");
       });
     });
-  }, []);
+  }, [isHydrated, profileCompleted, router, user, userRole, organizerStatus]);
 
   return (
     <View style={styles.container}>
-      {/* EXPANDING CIRCLE */}
       <Animated.View
         style={[
           styles.circle,
@@ -53,7 +90,6 @@ export default function Splash() {
         ]}
       />
 
-      {/* LOGO (stays centered, does NOT expand) */}
       <Animated.View
         style={{
           position: "absolute",
@@ -77,6 +113,6 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 180 / 2,
-    backgroundColor: "#FFEFE5", // Your brand color
+    backgroundColor: "#FFEFE5",
   },
 });

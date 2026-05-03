@@ -5,12 +5,12 @@ export class EventSponsor {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
-  event_id!: number;
+  @Column({ name: 'event_id' })
+  eventId!: number;
 
-  @Column()
-  sponsor_name!: string;
+  @Column({ name: 'sponsor_name' })
+  sponsorName!: string;
 
-  @Column({ nullable: true })
-  sponsor_logo!: string;
+  @Column({ name: 'sponsor_logo', nullable: true })
+  sponsorLogo!: string;
 }

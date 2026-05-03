@@ -6,6 +6,8 @@ import { EventSponsor } from 'src/database/entities/event-sponsor.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { User } from 'src/database/entities/user.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
+import { Interest } from 'src/database/entities/interest.entity';
+import { SavedEvent } from 'src/database/entities/saved-event.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Module({
@@ -16,6 +18,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       EventRegistration,
       User,
       OrganizerProfile,
+      Interest,
+      SavedEvent,
     ]),
   ],
   controllers: [EventController],

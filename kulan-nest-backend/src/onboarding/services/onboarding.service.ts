@@ -15,6 +15,8 @@ import { InterestsDto } from '../dto/interests.dto';
 import { UpdateOrganizerProfileDto } from '../dto/update-organizer-profile.dto';
 import { isProfileComplete } from '../helpers/organizer-profile.helper';
 
+const ORGANIZER_ROLE_ID = 2;
+
 @Injectable()
 export class OnboardingService {
   constructor(
@@ -32,6 +34,34 @@ export class OnboardingService {
 
   isProfileComplete(profile: OrganizerProfile): boolean {
     return isProfileComplete(profile);
+  }
+
+  /**
+   * After admin rejection, a new document upload completes resubmission:
+   * profile + user go back to pending review.
+   */
+  private async resetVerificationAfterResubmit(userId: number): Promise<void> {
+    const profile = await this.organizerProfileRepository.findOne({
+      where: { userId },
+    });
+
+    if (!profile || profile.verificationStatus !== 'rejected') {
+      return;
+    }
+
+    profile.verificationStatus = 'pending';
+    profile.rejectionReason = null;
+    await this.organizerProfileRepository.save(profile);
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (
+      user &&
+      user.roleId === ORGANIZER_ROLE_ID &&
+      user.status === 'rejected'
+    ) {
+      user.status = 'pending';
+      await this.userRepository.save(user);
+    }
   }
 
   private async resolveDocumentType(input: string): Promise<string> {
@@ -95,7 +125,8 @@ export class OnboardingService {
     }
 
     let profile = await this.profileRepository.findOne({ where: { userId } });
-    const wantsProfileUpdate = dto.gender !== undefined || dto.dob !== undefined;
+    const wantsProfileUpdate =
+      dto.gender !== undefined || dto.dob !== undefined;
 
     if (!profile && wantsProfileUpdate) {
       profile = this.profileRepository.create({
@@ -117,8 +148,7 @@ export class OnboardingService {
     }
 
     const latestProfile =
-      profile ??
-      (await this.profileRepository.findOne({ where: { userId } }));
+      profile ?? (await this.profileRepository.findOne({ where: { userId } }));
 
     return {
       userId,
@@ -163,9 +193,17 @@ export class OnboardingService {
     };
   }
 
+  async getInterests() {
+    const interests = await this.interestRepository.query(
+      'SELECT id, name FROM interests ORDER BY id ASC',
+    );
+
+    return { interests };
+  }
+
   async updateOrganizerProfile(userId: number, dto: UpdateOrganizerProfileDto) {
     const profile = await this.organizerProfileRepository.findOne({
-      where: { user_id: userId },
+      where: { userId: userId },
     });
 
     if (!profile) {
@@ -173,11 +211,11 @@ export class OnboardingService {
     }
 
     if (dto.organization_name !== undefined) {
-      profile.organization_name = dto.organization_name;
+      profile.organizationName = dto.organization_name;
     }
 
     if (dto.organization_description !== undefined) {
-      profile.organization_description = dto.organization_description;
+      profile.organizationDescription = dto.organization_description;
     }
 
     if (dto.website !== undefined) {
@@ -187,11 +225,11 @@ export class OnboardingService {
     const savedProfile = await this.organizerProfileRepository.save(profile);
 
     return {
-      user_id: savedProfile.user_id,
-      organization_name: savedProfile.organization_name ?? null,
-      organization_description: savedProfile.organization_description ?? null,
+      userId: savedProfile.userId,
+      organizationName: savedProfile.organizationName ?? null,
+      organizationDescription: savedProfile.organizationDescription ?? null,
       website: savedProfile.website ?? null,
-      verification_status: savedProfile.verification_status,
+      verificationStatus: savedProfile.verificationStatus,
       profileCompleted: this.isProfileComplete(savedProfile),
     };
   }
@@ -210,7 +248,7 @@ export class OnboardingService {
     const filePath = `/uploads/${file.filename}`;
 
     const documents = await this.organizerDocumentRepository.find({
-      where: { organizer_id: userId },
+      where: { organizerId: userId },
       order: { id: 'ASC' },
     });
 
@@ -223,40 +261,44 @@ export class OnboardingService {
     const existingDocument = documents[0];
 
     if (existingDocument) {
-      existingDocument.document_type = resolvedDocumentType;
-      existingDocument.document_path = filePath;
+      existingDocument.documentType = resolvedDocumentType;
+      existingDocument.documentPath = filePath;
       existingDocument.status = 'pending';
-      existingDocument.uploaded_at = new Date();
+      existingDocument.uploadedAt = new Date();
 
-      const updated = await this.organizerDocumentRepository.save(existingDocument);
+      const updated =
+        await this.organizerDocumentRepository.save(existingDocument);
+      await this.resetVerificationAfterResubmit(userId);
       return {
         id: updated.id,
-        organizer_id: updated.organizer_id,
-        document_type: updated.document_type,
-        document_path: updated.document_path,
+        organizerId: updated.organizerId,
+        documentType: updated.documentType,
+        documentPath: updated.documentPath,
         status: updated.status,
-        uploaded_at: updated.uploaded_at,
+        uploadedAt: updated.uploadedAt,
         mode: 'updated',
       };
     }
 
     const created = this.organizerDocumentRepository.create({
-      organizer_id: userId,
-      document_type: resolvedDocumentType,
-      document_path: filePath,
+      organizerId: userId,
+      documentType: resolvedDocumentType,
+      documentPath: filePath,
       status: 'pending',
-      uploaded_at: new Date(),
+      uploadedAt: new Date(),
     });
 
     const saved = await this.organizerDocumentRepository.save(created);
 
+    await this.resetVerificationAfterResubmit(userId);
+
     return {
       id: saved.id,
-      organizer_id: saved.organizer_id,
-      document_type: saved.document_type,
-      document_path: saved.document_path,
+      organizerId: saved.organizerId,
+      documentType: saved.documentType,
+      documentPath: saved.documentPath,
       status: saved.status,
-      uploaded_at: saved.uploaded_at,
+      uploadedAt: saved.uploadedAt,
       mode: 'created',
     };
   }

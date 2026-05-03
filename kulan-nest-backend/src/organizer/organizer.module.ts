@@ -1,15 +1,35 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrganizerController } from './controller/organizer.controller';
 import { OrganizerService } from './service/organizer.service';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/database/entities/user.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
+import { OrganizerVerificationDocument } from 'src/database/entities/organizer-verification-document.entity';
+import { Event } from 'src/database/entities/event.entity';
+import { EventRegistration } from 'src/database/entities/event-registration.entity';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
-   imports: [
-    TypeOrmModule.forFeature([User, OrganizerProfile]),
+  imports: [
+    TypeOrmModule.forFeature([
+      User,
+      OrganizerProfile,
+      OrganizerVerificationDocument,
+      Event,
+      EventRegistration,
+    ]),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '7d' },
+      }),
+      inject: [ConfigService],
+    }),
   ],
   controllers: [OrganizerController],
-  providers: [OrganizerService]
+  providers: [OrganizerService],
+  exports: [OrganizerService],
 })
 export class OrganizerModule {}

@@ -11,6 +11,4 @@ export class CreateMemberDto {
   password!: string;
 
   phone!: string;
-
-  
 }

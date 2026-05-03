@@ -7,10 +7,12 @@ import OnboardingHeader from '@/features/onboarding/components/OnboardingHeader'
 import Chip from '@/features/onboarding/components/Chip';
 import styles from "@/constants/onboardingStyles/styles";
 import onboardingApi from "@/api/onboarding";
+import useAuth from '@/auth/useAuth';
 
 export default function Interests() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { completeOnboarding } = useAuth();
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -29,10 +31,8 @@ export default function Interests() {
   useEffect(() => {
     const fetchInterests = async () => {
       try {
-        const response = await onboardingApi.getInterests();
-        if (response.data && response.data.interests) {
-          setInterests(response.data.interests);
-        }
+        const interestsList = await onboardingApi.getInterests();
+        setInterests(interestsList);
       } catch (error) {
         setApiError("Could not load interests. Please try again later.");
         console.error("Fetch interests error:", error);
@@ -60,6 +60,7 @@ export default function Interests() {
 
     try {
       await onboardingApi.updateInterests(selectedIds);
+      await completeOnboarding();
       router.replace("/(tabs)");
     } catch (error) {
       setApiError("Failed to save interests. Please try again.");

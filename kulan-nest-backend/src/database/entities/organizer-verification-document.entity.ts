@@ -6,13 +6,13 @@ export class OrganizerVerificationDocument {
   id!: number;
 
   @Column({ name: 'organizer_id' })
-  organizer_id!: number;
+  organizerId!: number;
 
   @Column({ name: 'document_type' })
-  document_type!: string;
+  documentType!: string;
 
   @Column({ name: 'document_path' })
-  document_path!: string;
+  documentPath!: string;
 
   @Column({
     name: 'status',
@@ -23,14 +23,14 @@ export class OrganizerVerificationDocument {
   status!: string;
 
   @Column({ name: 'review_note', type: 'text', nullable: true })
-  review_note!: string;
+  reviewNote!: string | null;
 
-  @Column({ name: 'reviewed_by', nullable: true })
-  reviewed_by!: number;
+  @Column({ name: 'reviewed_by', type: 'int', nullable: true })
+  reviewedBy!: number | null;
 
-  @Column({ name: 'uploaded_at' })
-  uploaded_at!: Date;
+  @Column({ name: 'uploaded_at', type: 'datetime' })
+  uploadedAt!: Date;
 
-  @Column({ name: 'reviewed_at', nullable: true })
-  reviewed_at!: Date;
+  @Column({ name: 'reviewed_at', type: 'datetime', nullable: true })
+  reviewedAt!: Date | null;
 }

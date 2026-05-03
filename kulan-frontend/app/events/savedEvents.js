@@ -1,17 +1,25 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-
-// --- THE FIX ---
-import { useSavedEvents } from '../../src/context/SavedEventsContext'; // 1. Import the context hook
-import { events as allEvents } from '../../src/data/events'; // 2. Import ALL events from your main data file
+import { useSavedEvents } from '../../src/context/SavedEventsContext';
+import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
+import { DEFAULT_COVER_GRADIENT } from '@/api/events';
 
 const SavedEventsScreen = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('Upcoming');
 
-  const { savedEventIds } = useSavedEvents();
-  const savedEventsData = allEvents.filter(event => savedEventIds.includes(event.id));
+  const { savedEvents = [], isSyncingSaved } = useSavedEvents();
+  const now = useMemo(() => new Date(), []);
+  const savedEventsData = useMemo(
+    () =>
+      savedEvents.filter((event) => {
+        const startsAt = event?.startsAt ? new Date(event.startsAt) : null;
+        if (!startsAt || Number.isNaN(startsAt.getTime())) return true;
+        return activeTab === 'Upcoming' ? startsAt >= now : startsAt < now;
+      }),
+    [savedEvents, activeTab, now],
+  );
 
   const navigateToDetail = (event) => {
     router.push(`/events/${event.id}`);
@@ -24,7 +32,17 @@ const SavedEventsScreen = () => {
         <Text style={styles.itemTitle}>{event.title}</Text>
         <Text style={styles.itemLocation}>{event.details.split('·')[1].trim()}</Text>
       </View>
-      <Image source={event.image} style={styles.itemImage} />
+      {event.coverImageUrl ? (
+        <Image source={{ uri: event.coverImageUrl }} style={styles.itemImage} />
+      ) : (
+        <CoverPlaceholder
+          letter={event.coverLetter ?? event.title}
+          gradient={event.coverGradient ?? DEFAULT_COVER_GRADIENT}
+          borderRadius={12}
+          style={styles.itemImage}
+          letterSize={28}
+        />
+      )}
     </TouchableOpacity>
   );
 
@@ -36,12 +54,17 @@ const SavedEventsScreen = () => {
         <TouchableOpacity style={[styles.tab, activeTab === 'Past' && styles.activeTab]} onPress={() => setActiveTab('Past')}><Text style={[styles.tabText, activeTab === 'Past' && styles.activeTabText]}>Past</Text></TouchableOpacity>
       </View>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {activeTab === 'Upcoming' && savedEventsData.length > 0 ? (
+        {isSyncingSaved ? (
+          <Text style={styles.emptyStateText}>Loading saved events...</Text>
+        ) : savedEventsData.length > 0 ? (
           savedEventsData.map(event => <SavedEventItem key={event.id} event={event} />)
         ) : (
-          <Text style={styles.emptyStateText}>You have no upcoming saved events.</Text>
+          <Text style={styles.emptyStateText}>
+            {activeTab === 'Upcoming'
+              ? 'You have no upcoming saved events.'
+              : 'You have no past saved events.'}
+          </Text>
         )}
-        {activeTab === 'Past' && <Text style={styles.emptyStateText}>You have no past saved events.</Text>}
       </ScrollView>
     </View>
   );

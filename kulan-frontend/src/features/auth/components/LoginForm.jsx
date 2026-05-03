@@ -7,13 +7,13 @@ import {
   Platform,
   Pressable,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
 import useLoginForm from '@/features/auth/hooks/useLoginForm';
 import TextField from '@/features/auth/components/TextField';
 import PasswordField from '@/features/auth/components/PasswordField';
 import SocialButtons from '@/features/auth/components/SocialButtons';
+import BackToWelcomeRow from '@/features/auth/components/BackToWelcomeRow';
 import { COLORS } from '@/constants/loginSignin/authStyles';
 
 export default function LoginForm() {
@@ -22,7 +22,7 @@ export default function LoginForm() {
     useLoginForm();
 
   return (
-    <LinearGradient colors={[COLORS.bgGradStart, COLORS.bgGradEnd]} style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.cardBg }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -166,9 +166,11 @@ export default function LoginForm() {
                 {' '}Register
               </Text>
             </Text>
+
+            <BackToWelcomeRow />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }

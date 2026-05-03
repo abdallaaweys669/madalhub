@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/database/entities/user.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
@@ -8,106 +12,120 @@ import { isProfileComplete } from 'src/onboarding/helpers/organizer-profile.help
 
 @Injectable()
 export class AdminService {
-   
-        constructor(
-        @InjectRepository(User)
-        private userRepository: Repository<User>,
-        @InjectRepository(OrganizerProfile)
-        private organizerProfileRepository: Repository<OrganizerProfile>,
-        @InjectRepository(OrganizerVerificationDocument)
-        private organizerDocumentRepository: Repository<OrganizerVerificationDocument>,
-      ) {}
+  constructor(
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    @InjectRepository(OrganizerProfile)
+    private organizerProfileRepository: Repository<OrganizerProfile>,
+    @InjectRepository(OrganizerVerificationDocument)
+    private organizerDocumentRepository: Repository<OrganizerVerificationDocument>,
+  ) {}
 
-
-      isProfileComplete(profile: OrganizerProfile): boolean {
-  return isProfileComplete(profile);
-}
-
-
-      async approveOrganizer(id: number) {
-  const user = await this.userRepository.findOne({ where: { id } });
-
-  if (!user || user.roleId !== 2) {
-    throw new NotFoundException('Organizer not found');
+  isProfileComplete(profile: OrganizerProfile): boolean {
+    return isProfileComplete(profile);
   }
 
-  const organizerProfile = await this.organizerProfileRepository.findOne({
-    where: { user_id: user.id },
-  });
+  async approveOrganizer(id: number) {
+    const user = await this.userRepository.findOne({ where: { id } });
 
-  if (!organizerProfile) {
-    throw new BadRequestException('Organizer profile not found');
+    if (!user || user.roleId !== 2) {
+      throw new NotFoundException('Organizer not found');
+    }
+
+    const organizerProfile = await this.organizerProfileRepository.findOne({
+      where: { userId: user.id },
+    });
+
+    if (!organizerProfile) {
+      throw new BadRequestException('Organizer profile not found');
+    }
+
+    if (!this.isProfileComplete(organizerProfile)) {
+      throw new BadRequestException('Organizer profile is incomplete');
+    }
+
+    const documents = await this.organizerDocumentRepository.find({
+      where: { organizerId: user.id },
+      select: ['id'],
+    });
+
+    if (documents.length !== 1) {
+      throw new BadRequestException(
+        'Organizer must have exactly one verification document before approval',
+      );
+    }
+
+    user.status = 'active';
+    organizerProfile.verificationStatus = 'approved';
+
+    await this.organizerProfileRepository.save(organizerProfile);
+    return this.userRepository.save(user);
   }
 
-  if (!this.isProfileComplete(organizerProfile)) {
-    throw new BadRequestException('Organizer profile is incomplete');
+  async rejectOrganizer(id: number, reason?: string) {
+    const user = await this.userRepository.findOne({ where: { id } });
+
+    if (!user || user.roleId !== 2) {
+      throw new NotFoundException('Organizer not found');
+    }
+
+    user.status = 'rejected';
+    await this.userRepository.save(user);
+
+    const organizerProfile = await this.organizerProfileRepository.findOne({
+      where: { userId: user.id },
+    });
+
+    if (organizerProfile) {
+      organizerProfile.verificationStatus = 'rejected';
+      organizerProfile.rejectionReason =
+        reason ?? organizerProfile.rejectionReason;
+      await this.organizerProfileRepository.save(organizerProfile);
+    }
+
+    return {
+      userId: user.id,
+      status: 'rejected',
+      rejectionReason: organizerProfile?.rejectionReason,
+    };
   }
 
-  const documents = await this.organizerDocumentRepository.find({
-    where: { organizer_id: user.id },
-    select: ['id'],
-  });
+  async getPendingOrganizers() {
+    const users = await this.userRepository.find({
+      where: {
+        roleId: 2, // organizer
+        status: 'pending', // waiting approval
+      },
+    });
 
-  if (documents.length !== 1) {
-    throw new BadRequestException(
-      'Organizer must have exactly one verification document before approval',
+    return Promise.all(
+      users.map(async (user) => {
+        const profile = await this.organizerProfileRepository.findOne({
+          where: { userId: user.id },
+        });
+
+        const document = await this.organizerDocumentRepository.findOne({
+          where: { organizerId: user.id },
+        });
+
+        return {
+          ...user,
+          profile: profile
+            ? {
+                organizationName: profile.organizationName,
+                organizationDescription: profile.organizationDescription,
+                website: profile.website,
+              }
+            : null,
+          document: document
+            ? {
+                documentType: document.documentType,
+                documentPath: document.documentPath,
+                status: document.status,
+              }
+            : null,
+        };
+      }),
     );
   }
-
-  user.status = 'active';
-  organizerProfile.verification_status = 'approved';
-
-  await this.organizerProfileRepository.save(organizerProfile);
-  return this.userRepository.save(user);
-}
-
-async rejectOrganizer(id: number) {
-  const user = await this.userRepository.findOne({ where: { id } });
-
-  if (!user || user.roleId !== 2) {
-    throw new NotFoundException('Organizer not found');
-  }
-
-  user.status = 'rejected';
-  return this.userRepository.save(user);
-}
-
-async getPendingOrganizers() {
-  const users = await this.userRepository.find({
-    where: {
-      roleId: 2,          // organizer
-      status: 'pending',  // waiting approval
-    },
-  });
-
-  return Promise.all(
-    users.map(async (user) => {
-      const profile = await this.organizerProfileRepository.findOne({
-        where: { user_id: user.id },
-      });
-
-      const document = await this.organizerDocumentRepository.findOne({
-        where: { organizer_id: user.id },
-      });
-
-      return {
-        ...user,
-        profile: profile
-          ? {
-              organization_name: profile.organization_name,
-              organization_description: profile.organization_description,
-              website: profile.website,
-            }
-          : null,
-        document: document
-          ? {
-              document_type: document.document_type,
-              document_path: document.document_path,
-              status: document.status,
-            }
-          : null,
-      };
-    }),
-  );
-}
 }

@@ -62,20 +62,58 @@ export default function useSignupForm() {
     setServerErrors({});
 
     try {
-      const response = await authApi.register({
+      const result = await authApi.register({
         full_name: values.fullName,
         email: values.email,
         phone: values.phone,
         password: values.password,
       });
 
-      await login(response.data.token);
-      router.replace('/onboarding/WelcomeIntro');
+      await login(result.token, result.onboardingCompleted);
+      router.replace(
+        result.onboardingCompleted ? '/(tabs)/' : '/onboarding/WelcomeIntro',
+      );
     } catch (error) {
       let message = 'An error occurred. Please check your network and try again.';
       let fieldErrors = {};
 
-      if (error?.response) {
+      if (error?.fieldErrors) {
+        const fieldMap = {
+          full_name: 'fullName',
+          fullName: 'fullName',
+          email: 'email',
+          phone: 'phone',
+          phone_number: 'phone',
+          password: 'password',
+          confirm_password: 'confirm',
+          confirm: 'confirm',
+        };
+
+        error.fieldErrors.forEach((err) => {
+          if (typeof err === 'string') {
+            if (!message || message.startsWith('An error occurred')) {
+              message = err;
+            }
+            return;
+          }
+
+          const key = fieldMap[err?.field] || fieldMap[err?.path] || err?.field;
+          const errMessage = err?.message || err?.error;
+          if (key && errMessage) {
+            fieldErrors[key] = errMessage;
+          } else if (errMessage) {
+            message = errMessage;
+          }
+        });
+
+        if (Object.keys(fieldErrors).length > 0) {
+          setServerErrors(fieldErrors);
+          setFormError('');
+          console.log('Registration field errors:', fieldErrors);
+        } else {
+          setFormError(message || 'An unexpected error occurred.');
+        }
+      } else if (error?.response) {
         const data = error.response.data;
         const fieldMap = {
           full_name: 'fullName',
@@ -130,18 +168,21 @@ export default function useSignupForm() {
             fieldErrors.password = message;
           }
         }
-      } else if (error?.message) {
-        message = error.message;
-      }
 
-      if (Object.keys(fieldErrors).length > 0) {
-        setServerErrors(fieldErrors);
-        setFormError('');
+        if (Object.keys(fieldErrors).length > 0) {
+          setServerErrors(fieldErrors);
+          setFormError('');
+        } else {
+          setFormError(message || 'An unexpected error occurred.');
+        }
+
+        console.log('Registration error:', error?.response?.data || error);
+      } else if (error?.message) {
+        setFormError(error.message);
       } else {
         setFormError(message || 'An unexpected error occurred.');
+        console.log('Registration error:', error);
       }
-
-      console.log('Registration error:', error?.response?.data || error);
     } finally {
       setLoading(false);
     }

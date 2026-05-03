@@ -1,9 +1,15 @@
+import { Type } from 'class-transformer';
 import {
   IsNotEmpty,
   IsBoolean,
   IsNumber,
   IsDateString,
+  IsOptional,
+  IsString,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
+import { EventSponsorInputDto } from './event-sponsor-input.dto';
 
 export class CreateEventDto {
   @IsNotEmpty()
@@ -32,4 +38,14 @@ export class CreateEventDto {
 
   @IsNumber()
   capacity!: number;
+
+  @IsOptional()
+  @IsString()
+  coverImage?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EventSponsorInputDto)
+  sponsors?: EventSponsorInputDto[];
 }

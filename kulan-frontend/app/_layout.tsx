@@ -16,9 +16,15 @@ export default function RootLayout() {
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               <Stack.Screen name="onboarding" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="(organizer)" options={{ headerShown: false }} />
+              <Stack.Screen name="(organizer-status)" options={{ headerShown: false }} />
               <Stack.Screen
                 name="events/[id]"
-                options={{ title: 'Event Details' }}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="events/[id]/attendees"
+                options={{ headerShown: false }}
               />
             </Stack>
           </SavedEventsProvider>

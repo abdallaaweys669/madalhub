@@ -10,11 +10,11 @@ import { OrganizerModule } from './organizer/organizer.module';
 import { AdminModule } from './admin/admin.module';
 import { EventModule } from './event/event.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
-
+import { InterestsModule } from './interests/interests.module';
 
 @Module({
   imports: [
-     ConfigModule.forRoot({
+    ConfigModule.forRoot({
       isGlobal: true, // 🔥 very important
     }),
 
@@ -32,29 +32,19 @@ import { OnboardingModule } from './onboarding/onboarding.module';
       }),
     }),
 
-    
-
     MemberModule,
-
-    
 
     AuthModule,
 
-    
-
     OrganizerModule,
 
-    
-
     AdminModule,
-
-    
 
     EventModule,
 
     OnboardingModule,
 
-    
+    InterestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

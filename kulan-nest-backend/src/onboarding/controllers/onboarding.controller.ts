@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Patch,
   Post,
   UploadedFile,
@@ -24,6 +25,12 @@ import { extname } from 'path';
 export class OnboardingController {
   constructor(private readonly onboardingService: OnboardingService) {}
 
+  @Get('interests')
+  @Roles(1)
+  getInterests() {
+    return this.onboardingService.getInterests();
+  }
+
   @Patch('profile')
   @Roles(1)
   updateProfile(@CurrentUser() user, @Body() dto: UpdateProfileDto) {
@@ -36,6 +43,8 @@ export class OnboardingController {
     return this.onboardingService.updateInterests(user.userId, dto);
   }
 
+  // Organizer profile/document endpoints: allowed for all organizer statuses (pending, approved, rejected)
+  // Status gating is enforced at the service level where needed
   @Patch('organizer')
   @Roles(2)
   updateOrganizerProfile(

@@ -7,14 +7,14 @@ import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity
 import { OrganizerVerificationDocument } from 'src/database/entities/organizer-verification-document.entity';
 
 @Module({
-   imports: [
-      TypeOrmModule.forFeature([
-        User,
-        OrganizerProfile,
-        OrganizerVerificationDocument,
-      ]),
-    ],
+  imports: [
+    TypeOrmModule.forFeature([
+      User,
+      OrganizerProfile,
+      OrganizerVerificationDocument,
+    ]),
+  ],
   controllers: [AdminController],
-  providers: [AdminService]
+  providers: [AdminService],
 })
 export class AdminModule {}

@@ -3,16 +3,16 @@ import { Column, Entity, PrimaryColumn } from 'typeorm';
 @Entity('organizer_profiles')
 export class OrganizerProfile {
   @PrimaryColumn({ name: 'user_id' })
-  user_id!: number;
+  userId!: number;
 
   @Column({ name: 'organization_name' })
-  organization_name!: string;
+  organizationName!: string;
 
-  @Column({ name: 'organization_description', type: 'text' })
-  organization_description!: string;
+  @Column({ name: 'organization_description', type: 'text', nullable: true })
+  organizationDescription!: string | null;
 
-  @Column({ name: 'website' })
-  website!: string;
+  @Column({ name: 'website', type: 'varchar', nullable: true })
+  website!: string | null;
 
   @Column({
     name: 'verification_status',
@@ -20,8 +20,11 @@ export class OrganizerProfile {
     enum: ['pending', 'approved', 'rejected'],
     default: 'pending',
   })
-  verification_status!: string;
+  verificationStatus!: string;
+
+  @Column({ name: 'rejection_reason', type: 'text', nullable: true })
+  rejectionReason!: string | null;
 
   @Column({ name: 'created_at' })
-  created_at!: Date;
+  createdAt!: Date;
 }

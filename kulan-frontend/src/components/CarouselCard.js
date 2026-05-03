@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { styles } from '../constants/home.styles';
 import { useSavedEvents } from '../context/SavedEventsContext';
+import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
+import { DEFAULT_COVER_GRADIENT } from '@/api/events';
 
 const CarouselCard = ({ event }) => {
   const router = useRouter();
@@ -35,7 +37,17 @@ const CarouselCard = ({ event }) => {
 
   return (
     <TouchableOpacity onPress={handleCardPress} style={styles.carouselCard}>
-      <Image source={event.image} style={styles.carouselCardImage} />
+      {event.coverImageUrl ? (
+        <Image source={{ uri: event.coverImageUrl }} style={styles.carouselCardImage} />
+      ) : (
+        <CoverPlaceholder
+          letter={event.coverLetter ?? event.title}
+          gradient={event.coverGradient ?? DEFAULT_COVER_GRADIENT}
+          borderRadius={16}
+          style={styles.carouselCardImage}
+          letterSize={36}
+        />
+      )}
       
       <TouchableOpacity style={styles.carouselCardBookmarkIcon} onPress={handleBookmarkPress}>
         <Feather name="bookmark" size={20} color={isSaved ? '#0047FF' : '#333'} />

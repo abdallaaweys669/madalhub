@@ -7,6 +7,12 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "typeorm": "node ./node_modules/typeorm/cli.js -d ./dist/database/data-source.js",
+    "migration:run": "npm run build && npm run typeorm -- migration:run",
+    "migration:revert": "npm run build && npm run typeorm -- migration:revert",
+    "migration:show": "npm run build && npm run typeorm -- migration:show",
+    "migration:create": "npm run typeorm -- migration:create ./src/database/migrations/NewMigration",
+    "migration:generate": "npm run build && npm run typeorm -- migration:generate ./src/database/migrations/GeneratedMigration",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

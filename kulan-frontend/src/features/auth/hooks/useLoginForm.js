@@ -33,29 +33,40 @@ export default function useLoginForm() {
     setFormError('');
 
     try {
-      const loginResponse = await api.login(values);
-      const responseData = loginResponse.data || {};
-      const authToken = responseData.token;
+      const result = await api.login(values);
 
-      if (!authToken) {
+      if (!result.token) {
         throw new Error('Missing auth token from login response.');
       }
 
-      await login(authToken);
+      await login(result.token, result.onboardingCompleted);
 
       router.replace(
-        responseData.onboardingCompleted
+        result.onboardingCompleted
           ? '/(tabs)/'
           : '/onboarding/WelcomeIntro'
       );
     } catch (error) {
       if (error.response && error.response.status === 401) {
-        setFormError(
+        const rawMessage =
           error.response.data?.message ||
-            'Invalid email or password. Please try again.'
-        );
+          'Invalid email or password. Please try again.';
+        if (rawMessage.includes('organizer login') || rawMessage.includes('Welcome screen')) {
+          setFormError(
+            rawMessage + '\n\nTap "Login as Organizer" on Welcome.'
+          );
+        } else {
+          setFormError(rawMessage);
+        }
       } else if (error.message) {
-        setFormError(error.message);
+        const rawMessage = error.message;
+        if (rawMessage.includes('organizer login') || rawMessage.includes('Welcome screen')) {
+          setFormError(
+            rawMessage + '\n\nTap "Login as Organizer" on Welcome.'
+          );
+        } else {
+          setFormError(rawMessage);
+        }
       } else {
         setFormError('An unexpected error occurred. Please try again.');
         console.error('Login error:', error);

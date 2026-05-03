@@ -5,13 +5,14 @@ import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/database/entities/user.entity';
 import { MemberProfile } from 'src/database/entities/member-profile.entity';
+import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import type { StringValue } from 'ms';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, MemberProfile]),
+    TypeOrmModule.forFeature([User, MemberProfile, OrganizerProfile]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
