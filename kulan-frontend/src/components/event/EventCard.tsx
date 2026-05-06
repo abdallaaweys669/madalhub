@@ -227,18 +227,20 @@ export function EventCard({ event, style }: EventCardProps) {
 }
 
 const CARD_RADIUS = 16;
-const IMAGE_HEIGHT = 152;
+const IMAGE_HEIGHT = 164;
 
 const styles = StyleSheet.create({
   card: {
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    borderRadius: CARD_RADIUS,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 2,
+    marginBottom: spacing.lg,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.06)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
     overflow: 'hidden',
   },
   imageWrap: {
@@ -255,7 +257,7 @@ const styles = StyleSheet.create({
     top: spacing.sm,
     right: spacing.sm,
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   iconBtn: {
     backgroundColor: 'rgba(255,255,255,0.92)',
@@ -273,14 +275,14 @@ const styles = StyleSheet.create({
   },
   body: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
   title: {
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: '700',
-    lineHeight: 22,
-    marginBottom: 6,
+    lineHeight: 24,
+    marginBottom: 4,
   },
   tagRow: {
     marginTop: 10,
@@ -305,7 +307,7 @@ const styles = StyleSheet.create({
   socialRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 14,
+    marginTop: 12,
     minHeight: 32,
   },
   avatarStack: {

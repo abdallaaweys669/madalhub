@@ -76,8 +76,16 @@ export const updateOrganizerProfile = async (data) => {
 export const uploadOrganizerDocument = async (formData) => {
   try {
     const response = await apiClient.post('/onboarding/organizer/document', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+      timeout: 120000,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      transformRequest: (body, headers) => {
+        if (headers && typeof headers.delete === 'function') {
+          headers.delete('Content-Type');
+        } else if (headers) {
+          delete headers['Content-Type'];
+        }
+        return body;
       },
     });
     return response.data;

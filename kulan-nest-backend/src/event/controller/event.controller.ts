@@ -23,6 +23,7 @@ import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { CreateEventDto } from '../DTO/create-event.dto';
 import { GetEventsQueryDto } from '../DTO/get-events-query.dto';
+import { UpdateEventDto } from '../DTO/update-event.dto';
 
 import { EventService } from '../service/event.service';
 
@@ -72,7 +73,7 @@ export class EventController {
   updateEvent(
     @CurrentUser() user,
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: Partial<CreateEventDto>,
+    @Body() dto: UpdateEventDto,
   ) {
     return this.eventService.updateEvent(id, user.userId, dto);
   }

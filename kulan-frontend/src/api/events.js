@@ -44,6 +44,24 @@ const INTEREST_GRADIENTS = {
   7: ['#FF7B3F', '#FFE8DC'],
 };
 
+const META_SEPARATOR = '\n---\n[KULAN_EVENT_META]\n';
+const META_END = '\n[/KULAN_EVENT_META]';
+
+function stripEmbeddedEventMeta(rawDescription) {
+  if (typeof rawDescription !== 'string' || !rawDescription.trim()) return '';
+  const start = rawDescription.indexOf(META_SEPARATOR);
+  if (start === -1) {
+    return rawDescription.trim();
+  }
+
+  const end = rawDescription.indexOf(META_END, start + META_SEPARATOR.length);
+  const visiblePart =
+    end === -1
+      ? rawDescription.slice(0, start)
+      : `${rawDescription.slice(0, start)}${rawDescription.slice(end + META_END.length)}`;
+  return visiblePart.trim();
+}
+
 function normalizeInterestId(event) {
   const raw = event?.interestId;
   if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
@@ -213,7 +231,7 @@ export function mapApiEventToCard(event) {
         ? event.interestId
         : Number(event.interestId || 0) || null,
     title,
-    description: event.description ?? '',
+    description: stripEmbeddedEventMeta(event.description ?? ''),
     details: formatEventDetails(startDate, city, isOnline),
     coverImageUrl: cover.coverImageUrl,
     coverLetter: cover.coverLetter,
@@ -230,6 +248,14 @@ export function mapApiEventToCard(event) {
     isJoined: Boolean(event.isJoined ?? event.joined),
     startsAt: startDate.toISOString(),
     city,
+    locationName:
+      typeof event.locationName === 'string' && event.locationName.trim()
+        ? event.locationName.trim()
+        : city,
+    locationAddress:
+      typeof event.locationAddress === 'string' && event.locationAddress.trim()
+        ? event.locationAddress.trim()
+        : '',
     isOnline,
     priceType: event.priceType ?? ((event.priceAmount ?? event.price ?? 0) > 0 ? 'Paid' : 'Free'),
     priceAmount:
@@ -317,4 +343,25 @@ export async function getSavedEvents() {
 export async function getEventInterests() {
   const response = await apiClient.get('/events/interests');
   return Array.isArray(response.data?.interests) ? response.data.interests : [];
+}
+
+/** Organizer (role 2): create draft event */
+export async function createOrganizerEvent(body) {
+  const response = await apiClient.post('/events', body);
+  invalidateEventsListCache();
+  return response.data;
+}
+
+/** Organizer: update draft / published fields */
+export async function patchOrganizerEvent(id, body) {
+  const response = await apiClient.patch(`/events/${id}`, body);
+  invalidateEventsListCache();
+  return response.data;
+}
+
+/** Organizer: publish draft (`PATCH /events/publish/:id` on backend) */
+export async function publishOrganizerEvent(id) {
+  const response = await apiClient.patch(`/events/publish/${id}`);
+  invalidateEventsListCache();
+  return response.data;
 }

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
 import { CreateEventDto } from '../DTO/create-event.dto';
 import { GetEventsQueryDto } from '../DTO/get-events-query.dto';
+import { UpdateEventDto } from '../DTO/update-event.dto';
 import { Event } from 'src/database/entities/event.entity';
 import { User } from 'src/database/entities/user.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
@@ -268,6 +269,114 @@ export class EventService {
     }
   }
 
+  private readonly descriptionMetaSeparator = '\n---\n[KULAN_EVENT_META]\n';
+  private readonly descriptionMetaEnd = '\n[/KULAN_EVENT_META]';
+
+  /** Parses embedded KULAN mobile meta (format + people_json) from description. */
+  private parseDescriptionMeta(description: string): {
+    format: string | null;
+    people: { role: string; fullName: string }[];
+  } {
+    const desc = description ?? '';
+    const startIdx = desc.indexOf(this.descriptionMetaSeparator);
+    if (startIdx === -1) {
+      return { format: null, people: [] };
+    }
+    const endIdx = desc.indexOf(this.descriptionMetaEnd, startIdx);
+    if (endIdx === -1) {
+      return { format: null, people: [] };
+    }
+    const block = desc.slice(
+      startIdx + this.descriptionMetaSeparator.length,
+      endIdx,
+    );
+    const lines = block.split('\n').map((l) => l.trim());
+    const map: Record<string, string> = {};
+    for (const line of lines) {
+      const colon = line.indexOf(':');
+      if (colon === -1) continue;
+      map[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
+    }
+    let format: string | null = null;
+    const fmtRaw = (map['format'] ?? '').trim();
+    if (
+      fmtRaw &&
+      fmtRaw !== '-' &&
+      ['talk', 'panel', 'hybrid', 'meetup'].includes(fmtRaw)
+    ) {
+      format = fmtRaw;
+    }
+    let people: { role: string; fullName: string }[] = [];
+    const pj = map['people_json'];
+    if (pj) {
+      try {
+        const decoded = decodeURIComponent(pj);
+        const parsed: unknown = JSON.parse(decoded);
+        if (Array.isArray(parsed)) {
+          people = parsed.map((p: { role?: string; fullName?: string }) => ({
+            role: typeof p?.role === 'string' ? p.role : 'speaker',
+            fullName:
+              typeof p?.fullName === 'string' ? p.fullName.trim() : '',
+          }));
+        }
+      } catch {
+        /* ignore invalid legacy payloads */
+      }
+    }
+    return { format, people };
+  }
+
+  /** Matches organizer app rules for Talk / Panel / Hybrid / Meetup. */
+  private ensurePeopleRulesForPublish(description: string): void {
+    const { format, people } = this.parseDescriptionMeta(description);
+    if (!format || format === 'meetup') {
+      return;
+    }
+    const speakers = people.filter(
+      (p) => p.role === 'speaker' && p.fullName,
+    );
+    const panelists = people.filter(
+      (p) => p.role === 'panelist' && p.fullName,
+    );
+    const moderators = people.filter(
+      (p) => p.role === 'moderator' && p.fullName,
+    );
+
+    if (format === 'talk') {
+      if (speakers.length < 1) {
+        throw new BadRequestException(
+          'Talk events require at least one speaker.',
+        );
+      }
+      return;
+    }
+    if (format === 'panel') {
+      if (panelists.length < 2) {
+        throw new BadRequestException(
+          'Panel events require at least two panelists.',
+        );
+      }
+      if (moderators.length < 1) {
+        throw new BadRequestException(
+          'Panel events require at least one moderator.',
+        );
+      }
+      return;
+    }
+    if (format === 'hybrid') {
+      if (speakers.length < 1) {
+        throw new BadRequestException(
+          'Hybrid events require at least one speaker.',
+        );
+      }
+      if (panelists.length < 2) {
+        throw new BadRequestException(
+          'Hybrid events require at least two panelists.',
+        );
+      }
+    }
+  }
+
   private ensurePublishReady(event: Event) {
     if (
       !event.title ||
@@ -280,6 +389,7 @@ export class EventService {
         'Event is missing required fields for publishing',
       );
     }
+    this.ensurePeopleRulesForPublish(event.description ?? '');
   }
 
   async createEvent(organizerId: number, dto: CreateEventDto) {
@@ -349,7 +459,7 @@ export class EventService {
   async updateEvent(
     eventId: number,
     organizerId: number,
-    dto: Partial<CreateEventDto>,
+    dto: UpdateEventDto,
   ) {
     const user = await this.userRepo.findOne({ where: { id: organizerId } });
 
@@ -378,11 +488,15 @@ export class EventService {
       throw new BadRequestException('startDatetime must be before endDatetime');
     }
 
-    const { sponsors, ...rest } = dto as Partial<CreateEventDto> & {
-      sponsors?: { name: string; logo?: string }[];
-    };
+    const { sponsors, ...rest } = dto;
 
-    Object.assign(event, rest);
+    for (const key of Object.keys(rest) as (keyof typeof rest)[]) {
+      const v = rest[key];
+      if (v !== undefined) {
+        (event as unknown as Record<string, unknown>)[key as string] = v as unknown;
+      }
+    }
+
     await this.eventRepo.save(event);
 
     if (sponsors !== undefined) {
@@ -845,10 +959,13 @@ export class EventService {
 
     return {
       id: event.id,
+      status: event.status,
       interestId: event.interestId,
       title: event.title,
       description: event.description,
       image: event.coverImage ?? null,
+      coverImage: event.coverImage ?? null,
+      capacity: event.capacity,
       startsAt: event.startDatetime,
       endsAt: event.endDatetime,
       city: event.locationName ?? null,

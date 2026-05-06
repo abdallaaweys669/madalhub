@@ -16,7 +16,15 @@ const apiClient = axios.create({
   timeoutErrorMessage: 'Request timed out. Check your API tunnel and internet connection.',
 });
 
+// Ngrok free tier serves an HTML interstitial unless this header is sent on API requests.
+if (typeof baseURL === 'string' && baseURL.includes('ngrok')) {
+  apiClient.defaults.headers.common['ngrok-skip-browser-warning'] = 'true';
+}
+
 console.log('API BASE URL:', baseURL);
+
+/** Same base URL as axios — used by `eventAssets` multipart upload (fetch). */
+export const API_BASE_URL = baseURL;
 
 apiClient.interceptors.response.use(
   (response) => response,

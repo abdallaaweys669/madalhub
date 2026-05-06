@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
+  Linking,
+  Platform,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -32,14 +35,18 @@ const SponsorCarousel = ({ logos }) => {
   const offsetRef = useRef(0);
   const isInteractingRef = useRef(false);
   const resumeTimeoutRef = useRef(null);
+  const shouldAutoSlide = logos.length >= 4;
   const loopData = useMemo(
-    () => [...logos, ...logos].map((logo, index) => ({ ...logo, id: `${logo.id}-${index}` })),
-    [logos],
+    () =>
+      shouldAutoSlide
+        ? [...logos, ...logos].map((logo, index) => ({ ...logo, id: `${logo.id}-${index}` }))
+        : logos.map((logo, index) => ({ ...logo, id: `${logo.id}-${index}` })),
+    [logos, shouldAutoSlide],
   );
-  const loopWidth = logos.length * SPONSOR_ITEM_SIZE;
+  const loopWidth = shouldAutoSlide ? logos.length * SPONSOR_ITEM_SIZE : 0;
 
   useEffect(() => {
-    if (logos.length <= 1) return undefined;
+    if (!shouldAutoSlide) return undefined;
 
     const timer = setInterval(() => {
       if (isInteractingRef.current || !listRef.current) return;
@@ -49,7 +56,7 @@ const SponsorCarousel = ({ logos }) => {
     }, 16);
 
     return () => clearInterval(timer);
-  }, [logos.length, loopWidth]);
+  }, [loopWidth, shouldAutoSlide]);
 
   useEffect(
     () => () => {
@@ -65,22 +72,31 @@ const SponsorCarousel = ({ logos }) => {
         data={loopData}
         horizontal
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.sponsorCarouselList}
+        contentContainerStyle={[
+          styles.sponsorCarouselList,
+          logos.length <= 2 ? styles.sponsorsRowCentered : null,
+        ]}
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
+        scrollEnabled={logos.length > 2}
         onScroll={(event) => {
-          offsetRef.current = event.nativeEvent.contentOffset.x;
+          if (shouldAutoSlide) {
+            offsetRef.current = event.nativeEvent.contentOffset.x;
+          }
         }}
         onScrollBeginDrag={() => {
+          if (!shouldAutoSlide) return;
           isInteractingRef.current = true;
           if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
         }}
         onScrollEndDrag={() => {
+          if (!shouldAutoSlide) return;
           resumeTimeoutRef.current = setTimeout(() => {
             isInteractingRef.current = false;
           }, 1200);
         }}
         onMomentumScrollEnd={() => {
+          if (!shouldAutoSlide) return;
           resumeTimeoutRef.current = setTimeout(() => {
             isInteractingRef.current = false;
           }, 800);
@@ -103,7 +119,6 @@ const EventDetailScreen = () => {
   const [event, setEvent] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [joined, setJoined] = useState(false);
-  const showStickyMapButton = true;
   const { isLoggedIn, user, isOrganizer } = useAuth();
 
   useEffect(() => {
@@ -244,12 +259,50 @@ const EventDetailScreen = () => {
     const datePieces = dateRaw.split(',').map((item) => item.trim());
     datePrimary = datePieces[0] ? `${datePieces[0]}, ${datePieces[1] ?? ''}`.trim() : dateRaw;
     dateSecondary = datePieces[2] || '7:00PM-10:00PM';
-    locationPrimary = locationRaw || 'Nova Halls';
-    locationSecondary = locationRaw?.toLowerCase() === 'online' ? 'Online' : 'Mogadishu';
+    locationPrimary = locationRaw || '';
+    locationSecondary = locationRaw?.toLowerCase() === 'online' ? 'Online' : '';
   }
 
+  const isOnlineEvent = String(locationPrimary || event?.locationName || '')
+    .trim()
+    .toLowerCase() === 'online';
+  const preferredLocationQuery = [
+    event?.locationAddress,
+    event?.locationName,
+    locationPrimary,
+    event?.city,
+    locationSecondary,
+  ]
+    .filter((part) => typeof part === 'string' && part.trim())
+    .join(', ')
+    .trim();
+  const mapFallbackQuery = typeof event?.city === 'string' ? event.city.trim() : '';
+  const mapQuery = preferredLocationQuery || mapFallbackQuery;
+  const showStickyMapButton = !isOnlineEvent && Boolean(mapQuery);
+
   const openAttendeesList = () => router.push(`/events/${String(event.id)}/attendees`);
-  const handleMapPress = () => {};
+  const handleMapPress = async () => {
+    if (!mapQuery || isOnlineEvent) {
+      Alert.alert('Map unavailable', 'This event does not have a physical venue location yet.');
+      return;
+    }
+
+    const encoded = encodeURIComponent(mapQuery);
+    const nativeScheme =
+      Platform.OS === 'ios' ? `maps:0,0?q=${encoded}` : `geo:0,0?q=${encoded}`;
+    const webFallback = `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+
+    try {
+      const canOpenNative = await Linking.canOpenURL(nativeScheme);
+      if (canOpenNative) {
+        await Linking.openURL(nativeScheme);
+        return;
+      }
+      await Linking.openURL(webFallback);
+    } catch {
+      Alert.alert('Unable to open map', 'Please try again in a moment.');
+    }
+  };
   const handleSaveToggle = () => {
     if (!isLoggedIn) {
       router.push('/(auth)/welcome');
@@ -277,8 +330,8 @@ const EventDetailScreen = () => {
             description={event.description}
             datePrimary={datePrimary}
             dateSecondary={dateSecondary}
-            locationPrimary={locationPrimary}
-            locationSecondary={locationSecondary}
+            locationPrimary={locationPrimary || event?.locationName || 'Venue TBA'}
+            locationSecondary={locationSecondary || event?.city || 'Location details not provided'}
           />
 
           <Text style={styles.sectionTitle}>Organized by</Text>
