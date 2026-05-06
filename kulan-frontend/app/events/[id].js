@@ -162,6 +162,18 @@ const EventDetailScreen = () => {
 
   const handleJoinToggle = async () => {
     if (!event) return;
+    if (event?.eventState === 'ended') {
+      Alert.alert('Event ended', 'This event has already ended.');
+      return;
+    }
+    if (event?.eventState === 'closed') {
+      Alert.alert('Registration closed', 'Registration is closed for this event.');
+      return;
+    }
+    if (event?.eventState === 'fully-booked') {
+      Alert.alert('Fully booked', 'This event is fully booked. You can join the waitlist and get notified.');
+      return;
+    }
     if (!isLoggedIn) {
       router.push('/(auth)/welcome');
       return;

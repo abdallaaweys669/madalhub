@@ -28,7 +28,7 @@ export function EventMeta({ details }: EventMetaProps) {
   return (
     <View style={styles.wrap}>
       {locationPart ? (
-        <View style={styles.row}>
+        <View style={styles.column}>
           <View style={styles.segment} importantForAccessibility="no">
             <Ionicons
               name="calendar-outline"
@@ -36,14 +36,10 @@ export function EventMeta({ details }: EventMetaProps) {
               color={iconColor}
               style={styles.segmentIcon}
             />
-            <Text style={[styles.meta, { color: metaColor }]} numberOfLines={2}>
+            <Text style={[styles.meta, { color: metaColor }]} numberOfLines={1}>
               {datePart}
             </Text>
           </View>
-          <Text style={[styles.separator, { color: metaColor }]} accessible={false}>
-            {' '}
-            •{' '}
-          </Text>
           <View style={styles.segment} importantForAccessibility="no">
             <Ionicons
               name="location-outline"
@@ -51,7 +47,7 @@ export function EventMeta({ details }: EventMetaProps) {
               color={iconColor}
               style={styles.segmentIcon}
             />
-            <Text style={[styles.meta, { color: metaColor }]} numberOfLines={2}>
+            <Text style={[styles.meta, { color: metaColor }]} numberOfLines={1}>
               {locationPart}
             </Text>
           </View>
@@ -77,12 +73,8 @@ const styles = StyleSheet.create({
   wrap: {
     marginTop: 8,
   },
-  row: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-start',
-    rowGap: 4,
-    columnGap: 0,
+  column: {
+    gap: 4,
   },
   segment: {
     flexDirection: 'row',
@@ -99,11 +91,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 21,
-  },
-  separator: {
-    fontSize: 14,
-    fontWeight: '500',
-    lineHeight: 21,
-    marginTop: 3,
   },
 });

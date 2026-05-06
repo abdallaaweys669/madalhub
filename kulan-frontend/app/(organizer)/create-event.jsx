@@ -197,6 +197,19 @@ function initialsFromName(name) {
   return name.slice(0, 2).toUpperCase();
 }
 
+function formatRelativeSaveTime(date) {
+  if (!(date instanceof Date) || !Number.isFinite(date.getTime())) return 'Not saved yet';
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 10 * 1000) return 'Saved just now';
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'Saved just now';
+  if (mins === 1) return 'Saved 1 minute ago';
+  if (mins < 60) return `Saved ${mins} minutes ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours === 1) return 'Saved 1 hour ago';
+  return `Saved ${hours} hours ago`;
+}
+
 function PressScale({ children, style, onPress, disabled }) {
   const scale = useRef(new Animated.Value(1)).current;
   const onPressIn = () => {
@@ -292,6 +305,7 @@ export default function CreateEventScreen() {
   const [autosaveFlash, setAutosaveFlash] = useState(false);
   const checkOpacity = useRef(new Animated.Value(1)).current;
   const autosaveTimerRef = useRef(null);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
 
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
@@ -485,8 +499,9 @@ export default function CreateEventScreen() {
     if (startDate.getTime() >= effectiveEndDate.getTime()) return false;
     if (values.isPhysical && !values.locationName.trim()) return false;
     if (!values.isPhysical && !onlineLink.trim()) return false;
+    if (ticketPaid && (Number(values.totalPrice) || 0) <= 0) return false;
     return peopleRuleOk;
-  }, [values, startDate, effectiveEndDate, onlineLink, peopleRuleOk]);
+  }, [values, startDate, effectiveEndDate, onlineLink, peopleRuleOk, ticketPaid]);
 
   const whatsNextText = useMemo(() => {
     if (!values.title.trim()) return 'Start with your event title';
@@ -495,8 +510,9 @@ export default function CreateEventScreen() {
     if (startDate.getTime() >= effectiveEndDate.getTime()) return 'Set a date and time';
     if (values.isPhysical && !values.locationName.trim()) return 'Add your venue';
     if (!values.isPhysical && !onlineLink.trim()) return 'Add a meeting link';
+    if (ticketPaid && (Number(values.totalPrice) || 0) <= 0) return 'Set a valid ticket price';
     return 'Looking good — review and publish when ready';
-  }, [values, startDate, effectiveEndDate, onlineLink]);
+  }, [values, startDate, effectiveEndDate, onlineLink, ticketPaid]);
 
   const triggerAutosaveFeedback = useCallback(() => {
     setAutosaveFlash(true);
@@ -523,6 +539,7 @@ export default function CreateEventScreen() {
         }
       }
       triggerAutosaveFeedback();
+      setLastSavedAt(new Date());
     } catch (error) {
       const msg = error?.response?.data?.message || error?.message || 'Could not save draft';
       Alert.alert('Save failed', typeof msg === 'string' ? msg : 'Could not save draft');
@@ -809,14 +826,13 @@ export default function CreateEventScreen() {
   const primaryBtnLabel =
     remoteStatus === 'published'
       ? 'Save changes'
-      : isEditing
-        ? 'Save changes'
-        : 'Publish event';
+      : 'Publish event';
 
   const footerWideFlex = 2;
   const footerNarrowFlex = 1;
 
   const scheduleErr = publishAttempted && !scheduleOk;
+  const priceErr = publishAttempted && ticketPaid && (Number(values.totalPrice) || 0) <= 0;
 
   if (fetchLoading) {
     return (
@@ -845,7 +861,7 @@ export default function CreateEventScreen() {
 
       <View style={[styles.autosaveStrip, { borderBottomColor: primaryBorder }]}>
         <Text style={[styles.autosaveText, { color: successGreen }]}>
-          Autosaved just now{' '}
+          {formatRelativeSaveTime(lastSavedAt)}{' '}
           {autosaveFlash ? (
             <Animated.Text style={{ opacity: checkOpacity }}>✓</Animated.Text>
           ) : (
@@ -991,7 +1007,7 @@ export default function CreateEventScreen() {
                       <>
                         <Pressable onPress={() => setAndroidStartTimeOpen(true)} style={[styles.dateTile, scheduleErr && styles.dateTileErr]}>
                           <Text style={styles.dateTileMain}>
-                            {startDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                            {startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                           </Text>
                         </Pressable>
                         {androidStartTimeOpen ? (
@@ -1005,7 +1021,7 @@ export default function CreateEventScreen() {
                           style={[styles.dateTileIos, scheduleErr && styles.dateTileErr]}
                         >
                           <Text style={styles.dateTileMain}>
-                            {startDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                            {startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                           </Text>
                         </Pressable>
                         {iosStartTimeOpen ? (
@@ -1028,7 +1044,7 @@ export default function CreateEventScreen() {
                     >
                       <Text style={styles.dateTileMain}>
                         {hasEndTime
-                          ? endDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+                          ? endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
                           : 'Default: 1 hour after start'}
                       </Text>
                     </Pressable>
@@ -1062,7 +1078,7 @@ export default function CreateEventScreen() {
                     >
                       <Text style={styles.dateTileMain}>
                         {hasEndTime
-                          ? endDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+                          ? endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
                           : 'Default: 1 hour after start'}
                       </Text>
                     </Pressable>
@@ -1186,6 +1202,7 @@ export default function CreateEventScreen() {
                     onChangeText={(v) => onChange('totalPrice', v)}
                     placeholder="0"
                     keyboardType="decimal-pad"
+                    error={priceErr ? 'Enter a price greater than 0' : undefined}
                   />
                 ) : null}
               </CollapsibleSection>

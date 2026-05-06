@@ -1,5 +1,5 @@
 import React from 'react';
-import { Share, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Share, Text, TouchableOpacity, View } from 'react-native';
 import { styles } from '@/constants/eventDetails_styles/eventDetails.styles';
 import useAuth from '@/auth/useAuth';
 import { useRouter } from 'expo-router';
@@ -7,12 +7,49 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+function formatTimeLabel(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return null;
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 const EventBottomBar = ({ joined, onToggleJoin, price = 'Free', event }) => {
   const { isLoggedIn } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const eventState = event?.eventState ?? 'upcoming';
+  const isClosed = eventState === 'closed';
+  const isEnded = eventState === 'ended';
+  const isFullyBooked = eventState === 'fully-booked';
+  const isLive = eventState === 'live';
+  const endsAtLabel = formatTimeLabel(event?.endsAt ?? null);
+  const stateSubtitle = isEnded
+    ? 'Event already ended'
+    : isClosed
+      ? 'Registration is closed'
+    : isFullyBooked
+      ? 'Join waitlist to get notified'
+      : isLive
+        ? endsAtLabel
+          ? `Ends at ${endsAtLabel}`
+          : 'Happening now'
+        : null;
+
   const handleJoin = () => {
+    if (isEnded) {
+      Alert.alert('Event ended', 'This event has already ended.');
+      return;
+    }
+    if (isClosed) {
+      Alert.alert('Registration closed', 'Registration is closed for this event.');
+      return;
+    }
+    if (isFullyBooked) {
+      Alert.alert('Fully booked', 'This event is fully booked. You can join the waitlist and get notified.');
+      return;
+    }
     if (!isLoggedIn) {
       router.push('/(auth)/welcome');
       return;
@@ -49,20 +86,58 @@ const EventBottomBar = ({ joined, onToggleJoin, price = 'Free', event }) => {
           </TouchableOpacity>
         </View>
       ) : (
-        <TouchableOpacity
-          style={styles.bottomJoinButton}
-          onPress={handleJoin}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={['#FF7A00', '#FF9A3D']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.bottomJoinButtonGradient}
+        <View style={styles.bottomActionWrap}>
+          <TouchableOpacity
+            style={[
+              styles.bottomJoinButton,
+              (isClosed || isFullyBooked) && {
+                shadowOpacity: 0,
+                elevation: 0,
+              },
+            ]}
+            onPress={handleJoin}
+            activeOpacity={0.9}
           >
-            <Text style={styles.bottomJoinButtonText}>Join Event</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            {isEnded ? (
+              <View
+                style={[
+                  styles.bottomJoinButtonGradient,
+                  { backgroundColor: '#E5E7EB' },
+                ]}
+              >
+                <Text style={[styles.bottomJoinButtonText, { color: '#6B7280' }]}>Event Ended</Text>
+              </View>
+            ) : isClosed ? (
+              <View
+                style={[
+                  styles.bottomJoinButtonGradient,
+                  { backgroundColor: '#FEE2E2' },
+                ]}
+              >
+                <Text style={[styles.bottomJoinButtonText, { color: '#B91C1C' }]}>Registration Closed</Text>
+              </View>
+            ) : isFullyBooked ? (
+              <View
+                style={[
+                  styles.bottomJoinButtonGradient,
+                  { backgroundColor: '#FFF1E6' },
+                ]}
+              >
+                <Text style={[styles.bottomJoinButtonText, { color: '#C2410C' }]}>Join Waitlist</Text>
+              </View>
+            ) : (
+              <LinearGradient
+                colors={['#FF7A00', '#FF9A3D']}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={styles.bottomJoinButtonGradient}
+              >
+                <Text style={styles.bottomJoinButtonText}>Register Now</Text>
+              </LinearGradient>
+            )}
+          </TouchableOpacity>
+          {stateSubtitle ? <Text style={styles.bottomCtaSubtext}>{stateSubtitle}</Text> : null}
+        </View>
       )}
     </View>
   );

@@ -402,6 +402,15 @@ export const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  bottomActionWrap: {
+    alignItems: 'flex-end',
+  },
+  bottomCtaSubtext: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
   bottomJoinedActions: {
     flexDirection: 'row',
     gap: 10,

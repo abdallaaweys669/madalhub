@@ -56,6 +56,10 @@ type ExploreRow = ExploreEventCardModel & {
   isOnline: boolean;
   priceType: 'Free' | 'Paid';
   interestId: number | null;
+  statusChip?: { label: string; variant: string };
+  urgencyLabel?: string | null;
+  categoryName?: string | null;
+  eventState?: 'upcoming' | 'live' | 'fully-booked' | 'closed' | 'ended';
 };
 
 const USER_CITY = 'Mogadishu';
@@ -133,6 +137,7 @@ function mapItemToExploreRow(event: any): ExploreRow {
   const timePart = startDate.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   });
   const isOnline = Boolean(event.isOnline);
   const city = event.city ?? '';
@@ -154,6 +159,10 @@ function mapItemToExploreRow(event: any): ExploreRow {
     isOnline,
     priceType: event.priceType ?? 'Free',
     interestId: typeof event.interestId === 'number' ? event.interestId : null,
+    statusChip: card.statusChip,
+    urgencyLabel: card.urgencyLabel,
+    categoryName: card.categoryName,
+    eventState: card.eventState,
   };
 }
 

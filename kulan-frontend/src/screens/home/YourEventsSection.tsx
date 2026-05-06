@@ -4,12 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { spacing, useThemeColors } from '@/theme';
 
-export type HomeEventTab = 'Upcoming' | 'Going' | 'Saved';
+export type HomeEventTab = 'Upcoming' | 'Past' | 'Going' | 'Saved';
 
-const TABS: HomeEventTab[] = ['Upcoming', 'Going', 'Saved'];
+const TABS: HomeEventTab[] = ['Upcoming', 'Past', 'Going', 'Saved'];
+const GUEST_TABS: HomeEventTab[] = ['Upcoming', 'Past'];
 
 const TAB_ICONS: Record<HomeEventTab, keyof typeof Ionicons.glyphMap> = {
   Upcoming: 'calendar-outline',
+  Past: 'time-outline',
   Going: 'checkmark-circle-outline',
   Saved: 'bookmark-outline',
 };
@@ -29,7 +31,7 @@ export function YourEventsSection({
   isGuest = false,
 }: YourEventsSectionProps) {
   const colors = useThemeColors();
-  const availableTabs = isGuest ? (['Upcoming'] as HomeEventTab[]) : TABS;
+  const availableTabs = isGuest ? GUEST_TABS : TABS;
 
   return (
     <View style={styles.section}>

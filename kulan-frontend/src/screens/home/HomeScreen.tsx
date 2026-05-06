@@ -5,6 +5,8 @@ import {
   RefreshControl,
   StatusBar,
   StyleSheet,
+  Text,
+  View,
   type ListRenderItem,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,11 +21,13 @@ import HomeSkeleton from '@/components/skeletons/HomeSkeleton';
 import { getEvents, invalidateEventsListCache, peekEventsListCache } from '@/api/events';
 import { spacing } from '@/theme';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
+import NoEventsIllustration from '@/assets/no events.svg';
 
 import { HomeHeader } from './HomeHeader';
 import { YourEventsSection, type HomeEventTab } from './YourEventsSection';
 
 const HOME_EVENTS_PARAMS = { page: 1, limit: 50, sort: 'start-asc' as const };
+const GUEST_HOME_TABS: HomeEventTab[] = ['Upcoming', 'Past'];
 
 function dedupeEventsById(items: EventCardModel[]): EventCardModel[] {
   const seen = new Set<string>();
@@ -37,6 +41,13 @@ function dedupeEventsById(items: EventCardModel[]): EventCardModel[] {
   }
 
   return unique;
+}
+
+function isPastEvent(event: EventCardModel): boolean {
+  if (event.eventState === 'ended') return true;
+  const startsAt = event.startsAt ? new Date(event.startsAt) : null;
+  if (!startsAt || !Number.isFinite(startsAt.getTime())) return false;
+  return startsAt.getTime() < Date.now() && event.eventState !== 'live';
 }
 
 function HomeScreen() {
@@ -103,23 +114,23 @@ function HomeScreen() {
   );
 
   const activeData = useMemo(() => {
-    if (isGuest) {
-      return events;
-    }
-
     switch (activeTab) {
+      case 'Past':
+        return events.filter((event) => isPastEvent(event));
       case 'Going':
+        if (isGuest) return [];
         return events.filter((event: any) => event.isJoined);
       case 'Saved':
+        if (isGuest) return [];
         return events.filter((e) => savedEventIds.includes(e.id));
       case 'Upcoming':
       default:
-        return events;
+        return events.filter((event) => !isPastEvent(event));
     }
   }, [activeTab, savedEventIds, events, isGuest]);
 
   useEffect(() => {
-    if (isGuest && activeTab !== 'Upcoming') {
+    if (isGuest && !GUEST_HOME_TABS.includes(activeTab)) {
       setActiveTab('Upcoming');
     }
   }, [isGuest, activeTab]);
@@ -182,6 +193,14 @@ function HomeScreen() {
                 message={loadError}
                 icon="alert-circle"
               />
+            ) : activeTab === 'Upcoming' ? (
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyTitle}>No upcoming events</Text>
+                <Text style={styles.emptyMessage}>
+                  There are no upcoming events right now. Check Past events or come back soon.
+                </Text>
+                <NoEventsIllustration width={300} height={240} />
+              </View>
             ) : (
               <EmptyState
                 title={`No ${activeTab.toLowerCase()} events`}
@@ -205,6 +224,27 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
     paddingBottom: spacing.xl,
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  emptyTitle: {
+    marginTop: spacing.md,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  emptyMessage: {
+    marginTop: spacing.sm,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    color: '#6B7280',
+    marginBottom: spacing.md,
   },
 });
 
