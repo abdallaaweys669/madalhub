@@ -11,6 +11,28 @@ import {
 } from 'class-validator';
 import { EventSponsorInputDto } from './event-sponsor-input.dto';
 
+export class EventRosterEntryDto {
+  @IsNotEmpty()
+  @IsString()
+  role!: string;
+
+  @IsNotEmpty()
+  @IsString()
+  displayName!: string;
+
+  @IsOptional()
+  @IsString()
+  title?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  sortOrder?: number;
+
+  @IsOptional()
+  @IsString()
+  photoUrl?: string | null;
+}
+
 export class CreateEventDto {
   @IsNotEmpty()
   title!: string;
@@ -24,10 +46,10 @@ export class CreateEventDto {
   @IsBoolean()
   isPhysical!: boolean;
 
-  @IsDateString() // 🔥 better
+  @IsDateString()
   startDatetime!: Date;
 
-  @IsDateString() // 🔥 better
+  @IsDateString()
   endDatetime!: Date;
 
   locationName!: string;
@@ -48,4 +70,26 @@ export class CreateEventDto {
   @ValidateNested({ each: true })
   @Type(() => EventSponsorInputDto)
   sponsors?: EventSponsorInputDto[];
+
+  @IsOptional()
+  @IsString()
+  eventFormat?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EventRosterEntryDto)
+  roster?: EventRosterEntryDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  isOnline?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isHybrid?: boolean;
+
+  @IsOptional()
+  @IsString()
+  onlineLink?: string | null;
 }

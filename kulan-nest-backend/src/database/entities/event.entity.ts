@@ -53,6 +53,14 @@ export class Event {
   })
   status!: string;
 
+  @Column({
+    name: 'event_format',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  eventFormat!: string | null;
+
   @Column({ name: 'created_at' })
   createdAt!: Date;
 

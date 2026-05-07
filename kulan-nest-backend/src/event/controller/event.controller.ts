@@ -155,4 +155,11 @@ export class EventController {
   unsaveEvent(@CurrentUser() user, @Param('id', ParseIntPipe) id: number) {
     return this.eventService.unsaveEvent(id, user.userId);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Delete(':id')
+  deleteEvent(@CurrentUser() user, @Param('id', ParseIntPipe) id: number) {
+    return this.eventService.deleteEvent(id, user.userId);
+  }
 }

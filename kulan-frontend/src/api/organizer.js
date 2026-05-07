@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { publishOrganizerEvent } from './events';
 
 const getNetworkErrorMessage = (error) => {
   const code = error?.code;
@@ -79,9 +80,27 @@ export const getOrganizerEvents = async (status) => {
   }
 };
 
+export const deleteEvent = async (eventId) => {
+  try {
+    const response = await apiClient.delete(`/events/${eventId}`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = error.response.data?.message || 'Failed to delete event';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+/** Publish a draft event (same as `publishOrganizerEvent` in `@/api/events`, keeps list cache in sync). */
+export const publishEvent = publishOrganizerEvent;
+
 export default {
   organizerRegister,
   organizerLogin,
   getOrganizerStatus,
   getOrganizerEvents,
+  deleteEvent,
+  publishEvent,
 };

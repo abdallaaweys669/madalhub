@@ -592,6 +592,17 @@ export function mapApiEventToCard(event) {
         ? event.locationAddress.trim()
         : '',
     isOnline,
+    eventFormat: event.eventFormat ?? null,
+    roster: Array.isArray(event.roster)
+      ? event.roster.map((r) => ({
+          id: r.id,
+          role: r.role,
+          displayName: r.displayName,
+          title: r.title,
+          photoUrl: r.photoUrl,
+          sortOrder: r.sortOrder,
+        }))
+      : [],
     priceType: event.priceType ?? ((event.priceAmount ?? event.price ?? 0) > 0 ? 'Paid' : 'Free'),
     priceAmount:
       event.priceAmount ?? (typeof event.price === 'number' && event.price > 0 ? event.price : null),

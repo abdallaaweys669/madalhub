@@ -11,6 +11,8 @@ import { EventSponsor } from 'src/database/entities/event-sponsor.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { Interest } from 'src/database/entities/interest.entity';
 import { SavedEvent } from 'src/database/entities/saved-event.entity';
+import { EventProgramRoster } from 'src/database/entities/event-program-roster.entity';
+import { EventCohost } from 'src/database/entities/event-cohost.entity';
 import {
   BadRequestException,
   ForbiddenException,
@@ -35,6 +37,10 @@ export class EventService {
     private interestRepo: Repository<Interest>,
     @InjectRepository(SavedEvent)
     private savedEventRepo: Repository<SavedEvent>,
+    @InjectRepository(EventProgramRoster)
+    private eventProgramRosterRepo: Repository<EventProgramRoster>,
+    @InjectRepository(EventCohost)
+    private eventCohostRepo: Repository<EventCohost>,
   ) {}
 
   private ensureMember(user: User) {
@@ -269,6 +275,34 @@ export class EventService {
     }
   }
 
+  private async syncEventRoster(
+    eventId: number,
+    roster: {
+      role: string;
+      displayName: string;
+      title?: string | null;
+      sortOrder?: number;
+      photoUrl?: string | null;
+    }[],
+  ) {
+    await this.eventProgramRosterRepo.delete({ eventId });
+    const rows = roster
+      .filter((r) => r?.displayName?.trim() && r?.role?.trim())
+      .map((r, idx) =>
+        this.eventProgramRosterRepo.create({
+          eventId,
+          role: r.role.trim(),
+          displayName: r.displayName.trim(),
+          title: r.title?.trim() || null,
+          photoUrl: r.photoUrl?.trim() || null,
+          sortOrder: r.sortOrder ?? idx,
+        }),
+      );
+    if (rows.length > 0) {
+      await this.eventProgramRosterRepo.save(rows);
+    }
+  }
+
   private readonly descriptionMetaSeparator = '\n---\n[KULAN_EVENT_META]\n';
   private readonly descriptionMetaEnd = '\n[/KULAN_EVENT_META]';
 
@@ -326,15 +360,33 @@ export class EventService {
     return { format, people };
   }
 
-  /** Matches organizer app rules for Talk / Panel / Hybrid / Meetup. */
-  private ensurePeopleRulesForPublish(description: string): void {
-    const { format, people } = this.parseDescriptionMeta(description);
-    if (!format || format === 'meetup') {
+  /** Matches organizer app rules for Panel format only. */
+  private async ensurePeopleRulesForPublish(eventId: number, event: Event): Promise<void> {
+    let rosterRows: EventProgramRoster[] = [];
+    try {
+      rosterRows = await this.eventProgramRosterRepo.find({ where: { eventId } });
+    } catch {
+      rosterRows = [];
+    }
+
+    let format: string | null = null;
+    let legacyPeople: { role: string; fullName: string }[] = [];
+
+    if (rosterRows.length === 0) {
+      const parsed = this.parseDescriptionMeta(event.description ?? '');
+      format = parsed.format;
+      legacyPeople = parsed.people;
+    }
+
+    const formatToUse = format ?? event.eventFormat;
+    if (!formatToUse || formatToUse === 'meetup') {
       return;
     }
-    const speakers = people.filter(
-      (p) => p.role === 'speaker' && p.fullName,
-    );
+
+    const people = rosterRows.length > 0
+      ? rosterRows.map((r) => ({ role: r.role, fullName: r.displayName }))
+      : legacyPeople;
+
     const panelists = people.filter(
       (p) => p.role === 'panelist' && p.fullName,
     );
@@ -342,15 +394,7 @@ export class EventService {
       (p) => p.role === 'moderator' && p.fullName,
     );
 
-    if (format === 'talk') {
-      if (speakers.length < 1) {
-        throw new BadRequestException(
-          'Talk events require at least one speaker.',
-        );
-      }
-      return;
-    }
-    if (format === 'panel') {
+    if (formatToUse === 'panel') {
       if (panelists.length < 2) {
         throw new BadRequestException(
           'Panel events require at least two panelists.',
@@ -361,23 +405,10 @@ export class EventService {
           'Panel events require at least one moderator.',
         );
       }
-      return;
-    }
-    if (format === 'hybrid') {
-      if (speakers.length < 1) {
-        throw new BadRequestException(
-          'Hybrid events require at least one speaker.',
-        );
-      }
-      if (panelists.length < 2) {
-        throw new BadRequestException(
-          'Hybrid events require at least two panelists.',
-        );
-      }
     }
   }
 
-  private ensurePublishReady(event: Event) {
+  private async ensurePublishReady(event: Event) {
     if (
       !event.title ||
       !event.description ||
@@ -389,7 +420,7 @@ export class EventService {
         'Event is missing required fields for publishing',
       );
     }
-    this.ensurePeopleRulesForPublish(event.description ?? '');
+    await this.ensurePeopleRulesForPublish(event.id, event);
   }
 
   async createEvent(organizerId: number, dto: CreateEventDto) {
@@ -408,8 +439,16 @@ export class EventService {
       throw new BadRequestException('startDatetime must be before endDatetime');
     }
 
-    const { sponsors, ...rest } = dto as CreateEventDto & {
+    const { sponsors, roster, eventFormat, ...rest } = dto as CreateEventDto & {
       sponsors?: { name: string; logo?: string }[];
+      roster?: {
+        role: string;
+        displayName: string;
+        title?: string | null;
+        sortOrder?: number;
+        photoUrl?: string | null;
+      }[];
+      eventFormat?: string | null;
     };
 
     const event = this.eventRepo.create({
@@ -422,6 +461,10 @@ export class EventService {
 
     if (sponsors !== undefined) {
       await this.syncEventSponsors(saved.id, sponsors);
+    }
+
+    if (roster !== undefined) {
+      await this.syncEventRoster(saved.id, roster);
     }
 
     return saved;
@@ -450,10 +493,26 @@ export class EventService {
       throw new BadRequestException('Event is already published');
     }
 
-    this.ensurePublishReady(event);
+    await this.ensurePublishReady(event);
 
     event.status = 'published';
     return this.eventRepo.save(event);
+  }
+
+  async deleteEvent(eventId: number, organizerId: number) {
+    const user = await this.userRepo.findOne({ where: { id: organizerId } });
+    if (!user) throw new NotFoundException('Organizer not found');
+    this.ensureOrganizerActive(user);
+
+    const event = await this.eventRepo.findOne({ where: { id: eventId } });
+    if (!event) throw new NotFoundException('Event not found');
+    
+    if (event.organizerId !== organizerId) {
+      throw new ForbiddenException('You do not own this event');
+    }
+
+    await this.eventRepo.remove(event);
+    return { success: true };
   }
 
   async updateEvent(
@@ -488,7 +547,16 @@ export class EventService {
       throw new BadRequestException('startDatetime must be before endDatetime');
     }
 
-    const { sponsors, ...rest } = dto;
+    const { sponsors, roster, ...rest } = dto as UpdateEventDto & {
+      sponsors?: { name: string; logo?: string }[];
+      roster?: {
+        role: string;
+        displayName: string;
+        title?: string | null;
+        sortOrder?: number;
+        photoUrl?: string | null;
+      }[];
+    };
 
     for (const key of Object.keys(rest) as (keyof typeof rest)[]) {
       const v = rest[key];
@@ -501,6 +569,10 @@ export class EventService {
 
     if (sponsors !== undefined) {
       await this.syncEventSponsors(event.id, sponsors);
+    }
+
+    if (roster !== undefined) {
+      await this.syncEventRoster(event.id, roster);
     }
 
     return event;
@@ -941,6 +1013,7 @@ export class EventService {
       attendeePreviewMap,
       userRegistrationRow,
       userSavedRow,
+      rosterRows,
     ] = await Promise.all([
       this.userRepo.findOne({ where: { id: event.organizerId } }),
       this.organizerProfileRepo.findOne({
@@ -951,6 +1024,10 @@ export class EventService {
       this.buildAttendeePreviewMap([event.id]),
       userRegistrationPromise,
       userSavedPromise,
+      this.eventProgramRosterRepo.find({
+        where: { eventId: event.id },
+        order: { sortOrder: 'ASC' },
+      }),
     ]);
 
     if (!organizer) {
@@ -981,6 +1058,7 @@ export class EventService {
         name: event.locationName ?? null,
         address: event.locationAddress ?? null,
       },
+      eventFormat: event.eventFormat ?? null,
       organizer: {
         name: profile?.organizationName || organizer.fullName,
         description: profile?.organizationDescription || '',
@@ -1003,6 +1081,15 @@ export class EventService {
         userRegistrationRow != null &&
         userRegistrationRow.registrationId != null,
       isSaved: userSavedRow != null,
+      roster:
+        rosterRows?.map((r) => ({
+          id: r.id,
+          role: r.role,
+          displayName: r.displayName,
+          title: r.title,
+          photoUrl: r.photoUrl,
+          sortOrder: r.sortOrder,
+        })) ?? [],
     };
   }
 }
