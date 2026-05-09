@@ -302,4 +302,23 @@ export class OnboardingService {
       mode: 'created',
     };
   }
+
+  async updateOrganizerProfileImage(userId: number, file: any) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.profileImg = `/uploads/${file.filename}`;
+    await this.userRepository.save(user);
+
+    return {
+      userId,
+      profileImg: user.profileImg,
+    };
+  }
 }

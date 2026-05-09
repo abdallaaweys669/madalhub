@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, MinLength } from 'class-validator';
 
 export class CreateOrganizerDto {
   @IsNotEmpty()
@@ -10,9 +10,9 @@ export class CreateOrganizerDto {
   @MinLength(6)
   password!: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   phone!: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   location!: string;
 }

@@ -7,8 +7,13 @@ import {
   Platform,
   Pressable,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import * as Facebook from 'expo-auth-session/providers/facebook';
 import { COLORS } from '@/constants/loginSignin/authStyles';
 import TextField from '@/features/auth/components/TextField';
 import PasswordField from '@/features/auth/components/PasswordField';
@@ -17,36 +22,51 @@ import organizerApi from '@/api/organizer';
 import { isOrganizerSubmissionReadyForReview } from '@/utils/organizerVerification';
 import BackToWelcomeRow from '@/features/auth/components/BackToWelcomeRow';
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function OrganizerSignupScreen() {
   const router = useRouter();
   const { loginAsOrganizer } = useAuth();
+  const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+  const googleAndroidClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || googleWebClientId || 'missing-google-client-id';
+  const googleIosClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || googleWebClientId || 'missing-google-client-id';
+  const facebookAppId = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || '';
+  const googleConfigured =
+    Boolean(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID) ||
+    Boolean(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
+  const facebookConfigured = Boolean(facebookAppId);
 
   const [values, setValues] = useState({
-    fullName: '',
+    organizationName: '',
     email: '',
-    phone: '',
-    location: '',
     password: '',
     confirm: '',
   });
   const [touched, setTouched] = useState({
-    fullName: false,
+    organizationName: false,
     email: false,
-    phone: false,
-    location: false,
     password: false,
     confirm: false,
   });
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState('');
   const [formError, setFormError] = useState('');
+  const [googleRequest, googleResponse, promptGoogle] = Google.useAuthRequest({
+    webClientId: googleWebClientId || googleAndroidClientId,
+    androidClientId: googleAndroidClientId,
+    iosClientId: googleIosClientId,
+  });
+  const [facebookRequest, facebookResponse, promptFacebook] = Facebook.useAuthRequest({
+    clientId: facebookAppId || 'missing-facebook-app-id',
+  });
 
   const fieldErrors = useMemo(() => {
     const errors = {};
-    if (!values.fullName.trim()) errors.fullName = 'Full name is required';
+    if (!values.organizationName.trim()) errors.organizationName = 'Organization name is required';
     if (!values.email.trim()) errors.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(values.email)) errors.email = 'Invalid email format';
-    if (!values.phone.trim()) errors.phone = 'Phone is required';
-    if (!values.location.trim()) errors.location = 'Location is required';
     if (!values.password) errors.password = 'Password is required';
     else if (values.password.length < 6) errors.password = 'Password must be at least 6 characters';
     if (!values.confirm) errors.confirm = 'Confirm password is required';
@@ -66,10 +86,8 @@ export default function OrganizerSignupScreen() {
 
   const onSubmit = async () => {
     setTouched({
-      fullName: true,
+      organizationName: true,
       email: true,
-      phone: true,
-      location: true,
       password: true,
       confirm: true,
     });
@@ -80,10 +98,8 @@ export default function OrganizerSignupScreen() {
 
     try {
       await organizerApi.organizerRegister({
-        full_name: values.fullName,
+        full_name: values.organizationName,
         email: values.email,
-        phone: values.phone,
-        location: values.location,
         password: values.password,
       });
 
@@ -111,6 +127,72 @@ export default function OrganizerSignupScreen() {
       setLoading(false);
     }
   };
+
+  const routeOrganizerAfterLogin = async (result) => {
+    await loginAsOrganizer(result.token, result.organizerStatus, result.rejectionReason);
+    if (result.organizerStatus === 'approved') {
+      router.replace('/(organizer)/dashboard');
+      return;
+    }
+    if (result.organizerStatus === 'rejected') {
+      router.replace('/(organizer-status)/verification-failed');
+      return;
+    }
+    const detail = await organizerApi.getOrganizerStatus();
+    const ready = isOrganizerSubmissionReadyForReview(detail);
+    router.replace(
+      ready ? '/(organizer-status)/pending-verification' : '/(organizer-status)/resubmit-verification',
+    );
+  };
+
+  React.useEffect(() => {
+    const run = async () => {
+      if (googleResponse?.type !== 'success') return;
+      try {
+        setFormError('');
+        setSocialLoading('google');
+        const auth = googleResponse.authentication || {};
+        const result = await organizerApi.organizerSocialLogin({
+          provider: 'google',
+          idToken: auth.idToken,
+          accessToken: auth.accessToken,
+          email: values.email,
+          fullName: values.organizationName,
+        });
+        await routeOrganizerAfterLogin(result);
+      } catch (error) {
+        setFormError(error?.message || 'Google sign-in failed');
+      } finally {
+        setSocialLoading('');
+      }
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleResponse]);
+
+  React.useEffect(() => {
+    const run = async () => {
+      if (facebookResponse?.type !== 'success') return;
+      try {
+        setFormError('');
+        setSocialLoading('facebook');
+        const auth = facebookResponse.authentication || {};
+        const result = await organizerApi.organizerSocialLogin({
+          provider: 'facebook',
+          accessToken: auth.accessToken,
+          email: values.email,
+          fullName: values.organizationName,
+        });
+        await routeOrganizerAfterLogin(result);
+      } catch (error) {
+        setFormError(error?.message || 'Facebook login failed');
+      } finally {
+        setSocialLoading('');
+      }
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facebookResponse]);
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.cardBg }}>
@@ -173,12 +255,12 @@ export default function OrganizerSignupScreen() {
             ) : null}
 
             <TextField
-              label="Full Name"
-              value={values.fullName}
-              onChangeText={(value) => onChange('fullName', value)}
-              onBlur={() => onBlur('fullName')}
-              error={touched.fullName ? fieldErrors.fullName : ''}
-              placeholder="Enter your full name"
+              label="Organization Name"
+              value={values.organizationName}
+              onChangeText={(value) => onChange('organizationName', value)}
+              onBlur={() => onBlur('organizationName')}
+              error={touched.organizationName ? fieldErrors.organizationName : ''}
+              placeholder="Enter organization name"
               autoCapitalize="words"
             />
 
@@ -191,25 +273,6 @@ export default function OrganizerSignupScreen() {
               placeholder="Enter your email"
               keyboardType="email-address"
               autoCapitalize="none"
-            />
-
-            <TextField
-              label="Phone Number"
-              value={values.phone}
-              onChangeText={(value) => onChange('phone', value)}
-              onBlur={() => onBlur('phone')}
-              error={touched.phone ? fieldErrors.phone : ''}
-              placeholder="Enter your phone number"
-              keyboardType="phone-pad"
-            />
-
-            <TextField
-              label="Location"
-              value={values.location}
-              onChangeText={(value) => onChange('location', value)}
-              onBlur={() => onBlur('location')}
-              error={touched.location ? fieldErrors.location : ''}
-              placeholder="City, Country"
             />
 
             <PasswordField
@@ -261,6 +324,66 @@ export default function OrganizerSignupScreen() {
                 </Text>
               )}
             </Pressable>
+
+            <View style={{ marginBottom: 18 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+                <Text style={{ marginHorizontal: 12, color: COLORS.textLight, fontSize: 13, fontWeight: '600' }}>
+                  or continue with
+                </Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable
+                  onPress={() => {
+                    if (!googleConfigured) {
+                      return Alert.alert('Google', 'Set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID (or web client id) in frontend .env first.');
+                    }
+                    if (!googleRequest) return Alert.alert('Google', 'Google auth is still initializing.');
+                    promptGoogle();
+                  }}
+                  style={{
+                    flex: 1,
+                    minHeight: 48,
+                    borderRadius: 12,
+                    borderWidth: 1.2,
+                    borderColor: '#E5E7EB',
+                    backgroundColor: '#FFFFFF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                  }}
+                >
+                  {socialLoading === 'google' ? <ActivityIndicator size="small" color="#EA4335" /> : <Ionicons name="logo-google" size={18} color="#EA4335" />}
+                  <Text style={{ color: '#111827', fontWeight: '700' }}>Google</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    if (!facebookConfigured) {
+                      return Alert.alert('Facebook', 'Set EXPO_PUBLIC_FACEBOOK_APP_ID in frontend .env first.');
+                    }
+                    if (!facebookRequest) return Alert.alert('Facebook', 'Facebook auth is still initializing.');
+                    promptFacebook();
+                  }}
+                  style={{
+                    flex: 1,
+                    minHeight: 48,
+                    borderRadius: 12,
+                    borderWidth: 1.2,
+                    borderColor: '#E5E7EB',
+                    backgroundColor: '#FFFFFF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                  }}
+                >
+                  {socialLoading === 'facebook' ? <ActivityIndicator size="small" color="#1877F2" /> : <Ionicons name="logo-facebook" size={18} color="#1877F2" />}
+                  <Text style={{ color: '#111827', fontWeight: '700' }}>Facebook</Text>
+                </Pressable>
+              </View>
+            </View>
 
             <Text
               style={{

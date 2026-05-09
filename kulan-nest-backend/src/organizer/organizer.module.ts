@@ -8,6 +8,8 @@ import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity
 import { OrganizerVerificationDocument } from 'src/database/entities/organizer-verification-document.entity';
 import { Event } from 'src/database/entities/event.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
+import { OrganizerFollow } from 'src/database/entities/organizer-follow.entity';
+import { OrganizerReview } from 'src/database/entities/organizer-review.entity';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
@@ -18,6 +20,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       OrganizerVerificationDocument,
       Event,
       EventRegistration,
+      OrganizerFollow,
+      OrganizerReview,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

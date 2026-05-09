@@ -22,6 +22,11 @@ export default function LocationPickerModal({ visible, onClose, onSelectLocation
     address: ''
   });
 
+  const looksLikePlusCode = (value = '') => {
+    const v = String(value || '').trim();
+    return /^[23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{2,8}$/i.test(v);
+  };
+
   useEffect(() => {
     if (visible) {
       (async () => {
@@ -64,9 +69,13 @@ export default function LocationPickerModal({ visible, onClose, onSelectLocation
         const constructedAddress = [place.streetName || place.street, place.city, place.region || place.country]
           .filter(Boolean)
           .join(', ');
+        const rawName = (place.name || '').trim();
+        const friendlyName = !looksLikePlusCode(rawName)
+          ? rawName
+          : ((place.streetName || place.street || place.district || place.subregion || place.city || 'Selected Location').trim());
         
         setAddressDetails({
-          name: place.name && place.name !== place.streetName ? place.name : (place.streetName || place.city || 'Selected Location'),
+          name: friendlyName || 'Selected Location',
           address: constructedAddress
         });
       }

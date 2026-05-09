@@ -10,6 +10,8 @@ export default function CreateEventFloatingBar({
   disabledPublish,
   bottomInset = 0,
 }) {
+  const showSavedText = Boolean(lastSavedText) && lastSavedText !== 'Not saved yet';
+
   return (
     <View
       style={{
@@ -17,42 +19,63 @@ export default function CreateEventFloatingBar({
         left: 14,
         right: 14,
         bottom: bottomInset + 10,
-        borderRadius: 16,
+        borderRadius: 18,
         backgroundColor: '#fff',
         borderWidth: 1,
-        borderColor: '#F3F4F6',
-        padding: 10,
+        borderColor: '#ECEEF1',
+        padding: 12,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 14,
         elevation: 8,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View>
-          <Text style={{ color: '#16A34A', fontSize: 12, fontWeight: '600' }}>{lastSavedText}</Text>
-          <Pressable onPress={onSaveDraft} hitSlop={8}>
-            <Text style={{ color: '#EA580C', fontWeight: '700', marginTop: 2 }}>Save Draft</Text>
-          </Pressable>
-        </View>
+      {showSavedText ? (
+        <Text style={{ color: '#16A34A', fontSize: 12, fontWeight: '700', marginBottom: 8 }}>
+          {lastSavedText}
+        </Text>
+      ) : null}
 
-        <View style={{ flex: 1 }} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Pressable
+          onPress={onSaveDraft}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            flex: 1,
+            height: 50,
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: '#FDBA74',
+            backgroundColor: pressed ? '#FFF7ED' : '#FFFFFF',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: loading ? 0.7 : 1,
+          })}
+        >
+          <Text style={{ color: '#C2410C', fontWeight: '800', fontSize: 16 }}>Save Draft</Text>
+        </Pressable>
 
         <Pressable
           onPress={onPublish}
           disabled={disabledPublish || loading}
-          style={{
-            borderRadius: 12,
-            backgroundColor: disabledPublish ? '#D1D5DB' : '#FF7A00',
-            paddingHorizontal: 14,
-            minWidth: 140,
+          style={({ pressed }) => ({
+            flex: 1,
+            height: 50,
+            borderRadius: 14,
+            backgroundColor: disabledPublish ? '#DDE1E7' : '#FF7A00',
             alignItems: 'center',
             justifyContent: 'center',
-            paddingVertical: 11,
-          }}
+            opacity: disabledPublish ? 1 : pressed ? 0.9 : 1,
+          })}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800' }}>{publishLabel}</Text>}
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={{ color: disabledPublish ? '#F8FAFC' : '#fff', fontWeight: '800', fontSize: 16 }}>
+              {publishLabel}
+            </Text>
+          )}
         </Pressable>
       </View>
     </View>

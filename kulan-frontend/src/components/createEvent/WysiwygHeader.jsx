@@ -47,33 +47,76 @@ export default function WysiwygHeader({
         </Pressable>
       </View>
 
-      <Pressable
-        onPress={onPickCover}
-        style={{
-          position: 'absolute',
-          left: 16,
-          right: 16,
-          bottom: 14,
-          borderRadius: 14,
-          backgroundColor: 'rgba(0,0,0,0.42)',
-          borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.2)',
-          paddingVertical: 12,
-          alignItems: 'center',
-          flexDirection: 'row',
-          justifyContent: 'center',
-          gap: 8,
-        }}
-      >
-        {coverUploading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <>
-            <Feather name="camera" size={20} color="#fff" />
-            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Tap to Upload Cover</Text>
-          </>
-        )}
-      </Pressable>
+      {!coverUri ? (
+        <Pressable
+          onPress={onPickCover}
+          style={{
+            position: 'absolute',
+            alignSelf: 'center',
+            top: '42%',
+            marginTop: -30,
+            minWidth: 190,
+            borderRadius: 16,
+            backgroundColor: 'rgba(13,17,28,0.5)',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.28)',
+            paddingVertical: 12,
+            paddingHorizontal: 18,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {coverUploading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 7,
+                }}
+              >
+                <Feather name="image" size={18} color="#fff" />
+              </View>
+              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Upload Cover</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.82)', fontSize: 12, marginTop: 2 }}>Tap to choose photo</Text>
+            </>
+          )}
+        </Pressable>
+      ) : (
+        <Pressable
+          onPress={onPickCover}
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: 14,
+            borderRadius: 14,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.2)',
+            paddingVertical: 11,
+            alignItems: 'center',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+        >
+          {coverUploading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Feather name="edit-2" size={18} color="#fff" />
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Change Cover</Text>
+            </>
+          )}
+        </Pressable>
+      )}
     </View>
   );
 }

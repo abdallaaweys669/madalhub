@@ -26,6 +26,10 @@ export default function RootLayout() {
                 name="events/[id]/attendees"
                 options={{ headerShown: false }}
               />
+              <Stack.Screen
+                name="(modal)/changePassword"
+                options={{ presentation: 'modal', headerShown: false }}
+              />
             </Stack>
           </SavedEventsProvider>
         </OnboardingProvider>

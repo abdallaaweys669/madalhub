@@ -91,6 +91,8 @@ export default function OrganizerDashboardScreen() {
   const { user } = useAuth();
   const [events, setEvents] = useState([]);
   const [organizationName, setOrganizationName] = useState('');
+  const [headerProfileImg, setHeaderProfileImg] = useState('');
+  const [headerFullName, setHeaderFullName] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('All');
@@ -101,12 +103,14 @@ export default function OrganizerDashboardScreen() {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const [eventsData, statusData] = await Promise.all([
+      const [eventsData, profileData] = await Promise.all([
         organizerApi.getOrganizerEvents(),
-        organizerApi.getOrganizerStatus().catch(() => null),
+        organizerApi.getProfileDashboard().catch(() => null),
       ]);
       setEvents(eventsData);
-      setOrganizationName((statusData?.organizationName ?? '').trim());
+      setOrganizationName((profileData?.organizationName ?? '').trim());
+      setHeaderFullName((profileData?.fullName ?? '').trim());
+      setHeaderProfileImg(resolveApiAssetUrl(profileData?.profileImg) || '');
     } catch (error) {
       console.error('Failed to fetch organizer events:', error);
     }
@@ -253,7 +257,8 @@ export default function OrganizerDashboardScreen() {
 
   const hasEvents = sortedEvents.length > 0;
   const greetingName =
-    organizationName || user?.organizationName || user?.fullName || 'Organizer';
+    organizationName || headerFullName || user?.organizationName || user?.fullName || 'Organizer';
+  const headerInitials = initials(organizationName || headerFullName || user?.fullName);
   const headerSubtitle = loading
     ? 'Loading your dashboard...'
     : hasEvents
@@ -332,9 +337,14 @@ export default function OrganizerDashboardScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               zIndex: 2,
+              overflow: 'hidden',
             }}
           >
-            <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '800' }}>{initials(user?.fullName)}</Text>
+            {headerProfileImg ? (
+              <Image source={{ uri: headerProfileImg }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            ) : (
+              <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '800' }}>{headerInitials}</Text>
+            )}
           </Pressable>
 
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 2 }}>

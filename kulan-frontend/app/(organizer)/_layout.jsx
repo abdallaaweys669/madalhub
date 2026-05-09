@@ -26,6 +26,8 @@ export default function OrganizerLayout() {
       <Stack.Screen name="dashboard" />
       <Stack.Screen name="my-events" />
       <Stack.Screen name="profile" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="edit-profile" />
       <Stack.Screen name="create-event" />
       <Stack.Screen name="edit-event" />
     </Stack>

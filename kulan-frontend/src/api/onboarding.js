@@ -1,4 +1,4 @@
-import apiClient from './client';
+import apiClient, { API_BASE_URL } from './client';
 
 export const getInterests = async () => {
   try {
@@ -74,27 +74,109 @@ export const updateOrganizerProfile = async (data) => {
 };
 
 export const uploadOrganizerDocument = async (formData) => {
+  const base = String(API_BASE_URL || '').replace(/\/$/, '');
+  const url = `${base}/onboarding/organizer/document`;
+  const headers = {};
+  const auth = apiClient.defaults.headers.common.Authorization;
+  if (auth) headers.Authorization = typeof auth === 'string' ? auth : String(auth);
+  if (base.includes('ngrok')) headers['ngrok-skip-browser-warning'] = 'true';
+
+  const controller = new AbortController();
+  const timeoutMs = 120000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
   try {
-    const response = await apiClient.post('/onboarding/organizer/document', formData, {
-      timeout: 120000,
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-      transformRequest: (body, headers) => {
-        if (headers && typeof headers.delete === 'function') {
-          headers.delete('Content-Type');
-        } else if (headers) {
-          delete headers['Content-Type'];
-        }
-        return body;
-      },
+    res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: controller.signal,
     });
-    return response.data;
   } catch (error) {
-    if (error.response) {
-      throw new Error(error.response.data?.message || 'Failed to upload document');
-    }
-    throw new Error('Network error. Please check your connection.');
+    const isAbort = error?.name === 'AbortError';
+    const isLocal = /localhost|127\.0\.0\.1/i.test(base);
+    throw new Error(
+      isAbort
+        ? `Document upload timed out after ${timeoutMs / 1000}s.`
+        : isLocal
+          ? 'Cannot reach API (localhost on device). Set EXPO_PUBLIC_API_BASE_URL to your ngrok URL and restart Expo.'
+          : `Document upload failed: ${error?.message || 'network'}. Check ngrok and backend.`,
+    );
+  } finally {
+    clearTimeout(timeoutId);
   }
+
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(res.ok ? 'Invalid JSON from server' : `Document upload failed (${res.status})`);
+  }
+
+  if (!res.ok) {
+    const serverMsg =
+      (typeof data?.message === 'string' && data.message) ||
+      (Array.isArray(data?.message) && data.message.join(', ')) ||
+      `HTTP ${res.status}`;
+    throw new Error(serverMsg);
+  }
+
+  return data;
+};
+
+export const uploadOrganizerProfileImage = async (formData) => {
+  const base = String(API_BASE_URL || '').replace(/\/$/, '');
+  const url = `${base}/onboarding/organizer/profile-image`;
+  const headers = {};
+  const auth = apiClient.defaults.headers.common.Authorization;
+  if (auth) headers.Authorization = typeof auth === 'string' ? auth : String(auth);
+  if (base.includes('ngrok')) headers['ngrok-skip-browser-warning'] = 'true';
+
+  const controller = new AbortController();
+  const timeoutMs = 120000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const isAbort = error?.name === 'AbortError';
+    const isLocal = /localhost|127\.0\.0\.1/i.test(base);
+    throw new Error(
+      isAbort
+        ? `Upload timed out after ${timeoutMs / 1000}s.`
+        : isLocal
+          ? 'Cannot reach API (localhost on device). Set EXPO_PUBLIC_API_BASE_URL to your ngrok URL and restart Expo.'
+          : `Upload failed: ${error?.message || 'network'}. Check ngrok and backend.`,
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(res.ok ? 'Invalid JSON from server' : `Upload failed (${res.status})`);
+  }
+
+  if (!res.ok) {
+    const serverMsg =
+      (typeof data?.message === 'string' && data.message) ||
+      (Array.isArray(data?.message) && data.message.join(', ')) ||
+      `HTTP ${res.status}`;
+    throw new Error(serverMsg);
+  }
+
+  return data;
 };
 
 export default {
@@ -103,4 +185,5 @@ export default {
   updateInterests,
   updateOrganizerProfile,
   uploadOrganizerDocument,
+  uploadOrganizerProfileImage,
 };

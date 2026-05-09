@@ -78,4 +78,21 @@ export class OnboardingController {
       documentType,
     );
   }
+
+  @Post('organizer/profile-image')
+  @Roles(2)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: 'uploads',
+        filename: (req, file, cb) => {
+          const uniqueName = `${Date.now()}${extname(file.originalname)}`;
+          cb(null, uniqueName);
+        },
+      }),
+    }),
+  )
+  updateOrganizerProfileImage(@CurrentUser() user, @UploadedFile() file: any) {
+    return this.onboardingService.updateOrganizerProfileImage(user.userId, file);
+  }
 }
