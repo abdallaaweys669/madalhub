@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
-export default function WysiwygLocation({ locationPrimary, locationSecondary, onPress }) {
+export default function WysiwygLocation({ locationPrimary, locationSecondary, hasMapPin, onPress }) {
   return (
     <Pressable onPress={onPress} style={eventStyles.infoRow}>
       <View style={eventStyles.infoIconBg}>
@@ -12,6 +12,11 @@ export default function WysiwygLocation({ locationPrimary, locationSecondary, on
       <View style={{ flex: 1 }}>
         <Text style={eventStyles.infoText}>{locationPrimary || 'Tap to set venue or online link'}</Text>
         <Text style={eventStyles.infoSubText}>{locationSecondary || 'Select map location or paste meeting URL'}</Text>
+        {hasMapPin ? (
+          <Text style={[eventStyles.infoSubText, { color: '#16A34A', fontWeight: '700' }]}>
+            Exact map pin saved
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );

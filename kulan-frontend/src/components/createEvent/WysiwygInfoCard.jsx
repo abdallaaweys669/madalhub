@@ -2,15 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
-
-const FORMAT_LABELS = {
-  meetup: 'Meetup',
-  panel: 'Panel',
-  seminar: 'Seminar',
-  workshop: 'Workshop',
-  talk: 'Talk',
-  bootcamp: 'Bootcamp',
-};
+import EventMetaChipsRow from '@/components/event/EventMetaChipsRow';
 
 export default function WysiwygInfoCard({
   title,
@@ -32,31 +24,16 @@ export default function WysiwygInfoCard({
 
   return (
     <View style={eventStyles.infoBlock}>
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Pressable
-          onPress={onPressCategory}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF7ED', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }}
-        >
-          <Feather name="tag" size={12} color="#EA580C" />
-          <Text style={{ color: '#EA580C', fontWeight: '700', fontSize: 12 }}>{categoryLabel || 'Pick category'}</Text>
-        </Pressable>
-
-        <Pressable 
-          onPress={onPressDeliveryMode} 
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EEF2FF', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }}
-        >
-          <Feather name={isOnline ? 'video' : 'map-pin'} size={12} color="#4338CA" />
-          <Text style={{ color: '#4338CA', fontWeight: '700', fontSize: 12 }}>{isOnline ? 'ONLINE' : 'IN-PERSON'}</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={onPressFormat}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ECFDF5', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }}
-        >
-          <Feather name="grid" size={12} color="#059669" />
-          <Text style={{ color: '#059669', fontWeight: '700', fontSize: 12 }}>{FORMAT_LABELS[formatLabel] || 'Pick format'}</Text>
-        </Pressable>
-      </View>
+      <EventMetaChipsRow
+        variant="create"
+        categoryLabel={categoryLabel}
+        formatKey={formatLabel}
+        isOnline={isOnline}
+        onPressCategory={onPressCategory}
+        onPressDelivery={onPressDeliveryMode}
+        onPressFormat={onPressFormat}
+        style={{ marginBottom: 12 }}
+      />
 
       <TextInput
         value={title}

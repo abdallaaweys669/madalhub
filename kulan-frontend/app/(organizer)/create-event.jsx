@@ -192,10 +192,11 @@ export default function CreateEventScreen() {
     totalPrice: '0',
     interestId: '',
   });
-  const [template, setTemplate] = useState(null);
+  const [template, setTemplate] = useState('meetup');
   const [eduSubtype, setEduSubtype] = useState(null);
   const [isInPerson, setIsInPerson] = useState(true);
   const [onlineLink, setOnlineLink] = useState('');
+  const [locationPin, setLocationPin] = useState(null);
   const [ticketPaid, setTicketPaid] = useState(false);
 
   const [startDate, setStartDate] = useState(() => {
@@ -291,10 +292,25 @@ export default function CreateEventScreen() {
           totalPrice: String(data.price ?? data.totalPrice ?? 0),
           interestId: String(data.interestId || ''),
         });
-        setTemplate(data.eventFormat === 'panel' ? 'panel' : data.eventFormat === 'meetup' ? 'meetup' : data.eventFormat ? 'education' : null);
+        setTemplate(
+          data.eventFormat === 'panel'
+            ? 'panel'
+            : data.eventFormat === 'meetup'
+              ? 'meetup'
+              : data.eventFormat
+                ? 'education'
+                : 'meetup',
+        );
         setEduSubtype(['seminar', 'workshop', 'talk', 'bootcamp'].includes(data.eventFormat) ? data.eventFormat : null);
         setIsInPerson(!(data.isOnline === true && data.isHybrid !== true));
         setOnlineLink(data.onlineLink || '');
+        const latitude = Number(data.location?.latitude ?? data.locationLatitude);
+        const longitude = Number(data.location?.longitude ?? data.locationLongitude);
+        setLocationPin(
+          Number.isFinite(latitude) && Number.isFinite(longitude)
+            ? { latitude, longitude }
+            : null,
+        );
         setCoverImagePath(data.image || data.coverImage || null);
         setRemoteStatus(data.status ?? null);
         setTicketPaid(Number(data.price ?? data.totalPrice ?? 0) > 0);
@@ -318,6 +334,8 @@ export default function CreateEventScreen() {
     coverImage: coverImagePath || null,
     locationName: isInPerson ? values.locationName.trim() || 'Venue TBD' : 'Online',
     locationAddress: values.locationAddress || '',
+    locationLatitude: isInPerson ? locationPin?.latitude ?? null : null,
+    locationLongitude: isInPerson ? locationPin?.longitude ?? null : null,
     capacity: Number(values.capacity) || 0,
     totalPrice: ticketPaid ? Number(values.totalPrice) || 0 : 0,
     interestId: draft ? Number(values.interestId) || 1 : Number(values.interestId),
@@ -328,7 +346,7 @@ export default function CreateEventScreen() {
     onlineLink: !isInPerson ? onlineLink.trim() : undefined,
     sponsors: sponsorRows.filter((s) => s.name.trim()).map((s) => ({ name: s.name.trim(), ...(s.logoPath ? { logo: s.logoPath } : {}) })),
     roster: people.filter((p) => p.fullName.trim()).map((p, idx) => ({ role: p.role, displayName: p.fullName.trim(), title: p.title.trim() || null, sortOrder: idx, photoUrl: p.photoPath || null })),
-  }), [values, startDate, endDate, coverImagePath, isInPerson, ticketPaid, onlineLink, template, eduSubtype, sponsorRows, people]);
+  }), [values, startDate, endDate, coverImagePath, isInPerson, locationPin, ticketPaid, onlineLink, template, eduSubtype, sponsorRows, people]);
 
   const saveDraft = async () => {
     if (effectiveEventId) await patchOrganizerEvent(effectiveEventId, buildPayload(true));
@@ -559,7 +577,12 @@ export default function CreateEventScreen() {
               onPressDeliveryMode={() => setLocationModalOpen(true)}
             />
 
-            <WysiwygLocation locationPrimary={isInPerson ? values.locationName : 'Online event'} locationSecondary={isInPerson ? values.locationAddress : onlineLink} onPress={() => setLocationModalOpen(true)} />
+            <WysiwygLocation
+              locationPrimary={isInPerson ? values.locationName : 'Online event'}
+              locationSecondary={isInPerson ? values.locationAddress : onlineLink}
+              hasMapPin={Boolean(locationPin)}
+              onPress={() => setLocationModalOpen(true)}
+            />
 
             <Text style={eventStyles.sectionTitle}>Organized by</Text>
             <View style={eventStyles.organizationCard}>
@@ -712,12 +735,22 @@ export default function CreateEventScreen() {
         onChangeIsInPerson={setIsInPerson}
         locationName={values.locationName}
         locationAddress={values.locationAddress}
+        locationPin={locationPin}
         onlineLink={onlineLink}
         onChangeOnlineLink={setOnlineLink}
         onOpenMap={() => setMapModalOpen(true)}
         mapVisible={mapModalOpen}
         onCloseMap={() => setMapModalOpen(false)}
-        onSelectLocation={(loc) => setValues((p) => ({ ...p, locationName: loc.locationName || p.locationName, locationAddress: loc.locationAddress || p.locationAddress }))}
+        onSelectLocation={(loc) => {
+          setValues((p) => ({
+            ...p,
+            locationName: loc.locationName || p.locationName,
+            locationAddress: loc.locationAddress || p.locationAddress,
+          }));
+          if (Number.isFinite(Number(loc.latitude)) && Number.isFinite(Number(loc.longitude))) {
+            setLocationPin({ latitude: Number(loc.latitude), longitude: Number(loc.longitude) });
+          }
+        }}
       />
 
       <SpeakerEditModal

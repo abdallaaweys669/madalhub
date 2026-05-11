@@ -417,6 +417,53 @@ function normalizeCategoryName(event) {
   return typeof byId === 'string' && byId.trim() ? byId.trim() : null;
 }
 
+/** Normalize event format key from GET /events/:id or list payloads (handles naming quirks). */
+function pickEventFormatFromPayload(event) {
+  const candidates = [
+    event?.eventFormat,
+    event?.event_format,
+    event?.formatType,
+    event?.format_type,
+    typeof event?.format === 'string' ? event.format : null,
+    event?.meta?.eventFormat,
+  ];
+  for (const c of candidates) {
+    if (c == null) continue;
+    const s = typeof c === 'number' ? String(c) : String(c).trim();
+    if (s) return s;
+  }
+  return null;
+}
+
+function normalizeCoordinate(raw) {
+  if (raw == null || raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function pickEventLocationCoordinates(event) {
+  const latitude = normalizeCoordinate(
+    event?.locationLatitude ??
+      event?.location_latitude ??
+      event?.latitude ??
+      event?.location?.latitude ??
+      event?.location?.lat,
+  );
+  const longitude = normalizeCoordinate(
+    event?.locationLongitude ??
+      event?.location_longitude ??
+      event?.longitude ??
+      event?.location?.longitude ??
+      event?.location?.lng,
+  );
+
+  return {
+    latitude,
+    longitude,
+    hasCoordinates: latitude != null && longitude != null,
+  };
+}
+
 async function ensureInterestLabelsLoaded() {
   if (
     interestLabelsByIdCache &&
@@ -560,8 +607,16 @@ export function mapApiEventToCard(event) {
       : Number(event.interestId || 0) || null;
   const categoryName = normalizeCategoryName(event);
 
+  const rawOrganizerId = event?.organizerId;
+  const organizerId =
+    rawOrganizerId != null && Number.isFinite(Number(rawOrganizerId)) ? Number(rawOrganizerId) : null;
+
+  const resolvedFormat = pickEventFormatFromPayload(event);
+  const locationCoordinates = pickEventLocationCoordinates(event);
+
   return {
     id: String(event.id),
+    organizerId,
     interestId,
     title,
     description: stripEmbeddedEventMeta(event.description ?? ''),
@@ -590,9 +645,14 @@ export function mapApiEventToCard(event) {
     locationAddress:
       typeof event.locationAddress === 'string' && event.locationAddress.trim()
         ? event.locationAddress.trim()
-        : '',
+        : typeof event?.location?.address === 'string' && event.location.address.trim()
+          ? event.location.address.trim()
+          : '',
+    locationLatitude: locationCoordinates.latitude,
+    locationLongitude: locationCoordinates.longitude,
+    hasLocationPin: locationCoordinates.hasCoordinates,
     isOnline,
-    eventFormat: event.eventFormat ?? null,
+    eventFormat: resolvedFormat,
     roster: Array.isArray(event.roster)
       ? event.roster.map((r) => ({
           id: r.id,
@@ -663,7 +723,8 @@ export async function getEvents(params = {}) {
 export async function getEventById(id) {
   await ensureInterestLabelsLoaded();
   const response = await apiClient.get(`/events/${id}`);
-  return mapApiEventToCard(response.data);
+  const raw = response.data?.data ?? response.data;
+  return mapApiEventToCard(raw);
 }
 
 export async function getEventAttendees(id, params = {}) {

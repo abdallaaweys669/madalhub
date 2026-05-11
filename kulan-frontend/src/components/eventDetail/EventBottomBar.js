@@ -24,13 +24,14 @@ const EventBottomBar = ({ joined, onToggleJoin, price = 'Free', event }) => {
   const isEnded = eventState === 'ended';
   const isFullyBooked = eventState === 'fully-booked';
   const isLive = eventState === 'live';
+  const hasInactiveStatus = isEnded || isClosed || isFullyBooked;
   const endsAtLabel = formatTimeLabel(event?.endsAt ?? null);
   const stateSubtitle = isEnded
-    ? 'Event already ended'
+    ? null
     : isClosed
-      ? 'Registration is closed'
+      ? null
     : isFullyBooked
-      ? 'Join waitlist to get notified'
+      ? null
       : isLive
         ? endsAtLabel
           ? `Ends at ${endsAtLabel}`
@@ -87,56 +88,47 @@ const EventBottomBar = ({ joined, onToggleJoin, price = 'Free', event }) => {
         </View>
       ) : (
         <View style={styles.bottomActionWrap}>
-          <TouchableOpacity
-            style={[
-              styles.bottomJoinButton,
-              (isClosed || isFullyBooked) && {
-                shadowOpacity: 0,
-                elevation: 0,
-              },
-            ]}
-            onPress={handleJoin}
-            activeOpacity={0.9}
-          >
-            {isEnded ? (
-              <View
-                style={[
-                  styles.bottomJoinButtonGradient,
-                  { backgroundColor: '#E5E7EB' },
-                ]}
-              >
-                <Text style={[styles.bottomJoinButtonText, { color: '#6B7280' }]}>Event Ended</Text>
+          {hasInactiveStatus ? (
+            <View style={styles.bottomStatusBlock}>
+              <Text style={styles.bottomPriceLabel}>STATUS</Text>
+              <View style={styles.bottomStatusValueRow}>
+                <Feather
+                  name={isClosed ? 'lock' : isFullyBooked ? 'users' : 'clock'}
+                  size={15}
+                  color={isClosed ? '#B91C1C' : isFullyBooked ? '#C2410C' : '#64748B'}
+                />
+                <Text
+                  style={[
+                    styles.bottomStatusValue,
+                    isClosed
+                      ? { color: '#B91C1C' }
+                      : isFullyBooked
+                        ? { color: '#C2410C' }
+                        : null,
+                  ]}
+                >
+                  {isClosed ? 'Closed' : isFullyBooked ? 'Full' : 'Ended'}
+                </Text>
               </View>
-            ) : isClosed ? (
-              <View
-                style={[
-                  styles.bottomJoinButtonGradient,
-                  { backgroundColor: '#FEE2E2' },
-                ]}
-              >
-                <Text style={[styles.bottomJoinButtonText, { color: '#B91C1C' }]}>Registration Closed</Text>
-              </View>
-            ) : isFullyBooked ? (
-              <View
-                style={[
-                  styles.bottomJoinButtonGradient,
-                  { backgroundColor: '#FFF1E6' },
-                ]}
-              >
-                <Text style={[styles.bottomJoinButtonText, { color: '#C2410C' }]}>Join Waitlist</Text>
-              </View>
-            ) : (
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.bottomJoinButton}
+              onPress={handleJoin}
+              activeOpacity={0.9}
+            >
               <LinearGradient
                 colors={['#FF7A00', '#FF9A3D']}
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
                 style={styles.bottomJoinButtonGradient}
               >
-                <Text style={styles.bottomJoinButtonText}>Register Now</Text>
+                <Feather name="ticket" size={16} color="#FFFFFF" />
+                <Text style={styles.bottomJoinButtonText}>Register now</Text>
               </LinearGradient>
-            )}
-          </TouchableOpacity>
-          {stateSubtitle ? <Text style={styles.bottomCtaSubtext}>{stateSubtitle}</Text> : null}
+            </TouchableOpacity>
+          )}
+          {stateSubtitle && isLive ? <Text style={styles.bottomCtaSubtext}>{stateSubtitle}</Text> : null}
         </View>
       )}
     </View>

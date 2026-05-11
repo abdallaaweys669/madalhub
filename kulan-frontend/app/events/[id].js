@@ -23,6 +23,7 @@ import EventActions from '@/components/eventDetail/EventActions';
 import EventBottomBar from '@/components/eventDetail/EventBottomBar';
 import EventRoster from '@/components/eventDetail/EventRoster';
 import SponsorCarousel from '@/components/eventDetail/SponsorCarousel';
+import EventDetailSkeleton from '@/components/skeletons/EventDetailSkeleton';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 
 const EventDetailScreen = () => {
@@ -135,8 +136,8 @@ const EventDetailScreen = () => {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text>Loading event...</Text>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+        <EventDetailSkeleton />
       </SafeAreaView>
     );
   }
@@ -185,6 +186,9 @@ const EventDetailScreen = () => {
   const isOnlineEvent = String(locationPrimary || event?.locationName || '')
     .trim()
     .toLowerCase() === 'online';
+  const locationLatitude = Number(event?.locationLatitude);
+  const locationLongitude = Number(event?.locationLongitude);
+  const hasExactMapPin = Number.isFinite(locationLatitude) && Number.isFinite(locationLongitude);
   const preferredLocationQuery = [
     event?.locationAddress,
     event?.locationName,
@@ -197,19 +201,51 @@ const EventDetailScreen = () => {
     .trim();
   const mapFallbackQuery = typeof event?.city === 'string' ? event.city.trim() : '';
   const mapQuery = preferredLocationQuery || mapFallbackQuery;
-  const showStickyMapButton = !isOnlineEvent && Boolean(mapQuery);
+  const showStickyMapButton = !isOnlineEvent && (hasExactMapPin || Boolean(mapQuery));
+
+  /** Venue title line — prefer parsed detail, then API venue name. */
+  const displayLocationPrimary = (
+    locationPrimary ||
+    event?.locationName ||
+    'Venue TBA'
+  ).trim();
+  /** Second line only when it adds info (avoid duplicating venue name as city/subtitle). */
+  const pickDistinctLocationSubtitle = (primary, candidates) => {
+    const p = String(primary || '')
+      .trim()
+      .toLowerCase();
+    for (const c of candidates) {
+      const t = typeof c === 'string' ? c.trim() : '';
+      if (t && t.toLowerCase() !== p) return t;
+    }
+    return '';
+  };
+  const displayLocationSecondary = pickDistinctLocationSubtitle(displayLocationPrimary, [
+    typeof event?.locationAddress === 'string' ? event.locationAddress : '',
+    locationSecondary,
+    typeof event?.city === 'string' ? event.city : '',
+  ]);
 
   const openAttendeesList = () => router.push(`/events/${String(event.id)}/attendees`);
   const handleMapPress = async () => {
-    if (!mapQuery || isOnlineEvent) {
+    if ((!mapQuery && !hasExactMapPin) || isOnlineEvent) {
       Alert.alert('Map unavailable', 'This event does not have a physical venue location yet.');
       return;
     }
 
+    const label = encodeURIComponent(displayLocationPrimary || 'Event venue');
     const encoded = encodeURIComponent(mapQuery);
-    const nativeScheme =
-      Platform.OS === 'ios' ? `maps:0,0?q=${encoded}` : `geo:0,0?q=${encoded}`;
-    const webFallback = `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+    const coordQuery = `${locationLatitude},${locationLongitude}`;
+    const nativeScheme = hasExactMapPin
+      ? Platform.OS === 'ios'
+        ? `maps://?ll=${coordQuery}&q=${label}`
+        : `geo:${coordQuery}?q=${coordQuery}(${label})`
+      : Platform.OS === 'ios'
+        ? `maps:0,0?q=${encoded}`
+        : `geo:0,0?q=${encoded}`;
+    const webFallback = hasExactMapPin
+      ? `https://www.google.com/maps/search/?api=1&query=${coordQuery}`
+      : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
 
     try {
       const canOpenNative = await Linking.canOpenURL(nativeScheme);
@@ -249,12 +285,24 @@ const EventDetailScreen = () => {
             description={event.description}
             datePrimary={datePrimary}
             dateSecondary={dateSecondary}
-            locationPrimary={locationPrimary || event?.locationName || 'Venue TBA'}
-            locationSecondary={locationSecondary || event?.city || 'Location details not provided'}
+            locationPrimary={displayLocationPrimary}
+            locationSecondary={displayLocationSecondary}
+            categoryName={event.categoryName}
+            eventFormat={event.eventFormat}
+            isOnline={typeof event.isOnline === 'boolean' ? event.isOnline : undefined}
           />
 
           <Text style={styles.sectionTitle}>Organized by</Text>
-          <View style={styles.organizationCard}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            disabled={!event.organizerId}
+            onPress={() => {
+              if (event.organizerId) {
+                router.push(`/organizer/${event.organizerId}`);
+              }
+            }}
+            style={[styles.organizationCard, !event.organizerId ? { opacity: 0.7 } : null]}
+          >
             {event.organizerLogoUrl ? (
               <Image source={{ uri: event.organizerLogoUrl }} style={styles.organizationLogo} />
             ) : (
@@ -271,7 +319,7 @@ const EventDetailScreen = () => {
               </View>
               <Text style={styles.organizationCategory}>{organizerDescription}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {event?.roster?.length > 0 ? (
             <>
@@ -307,7 +355,7 @@ const EventDetailScreen = () => {
         {showStickyMapButton ? (
           <TouchableOpacity style={styles.mapButton} onPress={handleMapPress}>
             <Feather name="map" size={16} color="#FF7A00" />
-            <Text style={styles.mapText}>View on Map</Text>
+            <Text style={styles.mapText}>Get Directions</Text>
           </TouchableOpacity>
         ) : null}
       </View>

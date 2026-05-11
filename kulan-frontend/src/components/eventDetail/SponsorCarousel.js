@@ -1,10 +1,7 @@
 ﻿import React, { useEffect, useMemo, useRef } from 'react';
 import { FlatList, Image, View } from 'react-native';
 import { styles } from '@/constants/eventDetails_styles/eventDetails.styles';
-
-const SPONSOR_ITEM_WIDTH = 94;
-const SPONSOR_ITEM_GAP = 12;
-const SPONSOR_ITEM_SIZE = SPONSOR_ITEM_WIDTH + SPONSOR_ITEM_GAP;
+import { sponsorCarouselStride } from '@/constants/sponsorTiles';
 
 const SponsorCarousel = ({ logos = [] }) => {
   const listRef = useRef(null);
@@ -12,6 +9,8 @@ const SponsorCarousel = ({ logos = [] }) => {
   const isInteractingRef = useRef(false);
   const resumeTimeoutRef = useRef(null);
   const shouldAutoSlide = logos.length >= 4;
+
+  const itemStride = sponsorCarouselStride();
 
   const loopData = useMemo(
     () =>
@@ -21,7 +20,7 @@ const SponsorCarousel = ({ logos = [] }) => {
     [logos, shouldAutoSlide],
   );
 
-  const loopWidth = shouldAutoSlide ? logos.length * SPONSOR_ITEM_SIZE : 0;
+  const loopWidth = shouldAutoSlide ? logos.length * itemStride : 0;
 
   useEffect(() => {
     if (!shouldAutoSlide) return undefined;
@@ -80,8 +79,8 @@ const SponsorCarousel = ({ logos = [] }) => {
           }, 800);
         }}
         renderItem={({ item }) => (
-          <View style={styles.sponsorCarouselItem}>
-            <Image source={item.image} style={styles.sponsorLogo} resizeMode="cover" />
+          <View style={[styles.sponsorLogoTile, styles.sponsorCarouselSlot]}>
+            <Image source={item.image} style={styles.sponsorLogo} resizeMode="contain" />
           </View>
         )}
       />

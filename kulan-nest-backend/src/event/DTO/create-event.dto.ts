@@ -55,6 +55,14 @@ export class CreateEventDto {
   locationName!: string;
   locationAddress!: string;
 
+  @IsOptional()
+  @IsNumber()
+  locationLatitude?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  locationLongitude?: number | null;
+
   @IsNumber()
   totalPrice!: number;
 

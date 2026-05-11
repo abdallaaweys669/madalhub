@@ -37,6 +37,12 @@ export class Event {
   @Column({ name: 'location_address', nullable: true, type: 'text' })
   locationAddress!: string | null;
 
+  @Column({ name: 'location_latitude', nullable: true, type: 'double' })
+  locationLatitude!: number | null;
+
+  @Column({ name: 'location_longitude', nullable: true, type: 'double' })
+  locationLongitude!: number | null;
+
   @Column({ name: 'cover_image', nullable: true, type: 'varchar', length: 500 })
   coverImage!: string | null;
 

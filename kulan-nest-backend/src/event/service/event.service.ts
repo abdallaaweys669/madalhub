@@ -81,12 +81,17 @@ export class EventService {
       location: {
         name: event.locationName ?? null,
         address: event.locationAddress ?? null,
+        latitude: event.locationLatitude ?? null,
+        longitude: event.locationLongitude ?? null,
       },
+      locationLatitude: event.locationLatitude ?? null,
+      locationLongitude: event.locationLongitude ?? null,
       price: event.totalPrice,
       attendeesCount,
       joined,
       isSaved,
       attendeePreviews: attendeePreviews ?? [],
+      eventFormat: event.eventFormat ?? null,
     };
   }
 
@@ -439,7 +444,7 @@ export class EventService {
       throw new BadRequestException('startDatetime must be before endDatetime');
     }
 
-    const { sponsors, roster, eventFormat, ...rest } = dto as CreateEventDto & {
+    const { sponsors, roster, ...rest } = dto as CreateEventDto & {
       sponsors?: { name: string; logo?: string }[];
       roster?: {
         role: string;
@@ -448,13 +453,13 @@ export class EventService {
         sortOrder?: number;
         photoUrl?: string | null;
       }[];
-      eventFormat?: string | null;
     };
 
     const event = this.eventRepo.create({
       ...rest,
       organizerId,
       status: 'draft',
+      eventFormat: dto.eventFormat ?? null,
     });
 
     const saved = await this.eventRepo.save(event);
@@ -608,6 +613,20 @@ export class EventService {
       .createQueryBuilder('event')
       .where('event.status = :status', { status: 'published' });
 
+    const now = new Date();
+    if (query.organizerId != null && Number.isFinite(Number(query.organizerId))) {
+      qb.andWhere('event.organizerId = :filterOrganizerId', {
+        filterOrganizerId: Number(query.organizerId),
+      });
+      if (query.organizerScope === 'upcoming') {
+        qb.andWhere('event.startDatetime >= :organizerNow', { organizerNow: now });
+      } else if (query.organizerScope === 'past') {
+        qb.andWhere('event.startDatetime < :organizerNowPast', {
+          organizerNowPast: now,
+        });
+      }
+    }
+
     if (query.q?.trim()) {
       qb.andWhere(
         new Brackets((qbInner) => {
@@ -670,7 +689,9 @@ export class EventService {
 
     this.applyDateBucketFilter(qb, query.dateBucket);
 
-    if (query.sort === 'start-desc') {
+    if (query.organizerScope === 'past') {
+      qb.orderBy('event.startDatetime', 'DESC');
+    } else if (query.sort === 'start-desc') {
       qb.orderBy('event.startDatetime', 'DESC');
     } else if (query.sort === 'popular') {
       qb.leftJoin(
@@ -1036,6 +1057,7 @@ export class EventService {
 
     return {
       id: event.id,
+      organizerId: event.organizerId,
       status: event.status,
       interestId: event.interestId,
       title: event.title,
@@ -1057,7 +1079,11 @@ export class EventService {
       location: {
         name: event.locationName ?? null,
         address: event.locationAddress ?? null,
+        latitude: event.locationLatitude ?? null,
+        longitude: event.locationLongitude ?? null,
       },
+      locationLatitude: event.locationLatitude ?? null,
+      locationLongitude: event.locationLongitude ?? null,
       eventFormat: event.eventFormat ?? null,
       organizer: {
         name: profile?.organizationName || organizer.fullName,

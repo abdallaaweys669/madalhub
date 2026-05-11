@@ -1,5 +1,13 @@
 import { StyleSheet } from 'react-native';
 
+import {
+  SPONSOR_TILE_GAP,
+  SPONSOR_TILE_HEIGHT,
+  SPONSOR_TILE_PADDING,
+  SPONSOR_TILE_RADIUS,
+  SPONSOR_TILE_WIDTH,
+} from '@/constants/sponsorTiles';
+
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -45,19 +53,55 @@ export const styles = StyleSheet.create({
   infoBlock: {
     marginBottom: 10,
   },
-  typeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#F2F3F5',
-    marginTop: 12,
-    marginBottom: 10,
+  /** Shared by `EventMetaChipsRow` (event detail + create preview card). */
+  eventMetaChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
   },
-  typeBadgeText: {
-    fontSize: 11,
+  eventMetaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  eventMetaChipCategory: {
+    backgroundColor: '#FFF7ED',
+  },
+  eventMetaChipDelivery: {
+    backgroundColor: '#EEF2FF',
+  },
+  eventMetaChipFormat: {
+    backgroundColor: '#ECFDF5',
+  },
+  /** When API has no stored format (should be rare after DB backfill). */
+  eventMetaChipFormatPlaceholder: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  eventMetaChipCategoryText: {
+    color: '#EA580C',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  eventMetaChipDeliveryText: {
+    color: '#4338CA',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  eventMetaChipFormatText: {
+    color: '#059669',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  eventMetaChipFormatTextPlaceholder: {
+    color: '#6B7280',
     fontWeight: '600',
-    color: '#374151',
+    fontSize: 12,
   },
   title: {
     fontSize: 23,
@@ -84,7 +128,7 @@ export const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 14,
   },
   infoIconBg: {
@@ -248,15 +292,29 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   sponsorCarouselList: {
-    paddingHorizontal: 16,
-    gap: 12,
-    paddingBottom: 2,
+    paddingVertical: 8,
+    paddingBottom: 12,
   },
-  sponsorCarouselItem: {
-    width: 94,
-    height: 62,
-    borderRadius: 12,
+  /** Logo tile — detail carousel & create flow (no horizontal gap; add `sponsorCarouselSlot`). */
+  sponsorLogoTile: {
+    width: SPONSOR_TILE_WIDTH,
+    height: SPONSOR_TILE_HEIGHT,
+    borderRadius: SPONSOR_TILE_RADIUS,
+    padding: SPONSOR_TILE_PADDING,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EEF0F4',
+    justifyContent: 'center',
+    alignItems: 'center',
     overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  sponsorCarouselSlot: {
+    marginRight: SPONSOR_TILE_GAP,
   },
   sponsorDotsRow: {
     marginTop: 10,
@@ -277,6 +335,7 @@ export const styles = StyleSheet.create({
   },
   sponsorsRowCentered: {
     justifyContent: 'center',
+    flexGrow: 1,
     flexWrap: 'nowrap',
   },
   sponsorsRowGrid: {
@@ -305,7 +364,7 @@ export const styles = StyleSheet.create({
   sponsorLogo: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: SPONSOR_TILE_RADIUS - 2,
   },
   sponsorLogoWrapGrid: {
     width: '22%',
@@ -360,47 +419,93 @@ export const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    borderTopColor: '#F1F5F9',
+    paddingHorizontal: 18,
+    paddingTop: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 14,
   },
   bottomPriceLabel: {
     fontSize: 11,
     color: '#9CA3AF',
   },
   bottomPriceValue: {
-    fontSize: 26,
+    fontSize: 25,
     color: '#111111',
     fontWeight: '700',
     marginTop: 2,
   },
   bottomJoinButton: {
-    minWidth: 164,
-    height: 48,
-    borderRadius: 20,
+    minWidth: 170,
+    height: 50,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     shadowColor: '#FF7A00',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.26,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
     elevation: 4,
   },
   bottomJoinButtonGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 20,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   bottomJoinButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  bottomStatusBlock: {
+    alignItems: 'flex-end',
+    minWidth: 112,
+  },
+  bottomStatusValueRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bottomStatusValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  bottomJoinButtonDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  bottomJoinButtonClosed: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  bottomJoinButtonWaitlist: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  bottomJoinButtonTextDisabled: {
+    color: '#6B7280',
+  },
+  bottomJoinButtonTextClosed: {
+    color: '#B91C1C',
+  },
+  bottomJoinButtonTextWaitlist: {
+    color: '#C2410C',
   },
   bottomActionWrap: {
     alignItems: 'flex-end',

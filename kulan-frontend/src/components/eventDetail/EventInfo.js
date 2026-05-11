@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { styles } from '../../constants/eventDetails_styles/eventDetails.styles';
 import { Feather } from '@expo/vector-icons';
+import EventMetaChipsRow from '@/components/event/EventMetaChipsRow';
 
 const EventInfo = ({
   title,
@@ -10,14 +11,26 @@ const EventInfo = ({
   dateSecondary,
   locationPrimary,
   locationSecondary,
+  categoryName,
+  eventFormat,
+  isOnline: isOnlineProp,
 }) => {
-  const isOnline = locationPrimary?.toLowerCase() === 'online';
+  const isOnline =
+    typeof isOnlineProp === 'boolean'
+      ? isOnlineProp
+      : locationPrimary?.toLowerCase() === 'online';
+  const categoryTrimmed =
+    typeof categoryName === 'string' ? categoryName.trim() : '';
   const [expanded, setExpanded] = useState(false);
   return (
     <View style={styles.infoBlock}>
-      <View style={styles.typeBadge}>
-        <Text style={styles.typeBadgeText}>{isOnline ? 'ONLINE' : 'IN-PERSON'}</Text>
-      </View>
+      <EventMetaChipsRow
+        variant="detail"
+        categoryLabel={categoryTrimmed || undefined}
+        formatKey={eventFormat}
+        isOnline={isOnline}
+        style={{ marginTop: 12, marginBottom: 10 }}
+      />
       <Text style={styles.title}>{title}</Text>
       <View style={styles.descriptionWrap}>
         <Text style={styles.description} numberOfLines={expanded ? undefined : 3}>
@@ -43,7 +56,9 @@ const EventInfo = ({
         </View>
         <View>
           <Text style={styles.infoText}>{locationPrimary}</Text>
-          <Text style={styles.infoSubText}>{locationSecondary}</Text>
+          {locationSecondary ? (
+            <Text style={styles.infoSubText}>{locationSecondary}</Text>
+          ) : null}
         </View>
       </View>
     </View>
