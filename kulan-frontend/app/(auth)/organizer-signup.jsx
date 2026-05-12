@@ -2,9 +2,6 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ActivityIndicator,
   Alert,
@@ -15,12 +12,21 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as Facebook from 'expo-auth-session/providers/facebook';
 import { COLORS } from '@/constants/loginSignin/authStyles';
+import AuthDivider from '@/features/auth/components/AuthDivider';
+import AuthFormMessage from '@/features/auth/components/AuthFormMessage';
+import AuthFormScaffold from '@/features/auth/components/AuthFormScaffold';
+import AuthSubmitButton from '@/features/auth/components/AuthSubmitButton';
 import TextField from '@/features/auth/components/TextField';
 import PasswordField from '@/features/auth/components/PasswordField';
 import useAuth from '@/auth/useAuth';
 import organizerApi from '@/api/organizer';
 import { isOrganizerSubmissionReadyForReview } from '@/utils/organizerVerification';
 import BackToWelcomeRow from '@/features/auth/components/BackToWelcomeRow';
+import {
+  getOrganizerSignupErrors,
+  inferFieldErrorsFromMessage,
+  normalizeEmail,
+} from '@/features/auth/validation/authRules';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -53,6 +59,7 @@ export default function OrganizerSignupScreen() {
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState('');
   const [formError, setFormError] = useState('');
+  const [serverErrors, setServerErrors] = useState({});
   const [googleRequest, googleResponse, promptGoogle] = Google.useAuthRequest({
     webClientId: googleWebClientId || googleAndroidClientId,
     androidClientId: googleAndroidClientId,
@@ -62,22 +69,20 @@ export default function OrganizerSignupScreen() {
     clientId: facebookAppId || 'missing-facebook-app-id',
   });
 
-  const fieldErrors = useMemo(() => {
-    const errors = {};
-    if (!values.organizationName.trim()) errors.organizationName = 'Organization name is required';
-    if (!values.email.trim()) errors.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(values.email)) errors.email = 'Invalid email format';
-    if (!values.password) errors.password = 'Password is required';
-    else if (values.password.length < 6) errors.password = 'Password must be at least 6 characters';
-    if (!values.confirm) errors.confirm = 'Confirm password is required';
-    else if (values.password !== values.confirm) errors.confirm = 'Passwords do not match';
-    return errors;
-  }, [values]);
+  const fieldErrors = useMemo(() => getOrganizerSignupErrors(values), [values]);
 
-  const isValid = Object.keys(fieldErrors).length === 0;
+  const isValid =
+    !fieldErrors.organizationName &&
+    !fieldErrors.email &&
+    !fieldErrors.password &&
+    !fieldErrors.confirm;
 
   const onChange = (field, value) => {
     setValues((prev) => ({ ...prev, [field]: value }));
+    if (serverErrors[field]) {
+      setServerErrors((prev) => ({ ...prev, [field]: '' }));
+    }
+    if (formError) setFormError('');
   };
 
   const onBlur = (field) => {
@@ -95,16 +100,17 @@ export default function OrganizerSignupScreen() {
 
     setLoading(true);
     setFormError('');
+    setServerErrors({});
 
     try {
       await organizerApi.organizerRegister({
         full_name: values.organizationName,
-        email: values.email,
+        email: normalizeEmail(values.email),
         password: values.password,
       });
 
       const result = await organizerApi.organizerLogin({
-        email: values.email,
+        email: normalizeEmail(values.email),
         password: values.password,
       });
 
@@ -122,7 +128,14 @@ export default function OrganizerSignupScreen() {
         );
       }
     } catch (error) {
-      setFormError(error.message || 'Registration failed. Please try again.');
+      const message = error.message || 'Registration failed. Please try again.';
+      const inferredErrors = inferFieldErrorsFromMessage(message);
+      if (Object.keys(inferredErrors).length > 0) {
+        setServerErrors(inferredErrors);
+        setFormError('');
+      } else {
+        setFormError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -156,7 +169,7 @@ export default function OrganizerSignupScreen() {
           provider: 'google',
           idToken: auth.idToken,
           accessToken: auth.accessToken,
-          email: values.email,
+          email: normalizeEmail(values.email),
           fullName: values.organizationName,
         });
         await routeOrganizerAfterLogin(result);
@@ -180,7 +193,7 @@ export default function OrganizerSignupScreen() {
         const result = await organizerApi.organizerSocialLogin({
           provider: 'facebook',
           accessToken: auth.accessToken,
-          email: values.email,
+          email: normalizeEmail(values.email),
           fullName: values.organizationName,
         });
         await routeOrganizerAfterLogin(result);
@@ -195,71 +208,15 @@ export default function OrganizerSignupScreen() {
   }, [facebookResponse]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.cardBg }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentInsetAdjustmentBehavior="always"
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingTop: 40,
-            paddingBottom: 120,
-          }}
-        >
-          <View style={{ marginBottom: 25, alignItems: 'center' }}>
-            <Text
-              style={{
-                fontSize: 28,
-                color: COLORS.primary,
-                fontWeight: '800',
-                textAlign: 'center',
-              }}
-            >
-              Organizer Sign Up
-            </Text>
-            <Text
-              style={{
-                marginTop: 6,
-                color: COLORS.textLight,
-                opacity: 0.9,
-                fontSize: 15,
-                textAlign: 'center',
-                width: '90%',
-              }}
-            >
-              Create your organizer account to manage events
-            </Text>
-          </View>
-
-          <View
-            style={{
-              backgroundColor: COLORS.cardBg,
-              borderRadius: 26,
-              paddingHorizontal: 24,
-              paddingVertical: 34,
-              shadowColor: '#000',
-              shadowOpacity: 0.08,
-              shadowRadius: 12,
-              elevation: 4,
-            }}
-          >
-            {formError ? (
-              <Text style={{ color: 'red', textAlign: 'center', marginBottom: 10 }}>
-                {formError}
-              </Text>
-            ) : null}
+    <AuthFormScaffold title="Organizer Sign Up" subtitle="Create your organizer account to manage events">
+      <AuthFormMessage message={formError} />
 
             <TextField
               label="Organization Name"
               value={values.organizationName}
               onChangeText={(value) => onChange('organizationName', value)}
               onBlur={() => onBlur('organizationName')}
-              error={touched.organizationName ? fieldErrors.organizationName : ''}
+              error={touched.organizationName ? serverErrors.organizationName || fieldErrors.organizationName : ''}
               placeholder="Enter organization name"
               autoCapitalize="words"
             />
@@ -269,10 +226,13 @@ export default function OrganizerSignupScreen() {
               value={values.email}
               onChangeText={(value) => onChange('email', value)}
               onBlur={() => onBlur('email')}
-              error={touched.email ? fieldErrors.email : ''}
+              error={touched.email ? serverErrors.email || fieldErrors.email : ''}
               placeholder="Enter your email"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              helperText={!touched.email ? 'Example: name@example.com.' : ''}
             />
 
             <PasswordField
@@ -280,8 +240,9 @@ export default function OrganizerSignupScreen() {
               value={values.password}
               onChangeText={(value) => onChange('password', value)}
               onBlur={() => onBlur('password')}
-              error={touched.password ? fieldErrors.password : ''}
+              error={touched.password ? serverErrors.password || fieldErrors.password : ''}
               placeholder="Create password"
+              helperText={!touched.password ? 'Use at least 8 chars with upper, lower & a number.' : ''}
               inputStyle={{
                 borderWidth: 1,
                 borderColor: COLORS.inputBorder,
@@ -294,7 +255,7 @@ export default function OrganizerSignupScreen() {
               value={values.confirm}
               onChangeText={(value) => onChange('confirm', value)}
               onBlur={() => onBlur('confirm')}
-              error={touched.confirm ? fieldErrors.confirm : ''}
+              error={touched.confirm ? serverErrors.confirm || fieldErrors.confirm : ''}
               placeholder="Confirm password"
               inputStyle={{
                 borderWidth: 1,
@@ -303,36 +264,16 @@ export default function OrganizerSignupScreen() {
               }}
             />
 
-            <Pressable
+            <AuthSubmitButton
               onPress={onSubmit}
               disabled={!isValid || loading}
-              style={{
-                height: 50,
-                backgroundColor: COLORS.primary,
-                borderRadius: 14,
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: 25,
-                opacity: !isValid || loading ? 0.5 : 1,
-              }}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text style={{ color: 'white', fontWeight: '700', fontSize: 17 }}>
-                  Sign Up as Organizer
-                </Text>
-              )}
-            </Pressable>
+              loading={loading}
+              label="Sign Up as Organizer"
+              style={{ marginBottom: 25 }}
+            />
 
             <View style={{ marginBottom: 18 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
-                <Text style={{ marginHorizontal: 12, color: COLORS.textLight, fontSize: 13, fontWeight: '600' }}>
-                  or continue with
-                </Text>
-                <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
-              </View>
+              <AuthDivider />
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <Pressable
                   onPress={() => {
@@ -403,9 +344,6 @@ export default function OrganizerSignupScreen() {
             </Text>
 
             <BackToWelcomeRow />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+    </AuthFormScaffold>
   );
 }

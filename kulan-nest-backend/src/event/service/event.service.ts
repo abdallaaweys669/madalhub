@@ -660,6 +660,12 @@ export class EventService {
       }
     }
 
+    if (query.eventFormat && query.eventFormat !== 'any') {
+      qb.andWhere('LOWER(event.eventFormat) = :eventFormat', {
+        eventFormat: query.eventFormat,
+      });
+    }
+
     if (query.city?.trim()) {
       qb.andWhere('event.locationName LIKE :city', {
         city: `%${query.city.trim()}%`,

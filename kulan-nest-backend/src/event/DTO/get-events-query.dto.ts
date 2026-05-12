@@ -40,6 +40,18 @@ export class GetEventsQueryDto {
   price?: 'free' | 'paid' | 'any';
 
   @IsOptional()
+  @Transform(({ value }) => String(value).toLowerCase())
+  @IsIn(['any', 'meetup', 'panel', 'seminar', 'workshop', 'talk', 'bootcamp'])
+  eventFormat?:
+    | 'any'
+    | 'meetup'
+    | 'panel'
+    | 'seminar'
+    | 'workshop'
+    | 'talk'
+    | 'bootcamp';
+
+  @IsOptional()
   @IsString()
   city?: string;
 
@@ -52,6 +64,18 @@ export class GetEventsQueryDto {
   @Transform(({ value }) => String(value).toLowerCase())
   @IsIn(['start-asc', 'start-desc', 'popular'])
   sort?: 'start-asc' | 'start-desc' | 'popular';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  organizerId?: number;
+
+  /** When filtering by organizerId: upcoming vs past by start time */
+  @IsOptional()
+  @Transform(({ value }) => String(value).toLowerCase())
+  @IsIn(['upcoming', 'past'])
+  organizerScope?: 'upcoming' | 'past';
 
   @IsOptional()
   @Type(() => Number)

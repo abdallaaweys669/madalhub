@@ -3,10 +3,11 @@ import { View, Text, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/loginSignin/authStyles';
 
-export default function PasswordField({ label, error, ...rest }) {
+export default function PasswordField({ label, error, helperText, ...rest }) {
   const [show, setShow] = useState(false);
+  const [focused, setFocused] = useState(false);
 
-  const borderColor = error ? COLORS.danger : COLORS.border;
+  const borderColor = error ? COLORS.danger : focused ? COLORS.primary : COLORS.border;
 
   return (
     <View style={{ marginBottom: error ? 4 : 16 }}>
@@ -27,10 +28,15 @@ export default function PasswordField({ label, error, ...rest }) {
         }}
       >
         <TextInput
+          {...rest}
           secureTextEntry={!show}
           placeholderTextColor={COLORS.placeholder}
           style={{ flex: 1, fontSize: 16, color: COLORS.textDark }}
-          {...rest}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            rest.onBlur && rest.onBlur();
+          }}
         />
 
         <Pressable onPress={() => setShow(!show)}>
@@ -42,15 +48,16 @@ export default function PasswordField({ label, error, ...rest }) {
         </Pressable>
       </View>
 
-      {error ? (
+      {error || helperText ? (
         <Text
           style={{
-            color: COLORS.danger,
+            color: error ? COLORS.danger : '#64748B',
             fontSize: 12,
             marginTop: 4,
+            lineHeight: 16,
           }}
         >
-          {error}
+          {error || helperText}
         </Text>
       ) : null}
     </View>

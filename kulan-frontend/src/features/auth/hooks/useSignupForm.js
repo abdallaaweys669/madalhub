@@ -3,7 +3,12 @@ import { useRouter } from 'expo-router';
 
 import authApi from '@/api/auth';
 import useAuth from '@/auth/useAuth';
-import { getSignupErrors } from '@/features/auth/validation/authRules';
+import {
+  fieldMap,
+  getSignupErrors,
+  inferFieldErrorsFromMessage,
+  normalizeEmail,
+} from '@/features/auth/validation/authRules';
 
 export default function useSignupForm() {
   const router = useRouter();
@@ -64,7 +69,7 @@ export default function useSignupForm() {
     try {
       const result = await authApi.register({
         full_name: values.fullName,
-        email: values.email,
+        email: normalizeEmail(values.email),
         phone: values.phone,
         password: values.password,
       });
@@ -78,17 +83,6 @@ export default function useSignupForm() {
       let fieldErrors = {};
 
       if (error?.fieldErrors) {
-        const fieldMap = {
-          full_name: 'fullName',
-          fullName: 'fullName',
-          email: 'email',
-          phone: 'phone',
-          phone_number: 'phone',
-          password: 'password',
-          confirm_password: 'confirm',
-          confirm: 'confirm',
-        };
-
         error.fieldErrors.forEach((err) => {
           if (typeof err === 'string') {
             if (!message || message.startsWith('An error occurred')) {
@@ -115,16 +109,6 @@ export default function useSignupForm() {
         }
       } else if (error?.response) {
         const data = error.response.data;
-        const fieldMap = {
-          full_name: 'fullName',
-          fullName: 'fullName',
-          email: 'email',
-          phone: 'phone',
-          phone_number: 'phone',
-          password: 'password',
-          confirm_password: 'confirm',
-          confirm: 'confirm',
-        };
         const normalizeMessage = (value) =>
           typeof value === 'string' ? value.trim() : '';
 
@@ -159,14 +143,7 @@ export default function useSignupForm() {
         }
 
         if (Object.keys(fieldErrors).length === 0) {
-          const normalized = normalizeMessage(message).toLowerCase();
-          if (normalized.includes('email')) {
-            fieldErrors.email = message;
-          } else if (normalized.includes('phone')) {
-            fieldErrors.phone = message;
-          } else if (normalized.includes('password')) {
-            fieldErrors.password = message;
-          }
+          fieldErrors = inferFieldErrorsFromMessage(normalizeMessage(message));
         }
 
         if (Object.keys(fieldErrors).length > 0) {

@@ -2,14 +2,14 @@ import React from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import useLoginForm from '@/features/auth/hooks/useLoginForm';
+import AuthDivider from '@/features/auth/components/AuthDivider';
+import AuthFormMessage from '@/features/auth/components/AuthFormMessage';
+import AuthFormScaffold from '@/features/auth/components/AuthFormScaffold';
+import AuthSubmitButton from '@/features/auth/components/AuthSubmitButton';
 import TextField from '@/features/auth/components/TextField';
 import PasswordField from '@/features/auth/components/PasswordField';
 import SocialButtons from '@/features/auth/components/SocialButtons';
@@ -22,56 +22,8 @@ export default function LoginForm() {
     useLoginForm();
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.cardBg }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={{ marginTop: 20, marginBottom: 25, alignItems: 'center' }}>
-            <Text
-              style={{
-                fontSize: 28,
-                fontWeight: '700',
-                color: COLORS.primary,
-                textAlign: 'center',
-              }}
-            >
-              Login here
-            </Text>
-
-            <Text
-              style={{
-                textAlign: 'center',
-                marginTop: 6,
-                color: COLORS.textLight,
-                fontSize: 15,
-              }}
-            >
-              Welcome back — you've been missed!
-            </Text>
-          </View>
-
-          <View
-            style={{
-              backgroundColor: COLORS.cardBg,
-              borderRadius: 26,
-              paddingVertical: 35,
-              paddingHorizontal: 24,
-              shadowColor: '#000',
-              shadowOpacity: 0.08,
-              shadowRadius: 12,
-              elevation: 4,
-            }}
-          >
-            {errors.form ? (
-              <Text style={{ color: 'red', textAlign: 'center', marginBottom: 10 }}>
-                {errors.form}
-              </Text>
-            ) : null}
+    <AuthFormScaffold title="Login here" subtitle="Welcome back - you've been missed!" compact>
+      <AuthFormMessage message={errors.form} />
 
             <View style={{ marginBottom: 18 }}>
               <TextField
@@ -82,7 +34,10 @@ export default function LoginForm() {
                 onBlur={() => onBlur('email')}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="emailAddress"
                 error={touched.email ? errors.email : ''}
+                helperText={!touched.email ? 'Use the email format name@example.com.' : ''}
                 inputStyle={{
                   borderWidth: 1,
                   borderColor: COLORS.inputBorder,
@@ -99,6 +54,7 @@ export default function LoginForm() {
                 onChangeText={(value) => onChange('password', value)}
                 onBlur={() => onBlur('password')}
                 error={touched.password ? errors.password : ''}
+                helperText={!touched.password ? 'Passwords are case-sensitive.' : ''}
                 inputStyle={{
                   borderWidth: 1,
                   borderColor: COLORS.inputBorder,
@@ -119,34 +75,17 @@ export default function LoginForm() {
               Forgot your password?
             </Text>
 
-            <Pressable
+            <AuthSubmitButton
               onPress={onSubmit}
               disabled={!isValid || loading}
-              style={{
-                backgroundColor: COLORS.primary,
-                height: 50,
-                borderRadius: 14,
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: 28,
-                opacity: !isValid || loading ? 0.5 : 1,
-              }}
-            >
-              <Text
-                style={{
-                  color: 'white',
-                  fontSize: 17,
-                  fontWeight: '700',
-                }}
-              >
-                {loading ? 'Signing in...' : 'Sign in'}
-              </Text>
-            </Pressable>
+              loading={loading}
+              label="Sign in"
+              loadingLabel="Signing in..."
+              style={{ marginBottom: 28 }}
+            />
 
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ color: COLORS.primary, marginBottom: 10 }}>
-                Or continue with
-              </Text>
+            <View style={{ marginBottom: 20 }}>
+              <AuthDivider />
               <SocialButtons />
             </View>
 
@@ -168,9 +107,6 @@ export default function LoginForm() {
             </Text>
 
             <BackToWelcomeRow />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+    </AuthFormScaffold>
   );
 }

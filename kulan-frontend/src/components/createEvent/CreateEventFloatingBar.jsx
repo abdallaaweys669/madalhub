@@ -58,21 +58,21 @@ export default function CreateEventFloatingBar({
 
         <Pressable
           onPress={onPublish}
-          disabled={disabledPublish || loading}
+          disabled={loading}
           style={({ pressed }) => ({
             flex: 1,
             height: 50,
             borderRadius: 14,
-            backgroundColor: disabledPublish ? '#DDE1E7' : '#FF7A00',
+            backgroundColor: disabledPublish ? '#FDBA74' : '#FF7A00',
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: disabledPublish ? 1 : pressed ? 0.9 : 1,
+            opacity: pressed ? 0.9 : 1,
           })}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={{ color: disabledPublish ? '#F8FAFC' : '#fff', fontWeight: '800', fontSize: 16 }}>
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
               {publishLabel}
             </Text>
           )}

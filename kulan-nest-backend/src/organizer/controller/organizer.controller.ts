@@ -14,6 +14,7 @@ import {
 import { CreateOrganizerDto } from '../dto/create-organizer.dto';
 import { OrganizerService } from '../service/organizer.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
@@ -41,6 +42,16 @@ export class OrganizerController {
   @Post('login')
   login(@Body() dto: OrganizerLoginDto) {
     return this.service.login(dto.email, dto.password);
+  }
+
+  /** Public organizer summary for member apps (optional JWT for isFollowing). */
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('public/:organizerId')
+  getPublicOrganizerProfile(
+    @Param('organizerId', ParseIntPipe) organizerId: number,
+    @CurrentUser() user?: { userId: number; role: number },
+  ) {
+    return this.service.getPublicOrganizerProfile(organizerId, user);
   }
 
   @Post('social-login')

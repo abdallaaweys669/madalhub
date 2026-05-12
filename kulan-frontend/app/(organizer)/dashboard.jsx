@@ -14,12 +14,15 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import useAuth from '@/auth/useAuth';
 import organizerApi from '@/api/organizer';
 import { useThemeColors } from '@/theme';
 import KulanLogo from '@/assets/kulan_logo.svg';
 import NoEventsIllustration from '@/assets/no events.svg';
+import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
+import OrganizerDashboardSkeleton from '@/components/skeletons/OrganizerDashboardSkeleton';
 import { Alert, StyleSheet } from 'react-native';
 
 function initials(name) {
@@ -62,6 +65,21 @@ function formatEventMeta(event) {
   return `${online} • ${price}`;
 }
 
+function resolveOrganizerEventCoverUrl(event) {
+  const raw =
+    event?.coverImage ??
+    event?.image ??
+    event?.coverImageUrl ??
+    event?.cover_image ??
+    event?.cover?.url ??
+    event?.cover?.path ??
+    event?.image?.uri ??
+    null;
+
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  return resolveApiAssetUrl(raw.trim().replace(/\\/g, '/')) || raw.trim();
+}
+
 function statusChip(event) {
   if (event?.status === 'draft') return { label: 'Draft', bg: '#EEF2FF', fg: '#4F46E5' };
   
@@ -93,6 +111,7 @@ export default function OrganizerDashboardScreen() {
   const [organizationName, setOrganizationName] = useState('');
   const [headerProfileImg, setHeaderProfileImg] = useState('');
   const [headerFullName, setHeaderFullName] = useState('');
+  const [verificationStatus, setVerificationStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('All');
@@ -111,6 +130,7 @@ export default function OrganizerDashboardScreen() {
       setOrganizationName((profileData?.organizationName ?? '').trim());
       setHeaderFullName((profileData?.fullName ?? '').trim());
       setHeaderProfileImg(resolveApiAssetUrl(profileData?.profileImg) || '');
+      setVerificationStatus((profileData?.verificationStatus ?? '').trim().toLowerCase());
     } catch (error) {
       console.error('Failed to fetch organizer events:', error);
     }
@@ -226,6 +246,8 @@ export default function OrganizerDashboardScreen() {
       value: events.length,
       hint: `${events.length === 1 ? '1 event created' : `${events.length} events created`}`,
       icon: 'calendar-outline',
+      accent: '#FF7A00',
+      bg: '#FFF7ED',
     },
     {
       key: 'attendees',
@@ -236,6 +258,8 @@ export default function OrganizerDashboardScreen() {
           ? 'No attendees yet'
           : `${totalAttendees} total registrations`,
       icon: 'people-outline',
+      accent: '#2563EB',
+      bg: '#EFF6FF',
     },
     {
       key: 'upcoming',
@@ -245,6 +269,8 @@ export default function OrganizerDashboardScreen() {
         ? `Next: ${formatDate(nearestUpcomingEvent.startsAt)}`
         : 'No upcoming events',
       icon: 'time-outline',
+      accent: '#059669',
+      bg: '#ECFDF5',
     },
     {
       key: 'drafts',
@@ -252,6 +278,8 @@ export default function OrganizerDashboardScreen() {
       value: draftCount,
       hint: draftCount > 0 ? 'Ready to publish' : 'No drafts pending',
       icon: 'document-text-outline',
+      accent: '#7C3AED',
+      bg: '#F5F3FF',
     },
   ];
 
@@ -259,6 +287,7 @@ export default function OrganizerDashboardScreen() {
   const greetingName =
     organizationName || headerFullName || user?.organizationName || user?.fullName || 'Organizer';
   const headerInitials = initials(organizationName || headerFullName || user?.fullName);
+  const isVerifiedOrganizer = verificationStatus === 'approved';
   const headerSubtitle = loading
     ? 'Loading your dashboard...'
     : hasEvents
@@ -266,6 +295,12 @@ export default function OrganizerDashboardScreen() {
         ? `Next event: ${formatDateTime(nearestUpcomingEvent.startsAt)}`
         : 'Manage your events and keep your audience engaged'
       : 'Start by creating your first event';
+  const nextActionTitle = nearestUpcomingEvent?.title || (hasEvents ? 'Keep your calendar active' : 'Create your first event');
+  const nextActionSubtitle = nearestUpcomingEvent
+    ? formatDateTime(nearestUpcomingEvent.startsAt)
+    : hasEvents
+      ? 'Create another event or continue improving your drafts.'
+      : 'Build, publish, and manage events from one place.';
   const pulseStyle = {
     transform: [
       {
@@ -308,6 +343,10 @@ export default function OrganizerDashboardScreen() {
     return sortedEvents;
   }, [sortedEvents, activeTab]);
 
+  if (loading) {
+    return <OrganizerDashboardSkeleton />;
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F7F7F8' }}>
       <ScrollView
@@ -321,71 +360,149 @@ export default function OrganizerDashboardScreen() {
           paddingBottom: insets.bottom + 20,
         }}
       >
-        <View style={{ marginBottom: 14, position: 'relative', minHeight: 88 }}>
+        <LinearGradient
+          colors={['#FFF7ED', '#FFFFFF', '#EEF2FF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 28,
+            padding: 18,
+            marginBottom: 14,
+            borderWidth: 1,
+            borderColor: '#FFE1CC',
+            shadowColor: '#0F172A',
+            shadowOffset: { width: 0, height: 14 },
+            shadowOpacity: 0.08,
+            shadowRadius: 24,
+            elevation: 5,
+          }}
+        >
+          <View style={{ alignItems: 'center' }}>
+            <KulanLogo width={128} height={38} preserveAspectRatio="xMidYMid meet" />
+          </View>
+
           <Pressable
             onPress={() => router.push('/(organizer)/profile')}
-            style={{
-              position: 'absolute',
-              right: 0,
-              top: 8,
-              width: 44,
-              height: 44,
-              borderRadius: 22,
+            style={({ pressed }) => ({
+              marginTop: 14,
+              borderRadius: 20,
+              backgroundColor: pressed ? '#F8FAFC' : '#FFFFFF',
               borderWidth: 1,
-              borderColor: '#FFD2BF',
-              backgroundColor: '#FFE9DD',
+              borderColor: '#E5E7EB',
+              paddingVertical: 12,
+              paddingLeft: 12,
+              paddingRight: 10,
+              flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 2,
-              overflow: 'hidden',
-            }}
+              gap: 12,
+              shadowColor: '#0F172A',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.07,
+              shadowRadius: 16,
+              elevation: 3,
+            })}
+            accessibilityRole="button"
+            accessibilityLabel="Open organizer profile"
           >
-            {headerProfileImg ? (
-              <Image source={{ uri: headerProfileImg }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-            ) : (
-              <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '800' }}>{headerInitials}</Text>
-            )}
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 18,
+                borderWidth: 2,
+                borderColor: '#FFFFFF',
+                backgroundColor: '#FFE9DD',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+              }}
+            >
+              {headerProfileImg ? (
+                <Image source={{ uri: headerProfileImg }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              ) : (
+                <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '900' }}>{headerInitials}</Text>
+              )}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 0 }}>
+                <Text style={{ color: '#0F172A', fontSize: 16, fontWeight: '900', flexShrink: 1 }} numberOfLines={1}>
+                  {greetingName}
+                </Text>
+                {isVerifiedOrganizer ? <VerificationBadgeWhite width={16} height={16} style={{ marginLeft: 7 }} /> : null}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
+                  Organizer profile
+                </Text>
+              </View>
+            </View>
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' }}>
+              <Ionicons name="chevron-forward" size={18} color="#64748B" />
+            </View>
           </Pressable>
 
-          <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 2 }}>
-            <KulanLogo width={170} height={52} preserveAspectRatio="xMidYMid meet" />
-          </View>
-          <Text
-            style={{
-              marginTop: 8,
-              fontSize: 15,
-              color: '#6E6E75',
-              fontWeight: '600',
-              letterSpacing: 0.2,
-              textAlign: 'left',
-            }}
-          >
+          <Text style={{ marginTop: 16, color: '#0F172A', fontSize: 24, fontWeight: '900', letterSpacing: -0.5 }}>
             Good morning, {greetingName}
           </Text>
-          <Text style={{ marginTop: 4, color: '#8E8E95', fontSize: 12 }}>
+          <Text style={{ marginTop: 6, color: '#64748B', fontSize: 14, lineHeight: 20, maxWidth: 290 }}>
             {headerSubtitle}
           </Text>
-        </View>
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
+          <View
+            style={{
+              marginTop: 16,
+              borderRadius: 22,
+              backgroundColor: 'rgba(255,255,255,0.84)',
+              borderWidth: 1,
+              borderColor: '#FFFFFF',
+              padding: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#FFF7ED', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name={nearestUpcomingEvent ? 'calendar' : 'sparkles'} size={15} color={colors.primary} />
+                </View>
+                <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  {nearestUpcomingEvent ? 'Next event' : 'Start here'}
+                </Text>
+              </View>
+              <Text style={{ marginTop: 8, color: '#111827', fontSize: 15, fontWeight: '800' }} numberOfLines={1}>
+                {nextActionTitle}
+              </Text>
+              <Text style={{ marginTop: 3, color: '#64748B', fontSize: 12 }}>
+                {nextActionSubtitle}
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5, marginBottom: 6 }}>
           {metricCards.map((card) => (
             <View
               key={card.key}
               style={{
                 width: '50%',
-                paddingHorizontal: 4,
-                marginBottom: 8,
+                paddingHorizontal: 5,
+                marginBottom: 10,
               }}
             >
               <View
                 style={{
-                  minHeight: 88,
+                  minHeight: 112,
                   backgroundColor: 'white',
-                  borderRadius: 12,
-                  paddingHorizontal: 10,
-                  paddingVertical: 10,
+                  borderRadius: 20,
+                  paddingHorizontal: 14,
+                  paddingVertical: 14,
                   borderWidth: 1,
-                  borderColor: '#E7E7EA',
+                  borderColor: '#EEF2F7',
+                  shadowColor: '#0F172A',
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.04,
+                  shadowRadius: 16,
+                  elevation: 2,
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -395,16 +512,19 @@ export default function OrganizerDashboardScreen() {
                       color: '#8D8D93',
                       fontWeight: '700',
                       textTransform: 'uppercase',
+                      letterSpacing: 0.4,
                     }}
                   >
                     {card.label}
                   </Text>
-                  <Ionicons name={card.icon} size={14} color={colors.primary} />
+                  <View style={{ width: 30, height: 30, borderRadius: 12, backgroundColor: card.bg, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name={card.icon} size={16} color={card.accent} />
+                  </View>
                 </View>
-                <Text style={{ fontSize: 30, fontWeight: '800', color: '#17171B', marginTop: 4 }}>
+                <Text style={{ fontSize: 32, fontWeight: '900', color: '#17171B', marginTop: 10, letterSpacing: -0.8 }}>
                   {card.value}
                 </Text>
-                <Text style={{ fontSize: 10, color: '#8D8D93', marginTop: 2 }}>{card.hint}</Text>
+                <Text style={{ fontSize: 11, color: '#8D8D93', marginTop: 3, lineHeight: 15 }}>{card.hint}</Text>
               </View>
             </View>
           ))}
@@ -413,30 +533,45 @@ export default function OrganizerDashboardScreen() {
         <Pressable
           onPress={() => router.push('/(organizer)/create-event')}
           style={({ pressed }) => ({
-            marginTop: 2,
-            marginBottom: 16,
-            height: 52,
-            borderRadius: 12,
-            backgroundColor: colors.primary,
+            marginTop: 0,
+            marginBottom: 18,
+            minHeight: 76,
+            borderRadius: 26,
+            backgroundColor: pressed ? '#FFEDD5' : '#FFF7ED',
+            borderWidth: 1,
+            borderColor: '#FED7AA',
             alignItems: 'center',
-            justifyContent: 'center',
-            opacity: pressed ? 0.9 : 1,
+            justifyContent: 'space-between',
+            flexDirection: 'row',
+            paddingHorizontal: 18,
             shadowColor: colors.primary,
-            shadowOpacity: 0.24,
-            shadowOffset: { width: 0, height: 4 },
-            shadowRadius: 8,
-            elevation: 3,
+            shadowOpacity: 0.14,
+            shadowOffset: { width: 0, height: 12 },
+            shadowRadius: 22,
+            elevation: 6,
           })}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
-            <Text style={{ fontWeight: '800', color: '#FFFFFF', fontSize: 15, marginLeft: 8 }}>
-              Create new event
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="sparkles" size={22} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '900', color: '#9A3412', fontSize: 17, letterSpacing: -0.2 }}>Create new event</Text>
+              <Text style={{ color: '#B45309', fontSize: 12, marginTop: 3 }}>Add cover, venue, speakers and sponsors.</Text>
+            </View>
+          </View>
+          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FED7AA' }}>
+            <Ionicons name="arrow-forward" size={18} color={colors.primary} />
           </View>
         </Pressable>
 
         <View style={{ marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 10 }}>
+            <View>
+              <Text style={{ color: '#0F172A', fontSize: 20, fontWeight: '900', letterSpacing: -0.4 }}>Your events</Text>
+              <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>{displayEvents.length} showing in {activeTab.toLowerCase()}</Text>
+            </View>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
             {['All', 'Drafts', 'Published', 'Past'].map((tab) => {
               const isActive = activeTab === tab;
@@ -470,11 +605,7 @@ export default function OrganizerDashboardScreen() {
           </ScrollView>
         </View>
 
-        {loading ? (
-          <View style={{ paddingVertical: 40 }}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : !hasEvents ? (
+        {!hasEvents ? (
           <View
             style={{
               backgroundColor: 'white',
@@ -545,7 +676,12 @@ export default function OrganizerDashboardScreen() {
               paddingBottom: 24,
               alignItems: 'center',
               justifyContent: 'center',
-              minHeight: 260,
+              minHeight: 340,
+              shadowColor: '#0F172A',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.05,
+              shadowRadius: 16,
+              elevation: 2,
             }}
           >
             <View style={{ width: '100%', alignItems: 'center' }}>
@@ -557,6 +693,7 @@ export default function OrganizerDashboardScreen() {
                 {activeTab === 'Past' && "You don't have any past events."}
               </Text>
             </View>
+            <NoEventsIllustration width={286} height={206} />
           </View>
         ) : (
           displayEvents.map((event) => {
@@ -571,7 +708,7 @@ export default function OrganizerDashboardScreen() {
             }
             const attendees = Number(event.registrationCount ?? 0);
             const capacity = Number(event.capacity ?? 0);
-            const coverUrl = event.image || event.coverImage ? resolveApiAssetUrl(event.image || event.coverImage) : null;
+            const coverUrl = resolveOrganizerEventCoverUrl(event);
             const priceLabel = Number(event.totalPrice) > 0 ? `$${event.totalPrice}` : 'Free';
             const locationKind = event.isPhysical ? 'IN-PERSON' : 'ONLINE';
             const showProgressBar = capacity > 0;
@@ -583,20 +720,20 @@ export default function OrganizerDashboardScreen() {
                 key={event.id}
                 style={{
                   backgroundColor: 'white',
-                  borderRadius: 16,
+                  borderRadius: 24,
                   borderWidth: 1,
-                  borderColor: '#E2E8F0',
-                  marginBottom: 14,
+                  borderColor: '#EEF2F7',
+                  marginBottom: 16,
                   overflow: 'hidden',
                   shadowColor: '#0F172A',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.04,
-                  shadowRadius: 10,
-                  elevation: 2,
+                  shadowOffset: { width: 0, height: 12 },
+                  shadowOpacity: 0.07,
+                  shadowRadius: 22,
+                  elevation: 4,
                 }}
               >
                 {/* Image Header */}
-                <View style={{ height: 154, width: '100%', backgroundColor: '#F8FAFC', position: 'relative' }}>
+                <View style={{ height: 168, width: '100%', backgroundColor: '#F8FAFC', position: 'relative' }}>
                   {coverUrl ? (
                     <View style={{ width: '100%', height: '100%', position: 'relative' }}>
                       <Image 
@@ -621,16 +758,30 @@ export default function OrganizerDashboardScreen() {
                           <Image source={terminalBadgeSource} style={{ width: 140, height: 140 }} resizeMode="contain" />
                         </View>
                       )}
+                      {!isEnded && (
+                        <LinearGradient
+                          colors={['rgba(15,23,42,0.02)', 'rgba(15,23,42,0.42)']}
+                          locations={[0.35, 1]}
+                          style={StyleSheet.absoluteFillObject}
+                        />
+                      )}
                     </View>
                   ) : (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E2E8F0' }}>
-                      <Ionicons name="image-outline" size={32} color="#9CA3AF" />
+                    <LinearGradient
+                      colors={['#FFF7ED', '#EEF2FF']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <View style={{ width: 58, height: 58, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.78)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FFFFFF' }}>
+                        <Ionicons name="image-outline" size={30} color="#EA580C" />
+                      </View>
                       {isEnded && (
                         <View style={{ ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.72)' }}>
                           <Image source={terminalBadgeSource} style={{ width: 140, height: 140 }} resizeMode="contain" />
                         </View>
                       )}
-                    </View>
+                    </LinearGradient>
                   )}
                   {/* Status Overlay */}
                   <View
@@ -638,13 +789,15 @@ export default function OrganizerDashboardScreen() {
                       position: 'absolute',
                       top: 12,
                       left: 12,
-                      backgroundColor: chip.bg,
-                      borderRadius: 6,
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
+                      backgroundColor: isEnded ? chip.bg : 'rgba(255,255,255,0.92)',
+                      borderRadius: 999,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 4
+                      gap: 5,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.7)',
                     }}
                   >
                     <Ionicons name={event.status === 'draft' ? "document-text" : "radio-button-on"} size={12} color={chip.fg} />
@@ -653,39 +806,47 @@ export default function OrganizerDashboardScreen() {
                 </View>
 
                 {/* Body Content */}
-                <View style={{ padding: 14 }}>
+                <View style={{ padding: 16 }}>
                   {/* Tags Row */}
-                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                    <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name={locationKind === 'ONLINE' ? 'videocam-outline' : 'location-outline'} size={11} color="#475569" />
-                      <Text style={{ color: '#475569', fontSize: 10, fontWeight: '700' }}>{locationKind}</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                    <View style={{ backgroundColor: '#F8FAFC', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Ionicons name={locationKind === 'ONLINE' ? 'videocam-outline' : 'location-outline'} size={12} color="#475569" />
+                      <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800' }}>{locationKind}</Text>
                     </View>
-                    <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name={priceLabel === 'Free' ? 'cash-outline' : 'card-outline'} size={11} color="#166534" />
-                      <Text style={{ color: '#166534', fontSize: 10, fontWeight: '700' }}>{priceLabel}</Text>
+                    <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                      <Ionicons name={priceLabel === 'Free' ? 'cash-outline' : 'card-outline'} size={12} color="#166534" />
+                      <Text style={{ color: '#166534', fontSize: 11, fontWeight: '800' }}>{priceLabel}</Text>
                     </View>
                   </View>
 
-                  <Text style={{ color: '#0F172A', fontSize: 17, fontWeight: '800', marginBottom: 12 }} numberOfLines={2}>
+                  <Text style={{ color: '#0F172A', fontSize: 19, fontWeight: '900', marginBottom: 14, letterSpacing: -0.3 }} numberOfLines={2}>
                     {event.title}
                   </Text>
 
                   {/* Details Block */}
-                  <View style={{ gap: 6, marginBottom: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Ionicons name="calendar-outline" size={14} color="#64748B" />
-                      <Text style={{ color: '#475569', fontSize: 12, fontWeight: '500' }}>{startDateLabel}</Text>
+                  <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                    <View style={{ flex: 1, borderRadius: 16, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#EEF2F7', padding: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>Date</Text>
+                      </View>
+                      <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: '800', marginTop: 5 }}>{startDateLabel || 'Not set'}</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Ionicons name="time-outline" size={14} color="#64748B" />
-                      <Text style={{ color: '#475569', fontSize: 12, fontWeight: '500' }}>{startTimeLabel}</Text>
+                    <View style={{ flex: 1, borderRadius: 16, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#EEF2F7', padding: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="time-outline" size={14} color="#64748B" />
+                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>Time</Text>
+                      </View>
+                      <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: '800', marginTop: 5 }}>{startTimeLabel || 'Not set'}</Text>
                     </View>
                   </View>
 
                   {/* Attendees Insight */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: showProgressBar ? 10 : 16 }}>
-                    <Ionicons name="people" size={14} color="#64748B" />
-                    <Text style={{ color: '#0F172A', fontSize: 12, fontWeight: '600' }}>
+                    <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="people" size={14} color="#4F46E5" />
+                    </View>
+                    <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: '700' }}>
                       {attendees} going <Text style={{ color: '#64748B', fontWeight: '400' }}>{capacity > 0 ? `(of ${capacity} capacity)` : ''}</Text>
                     </Text>
                   </View>
@@ -710,15 +871,18 @@ export default function OrganizerDashboardScreen() {
                       onPress={() => router.push({ pathname: '/(organizer)/edit-event', params: { eventId: event.id } })}
                       style={{
                         flex: 1,
-                        borderRadius: 8,
+                        borderRadius: 13,
                         borderWidth: 1,
                         borderColor: '#E2E8F0',
-                        height: 38,
+                        height: 42,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: '#F8FAFC'
+                        backgroundColor: '#F8FAFC',
+                        flexDirection: 'row',
+                        gap: 6,
                       }}
                     >
+                      <Ionicons name="create-outline" size={16} color="#0F172A" />
                       <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: '700' }}>
                         {event.status === 'draft' ? 'Edit Draft' : 'Edit Event'}
                       </Text>
@@ -727,15 +891,18 @@ export default function OrganizerDashboardScreen() {
                       onPress={() => router.push(`/events/${event.id}`)}
                       style={{
                         flex: 1,
-                        borderRadius: 8,
+                        borderRadius: 13,
                         borderWidth: 1,
                         borderColor: '#E2E8F0',
-                        height: 38,
+                        height: 42,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: '#fff'
+                        backgroundColor: '#fff',
+                        flexDirection: 'row',
+                        gap: 6,
                       }}
                     >
+                      <Ionicons name="eye-outline" size={16} color="#0F172A" />
                       <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: '700' }}>View Details</Text>
                     </Pressable>
                   </View>
@@ -753,9 +920,9 @@ export default function OrganizerDashboardScreen() {
                         }}
                         style={{
                           flex: 1,
-                          borderRadius: 8,
+                          borderRadius: 13,
                           backgroundColor: colors.primary,
-                          height: 38,
+                          height: 42,
                           alignItems: 'center',
                           justifyContent: 'center',
                           flexDirection: 'row',
@@ -769,11 +936,11 @@ export default function OrganizerDashboardScreen() {
                         onPress={() => openDeleteModal(event)}
                         style={{
                           width: 38,
-                          borderRadius: 8,
+                          borderRadius: 13,
                           backgroundColor: '#FEF2F2',
                           borderWidth: 1,
                           borderColor: '#FECACA',
-                          height: 38,
+                          height: 42,
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}

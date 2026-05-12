@@ -22,6 +22,7 @@ import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
 import { useSavedEvents } from '@/context/SavedEventsContext';
 import { spacing, useThemeColors } from '@/theme';
 import { DEFAULT_COVER_GRADIENT } from '@/api/events';
+import { formatKeyToDisplayLabel } from '@/constants/eventFormatLabels';
 
 const OVERLAY_ACTION_ICON = '#3F3F46';
 
@@ -42,6 +43,7 @@ export type EventCardModel = {
   startsAt?: string;
   endsAt?: string | null;
   isOnline?: boolean;
+  eventFormat?: string | null;
   description?: string;
   organizerName?: string;
   eventState?: 'upcoming' | 'live' | 'fully-booked' | 'closed' | 'ended';
@@ -206,6 +208,8 @@ export function EventCard({ event, style }: EventCardProps) {
   const urgencyLabel = event.urgencyLabel;
   const categoryName = event.categoryName;
   const showCategoryTag = Boolean(categoryName);
+  const formatLabel = formatKeyToDisplayLabel(event.eventFormat);
+  const showFormatTag = Boolean(formatLabel);
   const isEnded = event.eventState === 'ended';
   const isClosed = event.eventState === 'closed';
   const isSoldOut = event.eventState === 'fully-booked';
@@ -355,16 +359,12 @@ export function EventCard({ event, style }: EventCardProps) {
               {kind === 'online' ? 'ONLINE' : 'IN-PERSON'}
             </Text>
           </View>
-          <View style={[styles.tag, priceLabel === 'Free' ? styles.priceFreeTag : styles.pricePaidTag]}>
-            <Ionicons
-              name={priceLabel === 'Free' ? 'cash-outline' : 'card-outline'}
-              size={11}
-              color={priceLabel === 'Free' ? '#166534' : '#92400E'}
-            />
-            <Text style={[styles.tagLabel, { color: priceLabel === 'Free' ? '#166534' : '#92400E' }]}>
-              {priceLabel}
-            </Text>
-          </View>
+          {showFormatTag ? (
+            <View style={[styles.tag, styles.formatTag]}>
+              <Ionicons name="albums-outline" size={11} color="#6D28D9" />
+              <Text style={[styles.tagLabel, styles.formatTagText]}>{formatLabel}</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
@@ -497,6 +497,17 @@ export function EventCard({ event, style }: EventCardProps) {
         </View>
 
         <View style={styles.capacityRow}>
+          <View style={styles.capacityLeft}>
+            <View style={[styles.priceBadge, priceLabel === 'Free' ? styles.priceFreeTag : styles.pricePaidTag]}>
+              <Ionicons
+                name={priceLabel === 'Free' ? 'gift-outline' : 'card-outline'}
+                size={12}
+                color={priceLabel === 'Free' ? '#166534' : '#92400E'}
+              />
+              <Text style={[styles.priceBadgeText, { color: priceLabel === 'Free' ? '#166534' : '#92400E' }]}>
+                {priceLabel}
+              </Text>
+            </View>
             {typeof seatsLeft === 'number' && !isSoldOut && !isEnded ? (
               <View style={styles.seatsLeftWrap}>
                 <Ionicons name="ticket-outline" size={12} color="#0EA5E9" />
@@ -505,6 +516,7 @@ export function EventCard({ event, style }: EventCardProps) {
             ) : (
               <View />
             )}
+          </View>
             <View style={styles.capacityRight}>
               {stateLabel ? (
                 <Text
@@ -760,6 +772,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
+  formatTag: {
+    backgroundColor: '#F5F3FF',
+  },
+  formatTagText: {
+    color: '#6D28D9',
+  },
   socialRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -812,9 +830,11 @@ const styles = StyleSheet.create({
   },
   priceFreeTag: {
     backgroundColor: '#ECFDF3',
+    borderColor: '#BBF7D0',
   },
   pricePaidTag: {
     backgroundColor: '#FFF7ED',
+    borderColor: '#FED7AA',
   },
   socialRight: {
     marginLeft: spacing.sm,
@@ -841,6 +861,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
+  },
+  capacityLeft: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   capacityRight: {
     flexDirection: 'row',
@@ -862,6 +891,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#0C4A6E',
+    letterSpacing: 0.2,
+  },
+  priceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  priceBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
     letterSpacing: 0.2,
   },
   capacityState: {

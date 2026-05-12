@@ -631,23 +631,23 @@ export default function LocationPickerModal({
             </View>
           ) : (
             <>
-              <MapView
+            <MapView
                 ref={mapRef}
-                style={styles.map}
-                initialRegion={region}
-                onPress={handleMapPress}
+              style={styles.map}
+              initialRegion={region}
+              onPress={handleMapPress}
                 showsUserLocation
                 showsMyLocationButton
-              >
-                {markerCoord && (
-                  <Marker
-                    coordinate={markerCoord}
-                    draggable
-                    onDragEnd={(e) => handleMapPress(e)}
-                    pinColor="#FF7B3F"
-                  />
-                )}
-              </MapView>
+            >
+              {markerCoord && (
+                <Marker
+                  coordinate={markerCoord}
+                  draggable
+                  onDragEnd={(e) => handleMapPress(e)}
+                  pinColor="#FF7B3F"
+                />
+              )}
+            </MapView>
               <View style={styles.searchCard}>
                 <Feather name="search" size={18} color="#6B7280" />
                 <TextInput

@@ -2,15 +2,14 @@ import React from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import useSignupForm from '@/features/auth/hooks/useSignupForm';
+import AuthDivider from '@/features/auth/components/AuthDivider';
+import AuthFormMessage from '@/features/auth/components/AuthFormMessage';
+import AuthFormScaffold from '@/features/auth/components/AuthFormScaffold';
+import AuthSubmitButton from '@/features/auth/components/AuthSubmitButton';
 import TextField from '@/features/auth/components/TextField';
 import PasswordField from '@/features/auth/components/PasswordField';
 import SocialButtons from '@/features/auth/components/SocialButtons';
@@ -23,65 +22,11 @@ export default function SignupForm() {
     useSignupForm();
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.cardBg }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentInsetAdjustmentBehavior="always"
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingTop: 40,
-            paddingBottom: 120,
-          }}
-        >
-          <View style={{ marginBottom: 25, alignItems: 'center' }}>
-            <Text
-              style={{
-                fontSize: 28,
-                color: COLORS.primary,
-                fontWeight: '800',
-                textAlign: 'center',
-              }}
-            >
-              Create Account
-            </Text>
-
-            <Text
-              style={{
-                marginTop: 6,
-                color: COLORS.textLight,
-                opacity: 0.9,
-                fontSize: 15,
-                textAlign: 'center',
-                width: '90%',
-              }}
-            >
-              Create an account so you can explore all the events and meetups.
-            </Text>
-          </View>
-
-          <View
-            style={{
-              backgroundColor: COLORS.cardBg,
-              borderRadius: 26,
-              paddingHorizontal: 24,
-              paddingVertical: 34,
-              shadowColor: '#000',
-              shadowOpacity: 0.08,
-              shadowRadius: 12,
-              elevation: 4,
-            }}
-          >
-            {errors.form ? (
-              <Text style={{ color: 'red', textAlign: 'center', marginBottom: 10 }}>
-                {errors.form}
-              </Text>
-            ) : null}
+    <AuthFormScaffold
+      title="Create Account"
+      subtitle="Create an account so you can explore all the events and meetups."
+    >
+      <AuthFormMessage message={errors.form} />
 
             <TextField
               label="Full Name"
@@ -102,6 +47,9 @@ export default function SignupForm() {
               placeholder="Enter your email"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              helperText={!touched.email ? 'Example: name@example.com.' : ''}
             />
 
             <TextField
@@ -121,6 +69,7 @@ export default function SignupForm() {
               onBlur={() => onBlur('password')}
               error={touched.password ? errors.password : ''}
               placeholder="Create password"
+              helperText={!touched.password ? 'Use at least 8 chars with upper, lower & a number.' : ''}
               inputStyle={{
                 borderWidth: 1,
                 borderColor: COLORS.inputBorder,
@@ -142,44 +91,16 @@ export default function SignupForm() {
               }}
             />
 
-            <Pressable
+            <AuthSubmitButton
               onPress={onSubmit}
               disabled={!isValid || loading}
-              style={{
-                height: 50,
-                backgroundColor: COLORS.primary,
-                borderRadius: 14,
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: 25,
-                opacity: !isValid || loading ? 0.5 : 1,
-              }}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text
-                  style={{
-                    color: 'white',
-                    fontWeight: '700',
-                    fontSize: 17,
-                  }}
-                >
-                  Sign Up
-                </Text>
-              )}
-            </Pressable>
+              loading={loading}
+              label="Sign Up"
+              style={{ marginBottom: 25 }}
+            />
 
             <View style={{ marginBottom: 20 }}>
-              <Text
-                style={{
-                  textAlign: 'center',
-                  color: COLORS.primary,
-                  marginBottom: 10,
-                }}
-              >
-                Or continue with
-              </Text>
+              <AuthDivider />
               <SocialButtons />
             </View>
 
@@ -201,9 +122,6 @@ export default function SignupForm() {
             </Text>
 
             <BackToWelcomeRow />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+    </AuthFormScaffold>
   );
 }

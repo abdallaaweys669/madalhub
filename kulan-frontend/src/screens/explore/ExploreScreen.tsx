@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Platform,
   RefreshControl,
@@ -12,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 
 import { Container } from '@/components/common/Container';
 import {
@@ -28,6 +30,7 @@ import {
 } from '@/components/filters/FilterModal';
 import { SearchBar } from '@/components/explore/SearchBar';
 import ExploreSkeleton from '@/components/skeletons/ExploreSkeleton';
+import useAuth from '@/auth/useAuth';
 import {
   getEventInterests,
   getEvents,
@@ -55,23 +58,48 @@ type ExploreRow = ExploreEventCardModel & {
   city: string;
   isOnline: boolean;
   priceType: 'Free' | 'Paid';
+  eventFormat?: string | null;
   interestId: number | null;
   statusChip?: { label: string; variant: string };
   urgencyLabel?: string | null;
   categoryName?: string | null;
   eventState?: 'upcoming' | 'live' | 'fully-booked' | 'closed' | 'ended';
+  locationLatitude: number;
+  locationLongitude: number;
 };
 
 const USER_CITY = 'Mogadishu';
 const STARTING_SOON_HOURS = 48;
+const NEAR_ME_RADIUS_KM = 25;
+
+type Coordinates = { latitude: number; longitude: number };
+
+function extractCityFromLocation(value?: string | null) {
+  const raw = String(value || '').trim();
+  if (!raw) return USER_CITY;
+  return raw.split(',').map((part) => part.trim()).filter(Boolean)[0] || USER_CITY;
+}
+
+function haversineKm(a: Coordinates, b: Coordinates) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
 
 function buildExploreParams(args: {
   debouncedSearchQuery: string;
   activeCategory: string;
   interestIdByName: Record<string, number>;
   selectedFilters: ExploreFilters;
+  userCity: string;
 }) {
-  const { debouncedSearchQuery, activeCategory, interestIdByName, selectedFilters } = args;
+  const { debouncedSearchQuery, activeCategory, interestIdByName, selectedFilters, userCity } = args;
   const params: Record<string, string | number> = {
     page: 1,
     limit: 50,
@@ -91,9 +119,12 @@ function buildExploreParams(args: {
         ? 'online'
         : 'any';
   params.price = selectedFilters.price.toLowerCase();
+  if (selectedFilters.format !== 'Any') {
+    params.eventFormat = selectedFilters.format;
+  }
 
-  if (selectedFilters.location === 'In my city' || selectedFilters.location === 'Near me') {
-    params.city = USER_CITY;
+  if (selectedFilters.location === 'In my city') {
+    params.city = userCity;
   }
 
   const dateBucket =
@@ -115,19 +146,43 @@ function buildExploreParams(args: {
   return params;
 }
 
-function applyQuickPickFilter(rows: ExploreRow[], filters: ExploreFilters): ExploreRow[] {
-  if (filters.quickPickRule !== 'withinTwoHours') return rows;
+function applyClientFilters(
+  rows: ExploreRow[],
+  filters: ExploreFilters,
+  nearMeCoords: Coordinates | null,
+): ExploreRow[] {
+  let filteredRows = rows;
+
+  if (filters.location === 'Near me' && nearMeCoords) {
+    filteredRows = filteredRows.filter((row) => {
+      if (row.isOnline) return false;
+      if (!Number.isFinite(row.locationLatitude) || !Number.isFinite(row.locationLongitude)) {
+        return false;
+      }
+      return (
+        haversineKm(nearMeCoords, {
+          latitude: row.locationLatitude,
+          longitude: row.locationLongitude,
+        }) <= NEAR_ME_RADIUS_KM
+      );
+    });
+  }
+
+  if (filters.quickPickRule !== 'withinTwoHours') return filteredRows;
   const now = new Date();
   const soonLimit = new Date(now.getTime() + STARTING_SOON_HOURS * 60 * 60 * 1000);
-  return rows.filter((row) => {
+  return filteredRows.filter((row) => {
     const startsAt = new Date(row.startsAt);
     return startsAt >= now && startsAt <= soonLimit;
   });
 }
 
 function mapItemToExploreRow(event: any): ExploreRow {
-  const card = mapApiEventToCard(event);
-  const startsAt = event.startsAt ?? new Date().toISOString();
+  const card =
+    event?.coverImageUrl !== undefined || event?.coverLetter !== undefined || event?.details !== undefined
+      ? event
+      : mapApiEventToCard(event);
+  const startsAt = card.startsAt ?? event.startsAt ?? new Date().toISOString();
   const startDate = new Date(startsAt);
   const datePart = startDate.toLocaleDateString('en-US', {
     weekday: 'short',
@@ -139,8 +194,8 @@ function mapItemToExploreRow(event: any): ExploreRow {
     minute: '2-digit',
     hour12: true,
   });
-  const isOnline = Boolean(event.isOnline);
-  const city = event.city ?? '';
+  const isOnline = Boolean(card.isOnline ?? event.isOnline);
+  const city = card.city ?? event.city ?? '';
 
   return {
     id: card.id,
@@ -157,16 +212,20 @@ function mapItemToExploreRow(event: any): ExploreRow {
     startsAt,
     city,
     isOnline,
-    priceType: event.priceType ?? 'Free',
-    interestId: typeof event.interestId === 'number' ? event.interestId : null,
+    priceType: card.priceType ?? event.priceType ?? 'Free',
+    eventFormat: card.eventFormat ?? event.eventFormat ?? null,
+    interestId: typeof card.interestId === 'number' ? card.interestId : null,
     statusChip: card.statusChip,
     urgencyLabel: card.urgencyLabel,
     categoryName: card.categoryName,
     eventState: card.eventState,
+    locationLatitude: Number(card.locationLatitude),
+    locationLongitude: Number(card.locationLongitude),
   };
 }
 
 export default function ExploreScreen() {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -177,10 +236,12 @@ export default function ExploreScreen() {
   const [categories, setCategories] = useState<ExploreCategory[]>(DEFAULT_EXPLORE_CATEGORIES);
   const [interestIdByName, setInterestIdByName] = useState<Record<string, number>>({});
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+  const [nearMeCoords, setNearMeCoords] = useState<Coordinates | null>(null);
   const [selectedFilters, setSelectedFilters] = useState<ExploreFilters>({
     quickPick: null,
     date: 'Any time',
     type: 'Any',
+    format: 'Any',
     price: 'Any',
     location: 'Anywhere',
     quickPickRule: null,
@@ -189,6 +250,10 @@ export default function ExploreScreen() {
   const initialFetchDoneRef = useRef(false);
   const interestIdByNameRef = useRef(interestIdByName);
   interestIdByNameRef.current = interestIdByName;
+  const userCity = useMemo(
+    () => extractCityFromLocation(user?.location || user?.city),
+    [user?.city, user?.location],
+  );
 
   const interestKey = useMemo(() => {
     if (activeCategory === 'All') return 'all';
@@ -204,8 +269,33 @@ export default function ExploreScreen() {
     setIsFilterModalVisible(false);
   }, []);
 
-  const handleApplyFilters = useCallback((filters: ExploreFilters) => {
-    setSelectedFilters(filters);
+  const handleApplyFilters = useCallback(async (filters: ExploreFilters) => {
+    if (filters.location !== 'Near me') {
+      setNearMeCoords(null);
+      setSelectedFilters(filters);
+      return;
+    }
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Location needed', 'Allow location access to show nearby events.');
+        setNearMeCoords(null);
+        setSelectedFilters({ ...filters, location: 'Anywhere' });
+        return;
+      }
+
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setNearMeCoords({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+      setSelectedFilters(filters);
+    } catch {
+      Alert.alert('Location unavailable', 'We could not get your location. Try again or use In my city.');
+      setNearMeCoords(null);
+      setSelectedFilters({ ...filters, location: 'In my city' });
+    }
   }, []);
 
   useFocusEffect(
@@ -263,11 +353,12 @@ export default function ExploreScreen() {
       activeCategory,
       interestIdByName: interestIdByNameRef.current,
       selectedFilters,
+      userCity,
     });
     const { items } = await getEvents(params);
-    const nextRows = applyQuickPickFilter(items.map(mapItemToExploreRow), selectedFilters);
+    const nextRows = applyClientFilters(items.map(mapItemToExploreRow), selectedFilters, nearMeCoords);
     return nextRows;
-  }, [debouncedSearchQuery, activeCategory, selectedFilters]);
+  }, [debouncedSearchQuery, activeCategory, selectedFilters, nearMeCoords, userCity]);
 
   useEffect(() => {
     let mounted = true;
@@ -279,14 +370,16 @@ export default function ExploreScreen() {
         activeCategory,
         interestIdByName: interestIdByNameRef.current,
         selectedFilters,
+        userCity,
       });
       const cached = peekEventsListCache(params);
       const paintedFromCache = Boolean(cached && Array.isArray(cached.items));
 
       if (paintedFromCache) {
-        const fromCache = applyQuickPickFilter(
+        const fromCache = applyClientFilters(
           cached!.items.map(mapItemToExploreRow),
           selectedFilters,
+          nearMeCoords,
         );
         setRows(fromCache);
         setLoadError(null);
@@ -322,7 +415,7 @@ export default function ExploreScreen() {
     return () => {
       mounted = false;
     };
-  }, [debouncedSearchQuery, interestKey, selectedFilters, fetchExploreEvents]);
+  }, [debouncedSearchQuery, interestKey, selectedFilters, nearMeCoords, userCity, fetchExploreEvents]);
 
   const onRefresh = useCallback(async () => {
     invalidateEventsListCache();

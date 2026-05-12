@@ -500,9 +500,17 @@ async function ensureInterestLabelsLoaded() {
 }
 
 function resolveCoverFields(event, title) {
-  const rawImage = event?.image;
+  const rawImage = [
+    event?.coverImageUrl,
+    event?.coverImage,
+    event?.cover_image,
+    event?.cover?.url,
+    event?.cover?.path,
+    typeof event?.image === 'string' ? event.image : event?.image?.uri,
+  ].find((candidate) => typeof candidate === 'string' && candidate.trim());
   if (typeof rawImage === 'string' && rawImage.trim()) {
-    const resolvedCoverImage = resolveApiAssetUrl(rawImage.trim()) || rawImage.trim();
+    const normalizedImage = rawImage.trim().replace(/\\/g, '/');
+    const resolvedCoverImage = resolveApiAssetUrl(normalizedImage) || normalizedImage;
     return {
       coverImageUrl: resolvedCoverImage,
       coverLetter: pickCoverLetter(event, title),

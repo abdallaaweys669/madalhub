@@ -3,7 +3,12 @@ import { useRouter } from 'expo-router';
 
 import api from '@/api/auth';
 import useAuth from '@/auth/useAuth';
-import { getLoginErrors } from '@/features/auth/validation/authRules';
+import {
+  getInvalidCredentialsErrors,
+  getLoginErrors,
+  isInvalidCredentialsMessage,
+  normalizeEmail,
+} from '@/features/auth/validation/authRules';
 
 export default function useLoginForm() {
   const router = useRouter();
@@ -13,12 +18,17 @@ export default function useLoginForm() {
   const [touched, setTouched] = useState({ email: false, password: false });
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState('');
+  const [serverErrors, setServerErrors] = useState({});
 
   const fieldErrors = useMemo(() => getLoginErrors(values), [values]);
   const isValid = !fieldErrors.email && !fieldErrors.password;
 
   const onChange = (field, value) => {
     setValues((prev) => ({ ...prev, [field]: value }));
+    if (serverErrors[field]) {
+      setServerErrors((prev) => ({ ...prev, [field]: '' }));
+    }
+    if (formError) setFormError('');
   };
 
   const onBlur = (field) => {
@@ -31,9 +41,13 @@ export default function useLoginForm() {
 
     setLoading(true);
     setFormError('');
+    setServerErrors({});
 
     try {
-      const result = await api.login(values);
+      const result = await api.login({
+        ...values,
+        email: normalizeEmail(values.email),
+      });
 
       if (!result.token) {
         throw new Error('Missing auth token from login response.');
@@ -55,6 +69,10 @@ export default function useLoginForm() {
           setFormError(
             rawMessage + '\n\nTap "Login as Organizer" on Welcome.'
           );
+        } else if (isInvalidCredentialsMessage(rawMessage)) {
+          const invalidErrors = getInvalidCredentialsErrors();
+          setServerErrors({ email: invalidErrors.email, password: invalidErrors.password });
+          setFormError(invalidErrors.form);
         } else {
           setFormError(rawMessage);
         }
@@ -64,6 +82,10 @@ export default function useLoginForm() {
           setFormError(
             rawMessage + '\n\nTap "Login as Organizer" on Welcome.'
           );
+        } else if (isInvalidCredentialsMessage(rawMessage)) {
+          const invalidErrors = getInvalidCredentialsErrors();
+          setServerErrors({ email: invalidErrors.email, password: invalidErrors.password });
+          setFormError(invalidErrors.form);
         } else {
           setFormError(rawMessage);
         }
@@ -79,7 +101,7 @@ export default function useLoginForm() {
   return {
     values,
     touched,
-    errors: { ...fieldErrors, form: formError },
+    errors: { ...fieldErrors, ...serverErrors, form: formError },
     loading,
     isValid,
     onChange,

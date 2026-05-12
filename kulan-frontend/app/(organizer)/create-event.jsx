@@ -1,6 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -8,14 +7,13 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   UIManager,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -35,8 +33,9 @@ import VenueOnlineModal from '@/components/createEvent/VenueOnlineModal';
 import WysiwygRoster from '@/components/createEvent/WysiwygRoster';
 import SpeakerEditModal from '@/components/createEvent/SpeakerEditModal';
 import WysiwygSponsors from '@/components/createEvent/WysiwygSponsors';
-import TicketingCapacityModal from '@/components/createEvent/TicketingCapacityModal';
 import CreateEventFloatingBar from '@/components/createEvent/CreateEventFloatingBar';
+import CreateEventSkeleton from '@/components/skeletons/CreateEventSkeleton';
+import AppPopup from '@/components/common/AppPopup';
 
 const EDU_SUBTYPES = [
   { key: 'seminar', label: 'Seminar' },
@@ -70,108 +69,46 @@ function formatRelativeSaveTime(date) {
   return `Saved ${mins} minutes ago`;
 }
 
-const sheetStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-    backgroundColor: 'rgba(15, 23, 42, 0.52)',
-  },
-  card: {
-    width: '100%',
-    maxWidth: 368,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingHorizontal: 22,
-    paddingTop: 26,
-    paddingBottom: 22,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 12,
-    zIndex: 1,
-  },
-  iconCirclePublish: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#FFEDD5',
-  },
-  iconCircleSuccess: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#D1FAE5',
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    textAlign: 'center',
-    letterSpacing: -0.3,
-  },
-  cardBody: {
-    marginTop: 8,
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#64748B',
-    textAlign: 'center',
-    paddingHorizontal: 4,
-  },
-  btnSecondary: {
-    flex: 1,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnSecondaryText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  btnPrimary: {
-    flex: 1,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#FF7A00',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnPrimaryText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  btnSuccessFull: {
-    width: '100%',
-    height: 50,
-    borderRadius: 12,
-    backgroundColor: '#059669',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnSuccessFullText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-});
+function getPublishValidationIssues({
+  values,
+  startDate,
+  endDate,
+  isInPerson,
+  onlineLink,
+  ticketPaid,
+}) {
+  const issues = [];
+  const startTime = startDate?.getTime?.();
+  const endTime = endDate?.getTime?.();
+
+  if (!values.title.trim()) issues.push('Add a clear event title.');
+  if (!values.description.trim()) issues.push('Add a short event description.');
+  if (!values.interestId) issues.push('Choose the event category.');
+
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) {
+    issues.push('Choose a valid start date and end date.');
+  } else {
+    const oneMinuteAgo = Date.now() - 60 * 1000;
+    if (startTime < oneMinuteAgo) {
+      issues.push('Start date and time must be in the future.');
+    }
+    if (endTime <= startTime) {
+      issues.push('End date and time must be after the start date and time.');
+    }
+  }
+
+  if (isInPerson && !values.locationName.trim()) {
+    issues.push('Choose the event venue or map location.');
+  }
+  if (!isInPerson && !onlineLink.trim()) {
+    issues.push('Add the online event link.');
+  }
+  if (ticketPaid && (Number(values.totalPrice) || 0) <= 0) {
+    issues.push('Add a ticket price greater than 0 for paid events.');
+  }
+
+  return issues;
+}
 
 export default function CreateEventScreen() {
   const router = useRouter();
@@ -227,7 +164,6 @@ export default function CreateEventScreen() {
   const [categorySearch, setCategorySearch] = useState('');
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [mapModalOpen, setMapModalOpen] = useState(false);
-  const [ticketModalOpen, setTicketModalOpen] = useState(false);
   const [personModalVisible, setPersonModalVisible] = useState(false);
   const [editingPersonKey, setEditingPersonKey] = useState(null);
   const [personSaving, setPersonSaving] = useState(false);
@@ -235,6 +171,8 @@ export default function CreateEventScreen() {
   const [draftPerson, setDraftPerson] = useState({ fullName: '', role: 'speaker', title: '', photoPath: null });
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [publishSuccessOpen, setPublishSuccessOpen] = useState(false);
+  const [publishWarningOpen, setPublishWarningOpen] = useState(false);
+  const [publishErrorMessage, setPublishErrorMessage] = useState('');
   const [publishSuccessKind, setPublishSuccessKind] = useState('published');
   const [sponsorNamePrompt, setSponsorNamePrompt] = useState(null);
   const [sponsorDraftName, setSponsorDraftName] = useState('');
@@ -247,16 +185,20 @@ export default function CreateEventScreen() {
     return interests.filter((i) => String(i?.name || '').toLowerCase().includes(q));
   }, [interests, categorySearch]);
 
-  const canPublish = useMemo(() => {
-    return Boolean(
-      values.title.trim() &&
-        values.description.trim() &&
-        values.interestId &&
-        startDate.getTime() < endDate.getTime() &&
-        (isInPerson ? values.locationName.trim() : onlineLink.trim()) &&
-        (!ticketPaid || (Number(values.totalPrice) || 0) > 0),
-    );
-  }, [values, startDate, endDate, isInPerson, onlineLink, ticketPaid]);
+  const publishValidationIssues = useMemo(
+    () =>
+      getPublishValidationIssues({
+        values,
+        startDate,
+        endDate,
+        isInPerson,
+        onlineLink,
+        ticketPaid,
+      }),
+    [values, startDate, endDate, isInPerson, onlineLink, ticketPaid],
+  );
+
+  const canPublish = publishValidationIssues.length === 0;
 
   const rosterForCard = useMemo(
     () => people.filter((p) => p.fullName.trim()).map((p) => ({ id: p.key, displayName: p.fullName, role: p.role, title: p.title, photoUrl: p.photoPath || null })),
@@ -483,7 +425,10 @@ export default function CreateEventScreen() {
   };
 
   const runPublish = async () => {
-    if (!canPublish) return;
+    if (!canPublish) {
+      setPublishWarningOpen(true);
+      return;
+    }
     const wasAlreadyPublished = remoteStatus === 'published';
     setLoading(true);
     try {
@@ -502,10 +447,23 @@ export default function CreateEventScreen() {
       setPublishSuccessKind(wasAlreadyPublished ? 'saved' : 'published');
       setPublishSuccessOpen(true);
     } catch (e) {
-      Alert.alert('Error', e?.message || 'Publish failed');
+      setPublishConfirmOpen(false);
+      setPublishErrorMessage(e?.message || 'Publish failed. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const onPublishPress = () => {
+    if (!canPublish) {
+      setPublishWarningOpen(true);
+      return;
+    }
+    if (remoteStatus === 'published') {
+      runPublish();
+      return;
+    }
+    setPublishConfirmOpen(true);
   };
 
   const applyDatePart = (base, picked) => {
@@ -542,11 +500,7 @@ export default function CreateEventScreen() {
   };
 
   if (fetchLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#FF7A00" />
-      </View>
-    );
+    return <CreateEventSkeleton />;
   }
 
   return (
@@ -671,7 +625,7 @@ export default function CreateEventScreen() {
       <CreateEventFloatingBar
         lastSavedText={formatRelativeSaveTime(lastSavedAt)}
         onSaveDraft={onSaveDraftPress}
-        onPublish={() => (remoteStatus === 'published' ? runPublish() : setPublishConfirmOpen(true))}
+        onPublish={onPublishPress}
         publishLabel={remoteStatus === 'published' ? 'Save Changes' : 'Publish Event'}
         loading={loading}
         disabledPublish={!canPublish && remoteStatus !== 'published'}
@@ -767,89 +721,56 @@ export default function CreateEventScreen() {
         onDelete={removeEditingPerson}
       />
 
-      <Modal
-        visible={publishConfirmOpen}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setPublishConfirmOpen(false)}
-      >
-        <View style={sheetStyles.overlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => !loading && setPublishConfirmOpen(false)}
-            accessibilityLabel="Close"
-          />
-          <View style={sheetStyles.card}>
-            <View style={{ alignItems: 'center', marginBottom: 14 }}>
-              <View style={sheetStyles.iconCirclePublish}>
-                <Ionicons name="rocket-outline" size={28} color="#EA580C" />
-              </View>
-              <Text style={sheetStyles.cardTitle}>Publish your event?</Text>
-              <Text style={sheetStyles.cardBody}>
-                Your listing goes live right away—attendees can discover it and register.
-              </Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable
-                style={({ pressed }) => [sheetStyles.btnSecondary, pressed && { opacity: 0.85 }]}
-                onPress={() => setPublishConfirmOpen(false)}
-                disabled={loading}
-              >
-                <Text style={sheetStyles.btnSecondaryText}>Not yet</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [sheetStyles.btnPrimary, pressed && { opacity: 0.92 }]}
-                onPress={runPublish}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={sheetStyles.btnPrimaryText}>Publish</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <AppPopup
+        visible={publishWarningOpen}
+        variant="warning"
+        title="Before you publish"
+        message="Please fix these details so attendees see the correct event information."
+        details={publishValidationIssues}
+        primaryLabel="Got it"
+        onPrimary={() => setPublishWarningOpen(false)}
+      />
 
-      <Modal
+      <AppPopup
+        visible={publishConfirmOpen}
+        variant="warning"
+        title="Publish your event?"
+        message="Your listing goes live right away. Attendees can discover it and register."
+        primaryLabel="Publish"
+        secondaryLabel="Not yet"
+        loading={loading}
+        onPrimary={runPublish}
+        onSecondary={() => setPublishConfirmOpen(false)}
+        onClose={() => !loading && setPublishConfirmOpen(false)}
+      />
+
+      <AppPopup
         visible={publishSuccessOpen}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setPublishSuccessOpen(false)}
-      >
-        <View style={sheetStyles.overlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setPublishSuccessOpen(false)}
-            accessibilityLabel="Close"
-          />
-          <View style={sheetStyles.card}>
-            <View style={{ alignItems: 'center', marginBottom: 18 }}>
-              <View style={sheetStyles.iconCircleSuccess}>
-                <Ionicons name="checkmark-circle" size={36} color="#059669" />
-              </View>
-              <Text style={sheetStyles.cardTitle}>
-                {publishSuccessKind === 'saved' ? 'Changes saved' : "You're live"}
-              </Text>
-              <Text style={sheetStyles.cardBody}>
-                {publishSuccessKind === 'saved'
-                  ? 'Updates are visible on your event page for everyone.'
-                  : 'Your event is published and visible to attendees. Share it to fill the room.'}
-              </Text>
-            </View>
-            <Pressable
-              style={({ pressed }) => [sheetStyles.btnSuccessFull, pressed && { opacity: 0.92 }]}
-              onPress={() => setPublishSuccessOpen(false)}
-            >
-              <Text style={sheetStyles.btnSuccessFullText}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+        variant="success"
+        title={publishSuccessKind === 'saved' ? 'Changes saved' : "You're live"}
+        message={
+          publishSuccessKind === 'saved'
+            ? 'Updates are visible on your event page for everyone.'
+            : 'Your event is published and visible to attendees. Share it to fill the room.'
+        }
+        primaryLabel="Done"
+        onPrimary={() => setPublishSuccessOpen(false)}
+      />
+
+      <AppPopup
+        visible={Boolean(publishErrorMessage)}
+        variant="error"
+        title="Publish failed"
+        message={publishErrorMessage}
+        primaryLabel="Try again"
+        secondaryLabel="Close"
+        onPrimary={() => {
+          setPublishErrorMessage('');
+          runPublish();
+        }}
+        onSecondary={() => setPublishErrorMessage('')}
+        onClose={() => setPublishErrorMessage('')}
+      />
 
       <Modal visible={!!sponsorNamePrompt} transparent animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>

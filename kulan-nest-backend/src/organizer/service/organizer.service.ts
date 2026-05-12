@@ -392,6 +392,70 @@ export class OrganizerService {
     };
   }
 
+  /** Member-facing / shareable organizer summary (no private contact fields). */
+  async getPublicOrganizerProfile(
+    organizerId: number,
+    viewer?: { userId: number; role: number },
+  ) {
+    const user = await this.userRepository.findOne({
+      where: { id: organizerId },
+    });
+
+    if (!user || user.roleId !== 2) {
+      throw new NotFoundException('Organizer not found');
+    }
+
+    const organizerProfile = await this.organizerProfileRepository.findOne({
+      where: { userId: organizerId },
+    });
+
+    const publishedCount = await this.eventRepository.count({
+      where: { organizerId, status: 'published' },
+    });
+
+    const followersCount = await this.organizerFollowRepository.count({
+      where: { organizerId },
+    });
+
+    const ratingStats = await this.organizerReviewRepository
+      .createQueryBuilder('rev')
+      .select('AVG(rev.rating)', 'avg')
+      .addSelect('COUNT(rev.id)', 'cnt')
+      .where('rev.organizerId = :organizerId', { organizerId })
+      .getRawOne<{ avg: string | null; cnt: string }>();
+
+    const ratingAverage = ratingStats?.avg ? Number(Number(ratingStats.avg).toFixed(1)) : null;
+    const ratingCount = ratingStats ? Number(ratingStats.cnt) : 0;
+
+    let isFollowing = false;
+    if (viewer?.role === 1 && viewer.userId) {
+      const row = await this.organizerFollowRepository.findOne({
+        where: { organizerId, memberId: viewer.userId },
+      });
+      isFollowing = !!row;
+    }
+
+    const displayName =
+      (organizerProfile?.organizationName || '').trim() || user.fullName || 'Organizer';
+
+    return {
+      organizerId: user.id,
+      fullName: user.fullName,
+      displayName,
+      location: user.location ?? null,
+      profileImg: user.profileImg ?? null,
+      organizationName: organizerProfile?.organizationName ?? null,
+      organizationDescription: organizerProfile?.organizationDescription ?? null,
+      website: organizerProfile?.website ?? null,
+      verificationStatus: organizerProfile?.verificationStatus ?? 'pending',
+      eventsCount: publishedCount,
+      followersCount,
+      ratingAverage,
+      ratingCount,
+      isFollowing,
+    };
+  }
+
   async followOrganizer(organizerId: number, memberId: number) {
     const organizer = await this.userRepository.findOne({
       where: { id: organizerId, roleId: 2 },

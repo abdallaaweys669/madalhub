@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput } from 'react-native';
 import { COLORS } from '@/constants/loginSignin/authStyles';
 
-export default function TextField({ label, error, ...rest }) {
+export default function TextField({ label, error, helperText, ...rest }) {
   const [focused, setFocused] = useState(false);
 
   const borderColor = error
@@ -40,15 +40,16 @@ export default function TextField({ label, error, ...rest }) {
         />
       </View>
 
-      {error ? (
+      {error || helperText ? (
         <Text
           style={{
-            color: COLORS.danger,
+            color: error ? COLORS.danger : '#64748B',
             fontSize: 12,
             marginTop: 4,
+            lineHeight: 16,
           }}
         >
-          {error}
+          {error || helperText}
         </Text>
       ) : null}
     </View>

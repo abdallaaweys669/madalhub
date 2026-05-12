@@ -6,18 +6,17 @@ import { spacing } from '@/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-/** Same card silhouette as `HomeSkeleton` (image on top, body + badge + avatars). */
-const CARD_IMAGE_HEIGHT = 152;
-const CARD_RADIUS = 16;
+/** Matches `ExploreEventCard`: content left + thumbnail right. */
+const CARD_RADIUS = 18;
 const PAD_H = 16;
+const CARD_W = SCREEN_W - PAD_H * 2;
+const THUMB_W = 108;
+const THUMB_H = 96;
 
 /**
  * Explore loading: search bar + 3 tab chips + vertical cards matching home skeleton style.
  */
 export default function ExploreSkeleton() {
-  const cardWidth = SCREEN_W - spacing.lg * 2;
-  const cardBodyInner = cardWidth - spacing.md * 2;
-
   const tabWidths = useMemo(() => {
     const gutter = PAD_H * 2;
     const gaps = spacing.sm * 2;
@@ -56,32 +55,36 @@ export default function ExploreSkeleton() {
       </View>
 
       {[0, 1, 2, 3].map((i) => (
-        <Skeleton key={i} containerStyle={[styles.cardWrap, { width: cardWidth }]}>
-          <View style={styles.cardImageWrap}>
-            <SkeletonPiece width={cardWidth} height={CARD_IMAGE_HEIGHT} style={styles.cardImage} />
+        <Skeleton key={i} containerStyle={styles.cardWrap}>
+          <View style={styles.topRow}>
+            <View style={styles.textColumn}>
+              <SkeletonPiece width="90%" height={18} style={styles.mb8} />
+              <SkeletonPiece width="66%" height={18} style={styles.mb10} />
+              <View style={styles.chipRow}>
+                <SkeletonPiece width={72} height={24} style={styles.pill} />
+                <SkeletonPiece width={86} height={24} style={styles.pill} />
+              </View>
+              <SkeletonPiece width="72%" height={13} style={styles.mb8} />
+              <SkeletonPiece width="84%" height={13} />
+            </View>
+            <SkeletonPiece width={THUMB_W} height={THUMB_H} style={styles.thumbnail} />
           </View>
-          <View style={styles.cardBody}>
-            <SkeletonPiece
-              width={Math.round(cardBodyInner * 0.92)}
-              height={17}
-              style={styles.mb8}
-            />
-            <SkeletonPiece
-              width={Math.round(cardBodyInner * 0.78)}
-              height={14}
-              style={styles.mb8}
-            />
-            <SkeletonPiece width={92} height={26} style={styles.badgePiece} />
-            <View style={styles.divider} />
-            <View style={styles.socialRow}>
+
+          <View style={styles.bottomRow}>
+            <View style={styles.bottomLeft}>
               <View style={styles.avatarStack}>
                 {[0, 1, 2].map((j) => (
                   <View key={j} style={[styles.avatarBone, j > 0 && styles.avatarOverlap]}>
-                    <SkeletonPiece width={30} height={30} style={styles.avatarPiece} />
+                    <SkeletonPiece width={22} height={22} style={styles.avatarPiece} />
                   </View>
                 ))}
               </View>
-              <SkeletonPiece width={72} height={14} />
+              <SkeletonPiece width={72} height={13} style={styles.ml8} />
+              <SkeletonPiece width={82} height={22} style={styles.modeTag} />
+            </View>
+            <View style={styles.actions}>
+              <SkeletonPiece width={30} height={30} style={styles.iconBtn} />
+              <SkeletonPiece width={30} height={30} style={styles.iconBtn} />
             </View>
           </View>
         </Skeleton>
@@ -138,34 +141,63 @@ const styles = StyleSheet.create({
   },
   cardWrap: {
     alignSelf: 'center',
-    marginHorizontal: spacing.lg,
+    width: CARD_W,
     marginBottom: spacing.md,
     borderRadius: CARD_RADIUS,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
     backgroundColor: 'transparent',
   },
-  cardImageWrap: {
-    borderTopLeftRadius: CARD_RADIUS,
-    borderTopRightRadius: CARD_RADIUS,
-    overflow: 'hidden',
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
-  cardImage: {
-    borderTopLeftRadius: CARD_RADIUS,
-    borderTopRightRadius: CARD_RADIUS,
-    borderRadius: 0,
+  textColumn: {
+    flex: 1,
+    paddingRight: 14,
+    minHeight: THUMB_H,
   },
-  cardBody: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 8,
   },
   mb8: { marginBottom: 8 },
-  badgePiece: {
-    borderRadius: 8,
-    marginBottom: 10,
+  mb10: { marginBottom: 10 },
+  pill: {
+    borderRadius: 999,
   },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#ECEEF2',
-    marginBottom: 10,
+  thumbnail: {
+    borderRadius: 16,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  bottomLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  ml8: {
+    marginLeft: 8,
+  },
+  modeTag: {
+    borderRadius: 999,
+    marginLeft: 8,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+    gap: 6,
+  },
+  iconBtn: {
+    borderRadius: 15,
   },
   socialRow: {
     flexDirection: 'row',
@@ -179,13 +211,13 @@ const styles = StyleSheet.create({
   avatarBone: {
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    borderRadius: 17,
+    borderRadius: 13,
     overflow: 'hidden',
   },
   avatarPiece: {
-    borderRadius: 15,
+    borderRadius: 11,
   },
   avatarOverlap: {
-    marginLeft: -10,
+    marginLeft: -9,
   },
 });

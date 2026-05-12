@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -7,111 +7,21 @@ import { Feather } from '@expo/vector-icons';
 import useAuth from '@/auth/useAuth';
 import organizerApi from '@/api/organizer';
 import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
+import {
+  OrganizerAvatar,
+  OrganizerInfoRow,
+  StatTile,
+  formatCount,
+  formatRating,
+} from '@/components/organizer/OrganizerProfileChrome';
 import { useThemeColors, spacing } from '@/theme';
 import { COLORS } from '@/theme/colors';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
-
-function initialsFromName(name) {
-  if (!name || typeof name !== 'string') return 'OR';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
-
-function formatCount(value) {
-  const num = Number(value || 0);
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
-  return String(num);
-}
-
-function formatRating(value) {
-  if (value == null || Number.isNaN(Number(value))) return '0';
-  return Number(value).toFixed(1);
-}
 
 function statusTheme(status) {
   if (status === 'approved') return { label: 'Verified', icon: 'check-circle', color: COLORS.success };
   if (status === 'rejected') return { label: 'Rejected', icon: 'alert-circle', color: COLORS.danger };
   return { label: 'Pending', icon: 'clock', color: COLORS.warning };
-}
-
-function Avatar({ uri, name }) {
-  if (uri) {
-    return (
-      <Image
-        source={{ uri }}
-        style={{
-          width: 88,
-          height: 88,
-          borderRadius: 44,
-          borderWidth: 2,
-          borderColor: COLORS.card,
-          backgroundColor: COLORS.card,
-        }}
-      />
-    );
-  }
-
-  return (
-    <View
-      style={{
-        width: 88,
-        height: 88,
-        borderRadius: 44,
-        borderWidth: 2,
-        borderColor: COLORS.card,
-        backgroundColor: COLORS.primarySoft,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text allowFontScaling={false} style={{ color: COLORS.primary, fontSize: 30, fontWeight: '800' }}>
-        {initialsFromName(name)}
-      </Text>
-    </View>
-  );
-}
-
-function StatTile({ label, value }) {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', paddingVertical: 8 }}>
-      <Text allowFontScaling={false} style={{ color: COLORS.textPrimary, fontSize: 24, fontWeight: '800' }}>
-        {value}
-      </Text>
-      <Text allowFontScaling={false} style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: '500', marginTop: 2 }}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function InfoRow({ icon, label, value }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 12 }}>
-      <View
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: 17,
-          backgroundColor: COLORS.panel,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginRight: 10,
-        }}
-      >
-        <Feather name={icon} size={16} color={COLORS.textPrimary} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text allowFontScaling={false} style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', letterSpacing: 0.9 }}>
-          {label}
-        </Text>
-        <Text allowFontScaling={false} style={{ color: COLORS.textPrimary, fontSize: 13, fontWeight: '700', marginTop: 2 }}>
-          {value || 'Not set'}
-        </Text>
-      </View>
-    </View>
-  );
 }
 
 export default function OrganizerProfileScreen() {
@@ -215,7 +125,7 @@ export default function OrganizerProfileScreen() {
 
         <View style={{ alignItems: 'center', marginTop: 8 }}>
           <View style={{ position: 'relative' }}>
-            <Avatar uri={avatarUri} name={displayName} />
+            <OrganizerAvatar uri={avatarUri} name={displayName} />
             <Pressable
               onPress={() => router.push('/(organizer)/edit-profile')}
               hitSlop={10}
@@ -276,10 +186,10 @@ export default function OrganizerProfileScreen() {
 
           <View style={{ height: 1, backgroundColor: COLORS.border, marginTop: 12, marginBottom: 2 }} />
 
-          <InfoRow icon="map-pin" label="LOCATION" value={user?.location || d.location} />
-          <InfoRow icon="globe" label="WEBSITE" value={d.website} />
-          <InfoRow icon="mail" label="EMAIL" value={email} />
-          <InfoRow icon="phone" label="PHONE" value={d.phone || user?.phoneNumber || user?.phone || ''} />
+          <OrganizerInfoRow icon="map-pin" label="LOCATION" value={user?.location || d.location} />
+          <OrganizerInfoRow icon="globe" label="WEBSITE" value={d.website} />
+          <OrganizerInfoRow icon="mail" label="EMAIL" value={email} />
+          <OrganizerInfoRow icon="phone" label="PHONE" value={d.phone || user?.phoneNumber || user?.phone || ''} />
         </View>
 
         <View style={{ marginTop: 8 }}>

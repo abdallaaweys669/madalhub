@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { publishOrganizerEvent } from './events';
+import { getEvents, publishOrganizerEvent } from './events';
 
 const getNetworkErrorMessage = (error) => {
   const code = error?.code;
@@ -146,6 +146,33 @@ export const getProfileDashboard = async () => {
   }
 };
 
+/** Public organizer summary (`GET /organizer/public/:id`). */
+export const getPublicOrganizerProfile = async (organizerId) => {
+  try {
+    const response = await apiClient.get(`/organizer/public/${organizerId}`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to load organizer profile';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+/** Published events for an organizer (`GET /events` with organizer filters). */
+export const getPublicOrganizerEvents = async (organizerId, organizerScope) => {
+  try {
+    return await getEvents({ organizerId, organizerScope, limit: 50, page: 1 });
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to load events';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
 export const changeOrganizerPassword = async (currentPassword, newPassword) => {
   try {
     const response = await apiClient.post('/organizer/change-password', {
@@ -266,6 +293,8 @@ export default {
   deleteEvent,
   publishEvent,
   getProfileDashboard,
+  getPublicOrganizerProfile,
+  getPublicOrganizerEvents,
   changeOrganizerPassword,
   followOrganizer,
   unfollowOrganizer,
