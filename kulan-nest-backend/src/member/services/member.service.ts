@@ -12,6 +12,15 @@ import { CreateMemberDto } from '../dto/create-member.dto';
 import { UpdateMemberDto } from '../dto/update-member.dto';
 import * as bcrypt from 'bcrypt';
 
+const ROLE_MEMBER = 1;
+const ROLE_ORGANIZER = 2;
+const ROLE_ADMIN = 3;
+
+function canViewerSeeHiddenProfile(viewer?: { userId?: number; role?: number } | null): boolean {
+  const role = viewer?.role != null ? Number(viewer.role) : null;
+  return role === ROLE_ORGANIZER || role === ROLE_ADMIN;
+}
+
 @Injectable()
 export class MemberService {
   constructor(
@@ -24,19 +33,22 @@ export class MemberService {
 
   // member.controller.ts
 
-  async findAll(): Promise<Omit<User, 'password'>[]> {
+  async findAll(viewer?: { userId?: number; role?: number } | null): Promise<Omit<User, 'password'>[]> {
     const users = await this.userRepository.find();
-    return this.toSafeUsers(users);
+    return users.map((user) => this.applyHiddenProfileRules(user, viewer));
   }
 
-  async findOne(id: number): Promise<Omit<User, 'password'>> {
+  async findOne(
+    id: number,
+    viewer?: { userId?: number; role?: number } | null,
+  ): Promise<Omit<User, 'password'>> {
     const user = await this.userRepository.findOne({ where: { id } });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    return this.toSafeUser(user);
+    return this.applyHiddenProfileRules(user, viewer);
   }
 
   async register(
@@ -122,10 +134,29 @@ export class MemberService {
     user.fullName = dto.full_name ?? user.fullName;
 
     if (dto.email) user.email = dto.email.toLowerCase().trim();
-    if (dto.phone) user.phone = dto.phone.trim();
+    if (dto.phone !== undefined) {
+      const trimmed = (dto.phone ?? '').trim();
+      user.phone = trimmed.length > 0 ? trimmed : '';
+    }
+
+    if (dto.location !== undefined) {
+      const loc = (dto.location ?? '').trim();
+      user.location = loc.length > 0 ? loc : '';
+    }
+
+    if (dto.profile_show_email !== undefined) {
+      user.profileShowEmail = Boolean(dto.profile_show_email);
+    }
+    if (dto.profile_show_phone !== undefined) {
+      user.profileShowPhone = Boolean(dto.profile_show_phone);
+    }
+    if (dto.profile_hidden !== undefined) {
+      user.profileHidden = Boolean(dto.profile_hidden);
+    }
 
     const savedUser = await this.userRepository.save(user);
-    return this.toSafeUser(savedUser);
+    const fresh = await this.userRepository.findOne({ where: { id } });
+    return this.toSafeUser(fresh ?? savedUser);
   }
 
   async remove(id: number) {
@@ -152,6 +183,40 @@ export class MemberService {
   private toSafeUser(user: User): Omit<User, 'password'> {
     const { password, ...safeUser } = user;
     return safeUser;
+  }
+
+  private applyHiddenProfileRules(
+    user: User,
+    viewer?: { userId?: number; role?: number } | null,
+  ): Omit<User, 'password'> {
+    const safe = this.toSafeUser(user);
+    const viewerId = viewer?.userId != null ? Number(viewer.userId) : null;
+    const isSelf = viewerId != null && viewerId === user.id;
+
+    if (!safe.profileHidden || isSelf) {
+      return safe;
+    }
+
+    if (canViewerSeeHiddenProfile(viewer)) {
+      return {
+        ...safe,
+        email: '',
+        phone: '',
+        profileShowEmail: false,
+        profileShowPhone: false,
+      };
+    }
+
+    return {
+      ...safe,
+      fullName: 'Anonymous',
+      profileImg: '',
+      location: '',
+      email: '',
+      phone: '',
+      profileShowEmail: false,
+      profileShowPhone: false,
+    };
   }
 
   private toSafeUsers(users: User[]): Omit<User, 'password'>[] {

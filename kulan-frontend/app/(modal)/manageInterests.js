@@ -1,105 +1,156 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// --- Reusing your existing data and components ---
 import Chip from '@/features/onboarding/components/Chip';
-import { GROUPS } from '@/features/onboarding/data/interestsGroups';
 import { INTEREST_ICON_MAP } from '@/features/onboarding/data/interestIconMap';
+import onboardingApi from '@/api/onboarding';
 
-const MIN_SELECT = 4;
-const USER_INTERESTS = ['Fashion', 'Travel', 'AI'];
+const BRAND = '#FF7A00';
 
-const ManageInterestsScreen = () => {
+export default function ManageInterestsScreen() {
   const router = useRouter();
-  const [selectedInterests, setSelectedInterests] = useState(new Set(USER_INTERESTS));
+  const insets = useSafeAreaInsets();
+  const [catalog, setCatalog] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const toggleInterest = (interestKey) => {
-    const newInterests = new Set(selectedInterests);
-    if (newInterests.has(interestKey)) {
-      newInterests.delete(interestKey);
-    } else {
-      newInterests.add(interestKey);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [allInterests, mine] = await Promise.all([
+        onboardingApi.getInterests(),
+        onboardingApi.getMyInterests(),
+      ]);
+      setCatalog(Array.isArray(allInterests) ? allInterests : []);
+      const mineIds = (Array.isArray(mine) ? mine : []).map((row) => Number(row.id));
+      setSelectedIds(mineIds);
+    } catch (e) {
+      setError(e?.message || 'Could not load interests.');
+      setCatalog([]);
+      setSelectedIds([]);
+    } finally {
+      setLoading(false);
     }
-    setSelectedInterests(newInterests);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const toggle = (id) => {
+    const n = Number(id);
+    setSelectedIds((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
   };
 
-  const handleSave = () => {
-    const interestsArray = Array.from(selectedInterests);
-    console.log('Saving and passing back interests:', interestsArray);
-
-    // Navigate back to the profile tab and pass the updated interests as a parameter
-    router.push({
-        pathname: '/(tabs)/profile',
-        params: { updatedInterests: JSON.stringify(interestsArray) }
-    });
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      await onboardingApi.updateInterests(selectedIds);
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/profile');
+      }
+    } catch (e) {
+      setError(e?.message || 'Failed to save. Try again.');
+    } finally {
+      setSaving(false);
+    }
   };
-
-  const canSave = selectedInterests.size >= MIN_SELECT;
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Manage Interests' }} />
+      <Stack.Screen options={{ title: 'Interests' }} />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.title}>What are you interested in?</Text>
-          <Text style={styles.subtitle}>Add interests to your profile to help us personalize your feed.</Text>
-          <View style={styles.counterContainer}>
-            <Text style={styles.counterLabel}>Choose at least {MIN_SELECT} interests</Text>
-            <Text style={styles.counterValue}>{selectedInterests.size} selected</Text>
-          </View>
+          <Text style={styles.subtitle}>
+            Choose from all categories in our catalog. You can select one, several, or all — we use this to
+            recommend events near you.
+          </Text>
+          <Text style={styles.counterValue}>{selectedIds.length} selected</Text>
         </View>
 
-        {GROUPS.map((category) => (
-          <View key={category.title} style={styles.categorySection}>
-            <Text style={styles.categoryTitle}>{category.title}</Text>
-            <View style={styles.interestsGrid}>
-              {category.items.map((interest) => {
-                const isSelected = selectedInterests.has(interest.key);
-                return (
-                  <Chip
-                    key={interest.key}
-                    label={interest.key}
-                    icon={interest.icon}
-                    iconSpec={INTEREST_ICON_MAP[interest.key]}
-                    selected={isSelected}
-                    onPress={() => toggleInterest(interest.key)}
-                  />
-                );
-              })}
-            </View>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        {loading ? (
+          <ActivityIndicator size="large" color={BRAND} style={{ marginTop: 32 }} />
+        ) : (
+          <View style={styles.grid}>
+            {catalog.map((item) => {
+              const id = Number(item.id);
+              const selected = selectedIds.includes(id);
+              return (
+                <Chip
+                  key={id}
+                  label={item.name}
+                  iconSpec={INTEREST_ICON_MAP[item.name]}
+                  selected={selected}
+                  onPress={() => toggle(id)}
+                />
+              );
+            })}
           </View>
-        ))}
+        )}
       </ScrollView>
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
         <TouchableOpacity
-          style={[styles.saveButton, !canSave && styles.disabledButton]}
+          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
           onPress={handleSave}
-          disabled={!canSave}
+          disabled={saving}
         >
-          <Text style={styles.saveButtonText}>Save</Text>
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  scrollContent: { paddingBottom: 100 },
-  header: { paddingHorizontal: 24, paddingTop: 24 },
+  scrollContent: { paddingBottom: 120 },
+  header: { paddingHorizontal: 24, paddingTop: 20 },
   title: { fontSize: 24, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#64748B', marginBottom: 16 },
-  counterContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  counterLabel: { fontSize: 14, color: '#64748B' },
-  counterValue: { fontSize: 14, color: '#64748B', fontWeight: '700' },
-  categorySection: { paddingHorizontal: 24, marginTop: 16 },
-  categoryTitle: { fontSize: 14, color: '#0F172A', fontWeight: '700', marginBottom: 10 },
-  interestsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  saveButton: { backgroundColor: '#007AFF', padding: 15, borderRadius: 12, alignItems: 'center' },
-  disabledButton: { backgroundColor: '#A9A9A9' },
-  saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  subtitle: { fontSize: 14, color: '#64748B', lineHeight: 20, marginBottom: 12 },
+  counterValue: { fontSize: 14, color: '#0F172A', fontWeight: '700' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 24, marginTop: 8 },
+  errorText: { color: '#B91C1C', marginHorizontal: 24, marginTop: 8 },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  saveButton: {
+    backgroundColor: BRAND,
+    paddingVertical: 15,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  saveButtonDisabled: { opacity: 0.75 },
+  saveButtonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });
-
-export default ManageInterestsScreen;

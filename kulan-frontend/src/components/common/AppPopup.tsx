@@ -41,7 +41,7 @@ const VARIANTS: Record<
     iconColor: '#059669',
     iconBg: '#ECFDF5',
     iconBorder: '#D1FAE5',
-    primaryBg: '#059669',
+    primaryBg: '#FF7A00',
     primaryText: '#FFFFFF',
   },
   error: {

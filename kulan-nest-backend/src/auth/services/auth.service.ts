@@ -31,6 +31,11 @@ export class AuthService {
 
     const { password, ...safeUser } = user;
 
+    const locationPlain =
+      safeUser.location != null && String(safeUser.location).trim() !== ''
+        ? String(safeUser.location).trim()
+        : '';
+
     if (user.roleId === 1) {
       const profile = await this.profileRepository.findOne({
         where: { userId },
@@ -38,6 +43,7 @@ export class AuthService {
 
       return {
         ...safeUser,
+        location: locationPlain,
         profileCompleted: profile?.profileCompleted ?? false,
       };
     }
@@ -49,12 +55,16 @@ export class AuthService {
 
       return {
         ...safeUser,
+        location: locationPlain,
         organizerStatus: organizerProfile?.verificationStatus ?? 'pending',
         rejectionReason: organizerProfile?.rejectionReason ?? null,
       };
     }
 
-    return safeUser;
+    return {
+      ...safeUser,
+      location: locationPlain,
+    };
   }
   async login(loginDto: LoginDto) {
     const emailNorm = (loginDto.email ?? '').trim().toLowerCase();

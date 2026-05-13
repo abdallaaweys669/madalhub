@@ -4,43 +4,10 @@ import authStorage from './storage';
 import { jwtDecode } from 'jwt-decode';
 import { setAuthToken } from '../api/client';
 import authApi from '../api/auth';
+import { normalizeUser } from './normalizeUser';
 
 const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
-
-const normalizeUser = (decodedUser, profile = null) => {
-  const resolvedFullName =
-    profile?.full_name ||
-    profile?.fullName ||
-    profile?.name ||
-    decodedUser?.fullName ||
-    decodedUser?.full_name ||
-    decodedUser?.name ||
-    decodedUser?.firstName ||
-    '';
-  const resolvedLocation =
-    profile?.location ||
-    profile?.city ||
-    profile?.address ||
-    decodedUser?.location ||
-    decodedUser?.city ||
-    '';
-  const resolvedProfileImg =
-    profile?.profileImg ||
-    profile?.profile_img ||
-    decodedUser?.profileImg ||
-    decodedUser?.profile_img ||
-    null;
-
-  return {
-    ...decodedUser,
-    ...(profile || {}),
-    fullName: resolvedFullName,
-    location: resolvedLocation,
-    profileImg: resolvedProfileImg,
-    avatarUrl: resolvedProfileImg,
-  };
-};
 
 export default () => {
   const {

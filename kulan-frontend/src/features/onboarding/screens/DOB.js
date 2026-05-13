@@ -7,12 +7,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import styles from "@/constants/onboardingStyles/styles";
 import OnboardingHeader from "@/features/onboarding/components/OnboardingHeader";
 import onboardingApi from "@/api/onboarding";
+import useAuth from "@/auth/useAuth";
+import { mergeAuthenticatedUserFromMe } from "@/auth/mergeAuthenticatedUserFromMe";
 
 import CalendarSvg from "@/assets/DOB.svg";
 
 export default function DOB() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { setUser } = useAuth();
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -43,6 +46,7 @@ export default function DOB() {
       // Format date to YYYY-MM-DD for the backend
       const formattedDate = dob.toISOString().split("T")[0];
       await onboardingApi.updateProfile({ dob: formattedDate });
+      await mergeAuthenticatedUserFromMe(setUser);
       router.push("/onboarding/Interests");
     } catch (error) {
       setApiError("Failed to save date of birth. Please try again.");

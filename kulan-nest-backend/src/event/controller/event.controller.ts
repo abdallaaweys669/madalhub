@@ -19,8 +19,8 @@ import { extname } from 'path';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
 import { CreateEventDto } from '../DTO/create-event.dto';
 import { GetEventsQueryDto } from '../DTO/get-events-query.dto';
 import { UpdateEventDto } from '../DTO/update-event.dto';
@@ -81,11 +81,11 @@ export class EventController {
   @UseGuards(OptionalJwtAuthGuard)
   @Get()
   getAllEvents(
-    @CurrentUser() user?: { userId: number } | null,
+    @CurrentUser() user?: { userId?: number; role?: number } | null,
     @Query() query?: GetEventsQueryDto,
   ) {
     const userId = user?.userId;
-    return this.eventService.getAllEvents(userId, query);
+    return this.eventService.getAllEvents(userId, query, user?.role);
   }
 
   @Get('interests')
@@ -97,35 +97,41 @@ export class EventController {
   @Roles(1)
   @Get('saved/list')
   getSavedEvents(@CurrentUser() user) {
-    return this.eventService.getSavedEvents(user.userId);
+    return this.eventService.getSavedEvents(user.userId, user?.role);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(1)
   @Get('saved')
   getSavedEventsAlias(@CurrentUser() user) {
-    return this.eventService.getSavedEvents(user.userId);
+    return this.eventService.getSavedEvents(user.userId, user?.role);
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id/attendees')
   getEventAttendees(
     @Param('id', ParseIntPipe) id: number,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @CurrentUser() user?: { userId?: number; role?: number } | null,
   ) {
-    return this.eventService.getEventAttendees(id, {
-      page: page ? Number(page) : undefined,
-      limit: limit ? Number(limit) : undefined,
-    });
+    return this.eventService.getEventAttendees(
+      id,
+      {
+        page: page ? Number(page) : undefined,
+        limit: limit ? Number(limit) : undefined,
+      },
+      user,
+    );
   }
 
   @UseGuards(OptionalJwtAuthGuard)
   @Get(':id')
   getEventById(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user?: { userId: number },
+    @CurrentUser() user?: { userId?: number; role?: number } | null,
   ) {
-    return this.eventService.getEventById(id, user?.userId);
+    return this.eventService.getEventById(id, user?.userId, user?.role);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

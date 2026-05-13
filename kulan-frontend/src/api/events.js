@@ -558,14 +558,19 @@ export function mapApiEventToCard(event) {
         .filter(Boolean)
         .slice(0, 3)
         .map((row) => {
-          const userId = Number(row.userId ?? row.id ?? 0) || null;
-          const name = typeof row.name === 'string' && row.name.trim() ? row.name.trim() : 'Member';
-          const rawAvatar = row.avatar ?? row.profileImg ?? row.profile_img ?? null;
+          const isAnonymous = Boolean(row?.isAnonymous);
+          const userId = isAnonymous ? null : Number(row.userId ?? row.id ?? 0) || null;
+          const name = isAnonymous
+            ? 'Anonymous'
+            : typeof row.name === 'string' && row.name.trim()
+              ? row.name.trim()
+              : 'Member';
+          const rawAvatar = isAnonymous ? null : row.avatar ?? row.profileImg ?? row.profile_img ?? null;
           const avatarUrl =
             typeof rawAvatar === 'string' && rawAvatar.trim()
               ? resolveApiAssetUrl(rawAvatar.trim())
               : null;
-          return { userId, name, avatarUrl };
+          return { userId, name, avatarUrl, isAnonymous: isAnonymous ? true : undefined };
         })
     : [];
 
@@ -741,15 +746,21 @@ export async function getEventAttendees(id, params = {}) {
   const items = Array.isArray(payload.items) ? payload.items : [];
   return {
     items: items.map((row) => {
-      const rawAvatar = row?.avatar ?? row?.profileImg ?? row?.profile_img ?? null;
+      const isAnonymous = Boolean(row?.isAnonymous);
+      const rawAvatar = isAnonymous ? null : row?.avatar ?? row?.profileImg ?? row?.profile_img ?? null;
       return {
-        id: Number(row?.id ?? 0) || null,
-        name: typeof row?.name === 'string' && row.name.trim() ? row.name.trim() : 'Member',
+        id: isAnonymous ? null : Number(row?.id ?? 0) || null,
+        name: isAnonymous
+          ? 'Anonymous'
+          : typeof row?.name === 'string' && row.name.trim()
+            ? row.name.trim()
+            : 'Member',
         avatarUrl:
           typeof rawAvatar === 'string' && rawAvatar.trim()
             ? resolveApiAssetUrl(rawAvatar.trim())
             : null,
         joinedAt: row?.joinedAt ?? null,
+        isAnonymous: isAnonymous ? true : undefined,
       };
     }),
     page: payload.page ?? 1,

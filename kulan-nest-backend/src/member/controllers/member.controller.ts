@@ -4,6 +4,7 @@ import { CreateMemberDto } from '../dto/create-member.dto';
 import { Param, ParseIntPipe, Patch, Delete } from '@nestjs/common';
 import { UpdateMemberDto } from '../dto/update-member.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
 import { UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { ForbiddenException } from '@nestjs/common';
@@ -15,13 +16,17 @@ export class MemberController {
   // member.controller.ts
   @UseGuards(JwtAuthGuard)
   @Get()
-  findAll() {
-    return this.memberService.findAll();
+  findAll(@CurrentUser() viewer?: { userId?: number; role?: number } | null) {
+    return this.memberService.findAll(viewer);
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.memberService.findOne(id);
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() viewer?: { userId?: number; role?: number } | null,
+  ) {
+    return this.memberService.findOne(id, viewer);
   }
 
   @Post('register')

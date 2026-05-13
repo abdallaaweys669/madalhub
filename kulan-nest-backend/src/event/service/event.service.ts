@@ -20,6 +20,14 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 
+const ROLE_ORGANIZER = 2;
+const ROLE_ADMIN = 3;
+
+function canViewerSeeHiddenProfile(viewer?: { userId?: number; role?: number } | null): boolean {
+  const role = viewer?.role != null ? Number(viewer.role) : null;
+  return role === ROLE_ORGANIZER || role === ROLE_ADMIN;
+}
+
 @Injectable()
 export class EventService {
   constructor(
@@ -55,9 +63,10 @@ export class EventService {
     joined: boolean,
     isSaved: boolean,
     attendeePreviews?: {
-      userId: number;
+      userId: number | null;
       avatar: string | null;
       name: string;
+      isAnonymous?: boolean;
     }[],
   ) {
     return {
@@ -98,16 +107,33 @@ export class EventService {
   private async buildAttendeePreviewMap(
     eventIds: number[],
     previewLimit = 3,
+    viewer?: { userId?: number; role?: number } | null,
   ): Promise<
-    Map<number, { userId: number; avatar: string | null; name: string }[]>
+    Map<
+      number,
+      {
+        userId: number | null;
+        avatar: string | null;
+        name: string;
+        isAnonymous?: boolean;
+      }[]
+    >
   > {
     const attendeePreviewMap = new Map<
       number,
-      { userId: number; avatar: string | null; name: string }[]
+      {
+        userId: number | null;
+        avatar: string | null;
+        name: string;
+        isAnonymous?: boolean;
+      }[]
     >();
     if (!eventIds.length) {
       return attendeePreviewMap;
     }
+
+    const viewerId = viewer?.userId != null ? Number(viewer.userId) : null;
+    const canRevealHidden = canViewerSeeHiddenProfile(viewer);
 
     const previewRows = await this.eventRegistrationRepo.manager
       .createQueryBuilder()
@@ -115,6 +141,7 @@ export class EventService {
       .addSelect('reg.member_id', 'userId')
       .addSelect('user.profile_img', 'profileImg')
       .addSelect('user.full_name', 'fullName')
+      .addSelect('user.profile_hidden', 'profileHidden')
       .addSelect('reg.id', 'registrationId')
       .from('event_registrations', 'reg')
       .innerJoin('users', 'user', 'user.id = reg.member_id')
@@ -163,14 +190,20 @@ export class EventService {
 
       const profileImg = pickRaw(row, ['profileImg', 'profile_img']);
       const fullName = pickRaw(row, ['fullName', 'full_name']);
+      const profileHidden = Boolean(pickRaw(row, ['profileHidden', 'profile_hidden']));
+      const isSelf = viewerId != null && viewerId === uid;
+      const shouldMask = profileHidden && !canRevealHidden && !isSelf;
 
       list.push({
-        userId: uid,
-        avatar: typeof profileImg === 'string' ? profileImg : null,
+        userId: shouldMask ? null : uid,
+        avatar: shouldMask ? null : typeof profileImg === 'string' ? profileImg : null,
         name:
-          typeof fullName === 'string' && fullName.trim()
-            ? fullName.trim()
-            : 'Member',
+          shouldMask
+            ? 'Anonymous'
+            : typeof fullName === 'string' && fullName.trim()
+              ? fullName.trim()
+              : 'Member',
+        isAnonymous: shouldMask ? true : undefined,
       });
     }
 
@@ -591,7 +624,11 @@ export class EventService {
     return { interests };
   }
 
-  async getAllEvents(currentUserId?: number, query: GetEventsQueryDto = {}) {
+  async getAllEvents(
+    currentUserId?: number,
+    query: GetEventsQueryDto = {},
+    currentUserRole?: number,
+  ) {
     const userId =
       currentUserId === null || currentUserId === undefined
         ? undefined
@@ -744,7 +781,10 @@ export class EventService {
       joinedSet = new Set(joinedRows.map((row) => Number(row.eventId)));
     }
 
-    const attendeePreviewMap = await this.buildAttendeePreviewMap(eventIds);
+    const attendeePreviewMap = await this.buildAttendeePreviewMap(eventIds, 3, {
+      userId,
+      role: currentUserRole,
+    });
 
     return {
       items: events.map((event) =>
@@ -763,7 +803,11 @@ export class EventService {
     };
   }
 
-  async getEventById(eventId: number, currentUserId?: number) {
+  async getEventById(
+    eventId: number,
+    currentUserId?: number,
+    currentUserRole?: number,
+  ) {
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
 
     if (!event) {
@@ -774,7 +818,7 @@ export class EventService {
       throw new NotFoundException('Event not found');
     }
 
-    return this.formatEventDetails(event, currentUserId);
+    return this.formatEventDetails(event, currentUserId, currentUserRole);
   }
 
   async joinEvent(eventId: number, memberId: number) {
@@ -899,7 +943,7 @@ export class EventService {
     return { saved: false, message: 'Event removed from saved list' };
   }
 
-  async getSavedEvents(memberId: number) {
+  async getSavedEvents(memberId: number, viewerRole?: number) {
     const member = await this.userRepo.findOne({ where: { id: memberId } });
     if (!member) {
       throw new NotFoundException('Member not found');
@@ -945,8 +989,10 @@ export class EventService {
     const joinedSet = new Set(joinedRows.map((row) => Number(row.eventId)));
     const savedSet = new Set(savedEventIds);
 
-    const attendeePreviewMap =
-      await this.buildAttendeePreviewMap(savedEventIds);
+    const attendeePreviewMap = await this.buildAttendeePreviewMap(savedEventIds, 3, {
+      userId: memberId,
+      role: viewerRole,
+    });
 
     return savedRows
       .map((row) => eventMap.get(row.eventId))
@@ -967,6 +1013,7 @@ export class EventService {
   async getEventAttendees(
     eventId: number,
     options?: { page?: number; limit?: number },
+    viewer?: { userId?: number; role?: number } | null,
   ) {
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
     if (!event || event.status !== 'published') {
@@ -986,6 +1033,7 @@ export class EventService {
       .addSelect('user.id', 'userId')
       .addSelect('user.full_name', 'fullName')
       .addSelect('user.profile_img', 'profileImg')
+      .addSelect('user.profile_hidden', 'profileHidden')
       .orderBy('reg.created_at', 'DESC');
 
     const total = await qb.getCount();
@@ -995,15 +1043,26 @@ export class EventService {
       userId: number | string;
       fullName: string;
       profileImg: string | null;
+      profileHidden?: number | boolean | string;
     }>();
 
+    const viewerId = viewer?.userId != null ? Number(viewer.userId) : null;
+    const canRevealHidden = canViewerSeeHiddenProfile(viewer);
+
     return {
-      items: rows.map((row) => ({
-        id: Number(row.userId),
-        name: row.fullName,
-        avatar: row.profileImg,
-        joinedAt: row.joinedAt,
-      })),
+      items: rows.map((row) => {
+        const uid = Number(row.userId);
+        const isSelf = viewerId != null && viewerId === uid;
+        const profileHidden = Boolean((row as { profileHidden?: unknown }).profileHidden);
+        const shouldMask = profileHidden && !canRevealHidden && !isSelf;
+        return {
+          id: shouldMask ? null : uid,
+          name: shouldMask ? 'Anonymous' : row.fullName,
+          avatar: shouldMask ? null : row.profileImg,
+          joinedAt: row.joinedAt,
+          isAnonymous: shouldMask ? true : undefined,
+        };
+      }),
       page,
       limit,
       total,
@@ -1011,7 +1070,11 @@ export class EventService {
     };
   }
 
-  async formatEventDetails(event: Event, currentUserId?: number) {
+  async formatEventDetails(
+    event: Event,
+    currentUserId?: number,
+    currentUserRole?: number,
+  ) {
     const userRegistrationPromise =
       currentUserId != null
         ? this.eventRegistrationRepo
@@ -1048,7 +1111,10 @@ export class EventService {
       }),
       this.eventSponsorRepo.find({ where: { eventId: event.id } }),
       this.eventRegistrationRepo.count({ where: { eventId: event.id } }),
-      this.buildAttendeePreviewMap([event.id]),
+      this.buildAttendeePreviewMap([event.id], 3, {
+        userId: currentUserId,
+        role: currentUserRole,
+      }),
       userRegistrationPromise,
       userSavedPromise,
       this.eventProgramRosterRepo.find({

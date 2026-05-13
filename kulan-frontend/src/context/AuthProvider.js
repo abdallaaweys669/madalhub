@@ -4,43 +4,10 @@ import authStorage from '../auth/storage';
 import { jwtDecode } from 'jwt-decode';
 import { setAuthToken } from '../api/client';
 import authApi from '../api/auth';
+import { normalizeUser } from '../auth/normalizeUser';
 
 const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
-
-const normalizeUser = (decodedUser, profile = null) => {
-  const resolvedFullName =
-    profile?.full_name ||
-    profile?.fullName ||
-    profile?.name ||
-    decodedUser?.fullName ||
-    decodedUser?.full_name ||
-    decodedUser?.name ||
-    decodedUser?.firstName ||
-    '';
-  const resolvedLocation =
-    profile?.location ||
-    profile?.city ||
-    profile?.address ||
-    decodedUser?.location ||
-    decodedUser?.city ||
-    '';
-  const resolvedProfileImg =
-    profile?.profileImg ||
-    profile?.profile_img ||
-    decodedUser?.profileImg ||
-    decodedUser?.profile_img ||
-    null;
-
-  return {
-    ...decodedUser,
-    ...(profile || {}),
-    fullName: resolvedFullName,
-    location: resolvedLocation,
-    profileImg: resolvedProfileImg,
-    avatarUrl: resolvedProfileImg,
-  };
-};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -83,11 +50,17 @@ export const AuthProvider = ({ children }) => {
           setRejectionReason(profile.rejectionReason ?? null);
         }
       } catch (error) {
-        console.log('Unable to fetch profile during hydration, using token user.', error?.message);
-        if (role === ROLE_ORGANIZER) {
-          setOrganizerStatus(storedOrgStatus ?? 'pending');
-          setRejectionReason(storedRejectionReason);
-        }
+        console.log('Unable to fetch profile during hydration, logging out.', error?.message);
+        // Token is likely expired or invalid, so clear everything.
+        setUser(null);
+        setAuthToken(null);
+        setProfileCompleted(null);
+        setUserRole(null);
+        setOrganizerStatus(null);
+        setRejectionReason(null);
+        await authStorage.clearAll();
+        setIsHydrated(true);
+        return;
       }
       setUser(normalizedUser);
       setProfileCompleted(storedProfileCompleted);

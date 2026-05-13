@@ -1,5 +1,6 @@
 import React from 'react';
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { OnboardingProvider } from '@/features/onboarding/hooks/useOnboarding';
 import { SavedEventsProvider } from '@/context/SavedEventsContext';
 import { AuthProvider } from '@/context/AuthProvider';
@@ -8,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
+      <StatusBar style="dark" />
       <AuthProvider>
         <OnboardingProvider>
           <SavedEventsProvider>
@@ -18,19 +20,11 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="(organizer)" options={{ headerShown: false }} />
               <Stack.Screen name="(organizer-status)" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="events/[id]"
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="events/[id]/attendees"
-                options={{ headerShown: false }}
-              />
+              <Stack.Screen name="events/[id]" options={{ headerShown: false }} />
+              <Stack.Screen name="events/[id]/attendees" options={{ headerShown: false }} />
+              <Stack.Screen name="profile" options={{ headerShown: false }} />
               <Stack.Screen name="organizer/[id]" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="(modal)/changePassword"
-                options={{ presentation: 'modal', headerShown: false }}
-              />
+              <Stack.Screen name="(modal)/changePassword" options={{ presentation: 'modal', headerShown: false }} />
             </Stack>
           </SavedEventsProvider>
         </OnboardingProvider>

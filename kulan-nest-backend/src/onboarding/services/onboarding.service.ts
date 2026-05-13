@@ -120,8 +120,13 @@ export class OnboardingService {
     }
 
     if (dto.location !== undefined) {
-      user.location = dto.location;
+      const trimmed = String(dto.location ?? '').trim();
+      user.location = trimmed;
       await this.userRepository.save(user);
+      const reloaded = await this.userRepository.findOne({ where: { id: userId } });
+      if (reloaded) {
+        user.location = reloaded.location ?? '';
+      }
     }
 
     let profile = await this.profileRepository.findOne({ where: { userId } });
@@ -150,9 +155,14 @@ export class OnboardingService {
     const latestProfile =
       profile ?? (await this.profileRepository.findOne({ where: { userId } }));
 
+    const locationOut =
+      user.location != null && String(user.location).trim() !== ''
+        ? String(user.location).trim()
+        : null;
+
     return {
       userId,
-      location: user.location ?? null,
+      location: locationOut,
       gender: latestProfile?.gender ?? null,
       dob: latestProfile?.dob ?? null,
       profileCompleted: latestProfile?.profileCompleted ?? false,
@@ -196,6 +206,20 @@ export class OnboardingService {
   async getInterests() {
     const interests = await this.interestRepository.query(
       'SELECT id, name FROM interests ORDER BY id ASC',
+    );
+
+    return { interests };
+  }
+
+  /** Current member's selected interests (from DB), for profile / settings. */
+  async getMyInterests(userId: number) {
+    const interests = await this.interestRepository.query(
+      `SELECT i.id, i.name
+       FROM member_interests mi
+       INNER JOIN interests i ON i.id = mi.interest_id
+       WHERE mi.member_id = ?
+       ORDER BY i.id ASC`,
+      [userId],
     );
 
     return { interests };
@@ -311,6 +335,29 @@ export class OnboardingService {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
+    }
+
+    user.profileImg = `/uploads/${file.filename}`;
+    await this.userRepository.save(user);
+
+    return {
+      userId,
+      profileImg: user.profileImg,
+    };
+  }
+
+  async updateMemberProfileImage(userId: number, file: any) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.roleId !== 1) {
+      throw new BadRequestException('Only members can use this endpoint');
     }
 
     user.profileImg = `/uploads/${file.filename}`;

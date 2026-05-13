@@ -357,31 +357,52 @@ export default function PublicOrganizerProfileScreen() {
         </View>
 
         {mainTab === 'events' ? (
-          <>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+          <><View style={{ flexDirection: 'row', borderRadius: 14, backgroundColor: '#EEF0F4', padding: 3, height: 40, marginBottom: 12 }}>
               <Pressable
                 onPress={() => setEventScope('upcoming')}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  backgroundColor: eventScope === 'upcoming' ? COLORS.primary : COLORS.panel,
-                }}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  borderRadius: 11,
+                  height: 34,
+                  backgroundColor: eventScope === 'upcoming' ? COLORS.primary : 'transparent',
+                  shadowColor: eventScope === 'upcoming' ? '#C2410C' : 'transparent',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: eventScope === 'upcoming' ? 0.2 : 0,
+                  shadowRadius: eventScope === 'upcoming' ? 2 : 0,
+                  elevation: eventScope === 'upcoming' ? 2 : 0,
+                  opacity: pressed ? 0.9 : 1,
+                })}
               >
-                <Text style={{ color: eventScope === 'upcoming' ? COLORS.card : COLORS.textSecondary, fontWeight: '700', fontSize: 13 }}>
+                <Feather name="calendar" size={14} color={eventScope === 'upcoming' ? '#fff' : COLORS.textSecondary} />
+                <Text style={{ color: eventScope === 'upcoming' ? '#fff' : COLORS.textSecondary, fontWeight: '700', fontSize: 13 }}>
                   Upcoming
                 </Text>
               </Pressable>
               <Pressable
                 onPress={() => setEventScope('past')}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  backgroundColor: eventScope === 'past' ? COLORS.primary : COLORS.panel,
-                }}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  borderRadius: 11,
+                  height: 34,
+                  backgroundColor: eventScope === 'past' ? COLORS.primary : 'transparent',
+                  shadowColor: eventScope === 'past' ? '#C2410C' : 'transparent',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: eventScope === 'past' ? 0.2 : 0,
+                  shadowRadius: eventScope === 'past' ? 2 : 0,
+                  elevation: eventScope === 'past' ? 2 : 0,
+                  opacity: pressed ? 0.9 : 1,
+                })}
               >
-                <Text style={{ color: eventScope === 'past' ? COLORS.card : COLORS.textSecondary, fontWeight: '700', fontSize: 13 }}>
+                <Feather name="clock" size={14} color={eventScope === 'past' ? '#fff' : COLORS.textSecondary} />
+                <Text style={{ color: eventScope === 'past' ? '#fff' : COLORS.textSecondary, fontWeight: '700', fontSize: 13 }}>
                   Past
                 </Text>
               </Pressable>

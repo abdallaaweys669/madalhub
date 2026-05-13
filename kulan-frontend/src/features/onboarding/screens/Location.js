@@ -14,6 +14,8 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import onboardingApi from "@/api/onboarding";
+import useAuth from "@/auth/useAuth";
+import { mergeAuthenticatedUserFromMe } from "@/auth/mergeAuthenticatedUserFromMe";
 import OnboardingHeader from "@/features/onboarding/components/OnboardingHeader";
 import styles from "@/constants/onboardingStyles/styles";
 
@@ -22,6 +24,7 @@ import LocationSvg from "@/assets/location.svg";
 export default function LocationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { setUser } = useAuth();
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -67,6 +70,7 @@ export default function LocationScreen() {
 
     try {
       await onboardingApi.updateProfile({ location: locationText });
+      await mergeAuthenticatedUserFromMe(setUser);
       router.push("/onboarding/Gender");
     } catch (error) {
       setApiError("Failed to save location. Please try again.");

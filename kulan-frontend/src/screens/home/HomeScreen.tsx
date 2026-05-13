@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import useAuth from '@/auth/useAuth';
+import { mergeAuthenticatedUserFromMe } from '@/auth/mergeAuthenticatedUserFromMe';
+import { pickDisplayName, pickLocationLabel } from '@/auth/normalizeUser';
 import { Container } from '@/components/common/Container';
 import { EventCard, type EventCardModel } from '@/components/event/EventCard';
 import EmptyState from '@/components/EmptyState';
@@ -51,7 +53,7 @@ function isPastEvent(event: EventCardModel): boolean {
 }
 
 function HomeScreen() {
-  const { user, isLoggedIn } = useAuth();
+  const { user, setUser, isLoggedIn } = useAuth();
   const isGuest = !isLoggedIn;
 
   useFocusEffect(
@@ -62,6 +64,13 @@ function HomeScreen() {
         StatusBar.setTranslucent(false);
       }
     }, []),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoggedIn) return undefined;
+      void mergeAuthenticatedUserFromMe(setUser);
+    }, [isLoggedIn, setUser]),
   );
 
   const { savedEventIds = [] } = useSavedEvents() || {};
@@ -135,9 +144,9 @@ function HomeScreen() {
     }
   }, [isGuest, activeTab]);
 
-  const displayName = user?.fullName || user?.name || user?.firstName || 'My profile';
-  const location = user?.location || 'Your location';
-  const rawAvatar = user?.avatarUrl?.trim() || user?.profileImg?.trim();
+  const displayName = pickDisplayName(user) || 'My profile';
+  const location = pickLocationLabel(user) || 'Your location';
+  const rawAvatar = user?.avatarUrl?.trim() || user?.profileImg?.trim() || user?.profile_img?.trim();
   const avatarUri = resolveApiAssetUrl(rawAvatar);
 
   const renderItem: ListRenderItem<EventCardModel> = ({ item }) => <EventCard event={item} />;
@@ -167,6 +176,7 @@ function HomeScreen() {
               refreshing={refreshing}
               onRefresh={() => {
                 void loadEvents({ manual: true });
+                if (isLoggedIn) void mergeAuthenticatedUserFromMe(setUser);
               }}
               tintColor="#FF7B3F"
             />

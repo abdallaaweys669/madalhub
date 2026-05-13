@@ -102,7 +102,7 @@ function buildExploreParams(args: {
   const { debouncedSearchQuery, activeCategory, interestIdByName, selectedFilters, userCity } = args;
   const params: Record<string, string | number> = {
     page: 1,
-    limit: 50,
+    limit: 20,
     sort: selectedFilters.quickPickRule === 'sortByAttendees' ? 'popular' : 'start-asc',
   };
 

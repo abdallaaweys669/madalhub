@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import OnboardingHeader from "@/features/onboarding/components/OnboardingHeader";
 import onboardingApi from "@/api/onboarding";
+import useAuth from "@/auth/useAuth";
+import { mergeAuthenticatedUserFromMe } from "@/auth/mergeAuthenticatedUserFromMe";
 import styles from "@/constants/onboardingStyles/styles";
 
 import GenderSvg from "@/assets/gender.svg";
@@ -12,6 +14,7 @@ import GenderSvg from "@/assets/gender.svg";
 export default function GenderScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { setUser } = useAuth();
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -33,6 +36,7 @@ export default function GenderScreen() {
 
     try {
       await onboardingApi.updateProfile({ gender: selected });
+      await mergeAuthenticatedUserFromMe(setUser);
       router.push("/onboarding/DOB");
     } catch (error) {
       setApiError("Failed to save gender. Please try again.");

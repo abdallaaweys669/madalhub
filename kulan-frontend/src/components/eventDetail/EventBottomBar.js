@@ -72,7 +72,7 @@ const EventBottomBar = ({ joined, onToggleJoin, price = 'Free', event }) => {
 
   return (
     <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 10 }]}>
-      <View>
+      <View style={styles.bottomPriceColumn}>
         <Text style={styles.bottomPriceLabel}>PRICE</Text>
         <Text style={styles.bottomPriceValue}>{displayPrice}</Text>
       </View>
@@ -123,8 +123,10 @@ const EventBottomBar = ({ joined, onToggleJoin, price = 'Free', event }) => {
                 end={{ x: 1, y: 0.5 }}
                 style={styles.bottomJoinButtonGradient}
               >
-                <Feather name="ticket" size={16} color="#FFFFFF" />
-                <Text style={styles.bottomJoinButtonText}>Register now</Text>
+                <Feather name="user-plus" size={18} color="#FFFFFF" />
+                <Text style={styles.bottomJoinButtonText} numberOfLines={1}>
+                  Register now
+                </Text>
               </LinearGradient>
             </TouchableOpacity>
           )}

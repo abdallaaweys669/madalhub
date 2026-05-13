@@ -25,6 +25,12 @@ import { extname } from 'path';
 export class OnboardingController {
   constructor(private readonly onboardingService: OnboardingService) {}
 
+  @Get('my-interests')
+  @Roles(1)
+  getMyInterests(@CurrentUser() user) {
+    return this.onboardingService.getMyInterests(user.userId);
+  }
+
   @Get('interests')
   @Roles(1)
   getInterests() {
@@ -41,6 +47,23 @@ export class OnboardingController {
   @Roles(1)
   updateInterests(@CurrentUser() user, @Body() dto: InterestsDto) {
     return this.onboardingService.updateInterests(user.userId, dto);
+  }
+
+  @Post('member/profile-image')
+  @Roles(1)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: 'uploads',
+        filename: (req, file, cb) => {
+          const uniqueName = `${Date.now()}${extname(file.originalname)}`;
+          cb(null, uniqueName);
+        },
+      }),
+    }),
+  )
+  updateMemberProfileImage(@CurrentUser() user, @UploadedFile() file: any) {
+    return this.onboardingService.updateMemberProfileImage(user.userId, file);
   }
 
   // Organizer profile/document endpoints: allowed for all organizer statuses (pending, approved, rejected)

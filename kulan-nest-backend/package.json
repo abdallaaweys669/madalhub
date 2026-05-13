@@ -9,6 +9,7 @@
     "build": "nest build",
     "typeorm": "node ./node_modules/typeorm/cli.js -d ./dist/database/data-source.js",
     "migration:run": "npm run build && npm run typeorm -- migration:run",
+    "migration:run:only": "node ./node_modules/typeorm/cli.js -d ./dist/database/data-source.js migration:run",
     "migration:revert": "npm run build && npm run typeorm -- migration:revert",
     "migration:show": "npm run build && npm run typeorm -- migration:show",
     "migration:create": "npm run typeorm -- migration:create ./src/database/migrations/NewMigration",
