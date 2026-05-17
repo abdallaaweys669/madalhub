@@ -1,38 +1,23 @@
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import KulanLogo from '@/assets/kulan_logo.svg';
+import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
 import { spacing, useThemeColors } from '@/theme';
-
-/** Logo scales for prominent branding (~46px tall, contained aspect). */
-const LOGO_HEIGHT = 46;
-const LOGO_WIDTH = Math.round((670 / 210) * LOGO_HEIGHT);
 
 type HomeHeaderProps = {
   displayName?: string;
   location?: string;
-  avatarUri?: string;
   isGuest?: boolean;
 };
 
-export function HomeHeader({ displayName, location, avatarUri, isGuest = false }: HomeHeaderProps) {
+export function HomeHeader({ displayName, location, isGuest = false }: HomeHeaderProps) {
   const colors = useThemeColors();
   const router = useRouter();
-  const showPhoto = Boolean(avatarUri?.trim());
 
   return (
     <View style={styles.root}>
-      <View style={styles.logoWrap}>
-        <KulanLogo
-          width={LOGO_WIDTH}
-          height={LOGO_HEIGHT}
-          accessibilityLabel="Kulan"
-          preserveAspectRatio="xMidYMid meet"
-        />
-      </View>
-
       {isGuest ? (
         <TouchableOpacity
           style={[styles.profileCard, { backgroundColor: colors.card }]}
@@ -42,7 +27,7 @@ export function HomeHeader({ displayName, location, avatarUri, isGuest = false }
           accessibilityLabel="Open login and signup"
         >
           <View style={styles.guestIconWrap}>
-            <Ionicons name="person-outline" size={20} color={colors.primary} />
+            <Ionicons name="person-outline" size={22} color={colors.primary} />
           </View>
           <View style={styles.profileText}>
             <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
@@ -62,24 +47,18 @@ export function HomeHeader({ displayName, location, avatarUri, isGuest = false }
           accessibilityRole="button"
           accessibilityLabel="Open profile"
         >
-          {showPhoto ? (
-            <Image source={{ uri: avatarUri as string }} style={styles.avatar} />
-          ) : (
-            <View
-              style={[styles.avatar, styles.avatarPlaceholder]}
-              accessibilityRole="image"
-              accessibilityLabel="Default profile photo"
-            >
-              <Ionicons name="person" size={26} color="#FFFFFF" />
-            </View>
-          )}
+          <MemberInitialAvatar name={displayName || 'Member'} size={52} borderWidth={0} />
           <View style={styles.profileText}>
             <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
               {displayName}
             </Text>
             <View style={styles.locationRow}>
-              <Ionicons name="location-sharp" size={12} color={colors.textSecondary} />
-              <Text style={[styles.location, { color: colors.textSecondary }]} numberOfLines={1}>
+              <Ionicons name="location-sharp" size={12} color={colors.textSecondary} style={styles.locationIcon} />
+              <Text
+                style={[styles.location, { color: colors.textSecondary }]}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
                 {location}
               </Text>
             </View>
@@ -95,18 +74,12 @@ const styles = StyleSheet.create({
   root: {
     paddingTop: 0,
   },
-  logoWrap: {
-    alignSelf: 'center',
-    marginTop: 16,
-    height: LOGO_HEIGHT,
-    justifyContent: 'center',
-  },
   profileCard: {
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
     marginHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 11,
     paddingLeft: spacing.md,
     paddingRight: spacing.sm,
     borderRadius: 16,
@@ -117,20 +90,10 @@ const styles = StyleSheet.create({
     elevation: 2,
     gap: spacing.sm,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  avatarPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#9CA3AF',
-  },
   guestIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 140, 66, 0.12)',
@@ -145,12 +108,17 @@ const styles = StyleSheet.create({
   },
   locationRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginTop: 2,
     gap: 4,
   },
+  locationIcon: {
+    marginTop: 2,
+  },
   location: {
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 16,
+    flex: 1,
     flexShrink: 1,
   },
 });

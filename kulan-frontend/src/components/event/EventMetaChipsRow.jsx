@@ -52,7 +52,7 @@ export default function EventMetaChipsRow({
       ? formatDisplay || 'Pick format'
       : formatDisplay || 'Not specified';
 
-  const deliveryLabel = isOnline ? 'ONLINE' : 'IN-PERSON';
+  const deliveryLabel = isOnline ? 'Online' : 'In person';
 
   const useFormatPlaceholderStyle = variant === 'detail' && !hasStoredFormat;
   const formatChipStyles = useFormatPlaceholderStyle

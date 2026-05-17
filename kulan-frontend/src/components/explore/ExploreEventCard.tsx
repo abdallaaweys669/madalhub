@@ -7,9 +7,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  type ImageStyle,
-  type StyleProp,
-  type ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +14,7 @@ import { Feather } from '@expo/vector-icons';
 import useAuth from '@/auth/useAuth';
 import { useSavedEvents } from '@/context/SavedEventsContext';
 import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
+import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
 import { DEFAULT_COVER_GRADIENT } from '@/api/events';
 import { useThemeColors } from '@/theme';
 
@@ -64,25 +62,6 @@ const STATUS_VARIANT_STYLES: Record<string, { bg: string; fg: string; icon?: key
   neutral: { bg: '#FFEDD5', fg: '#C2410C', icon: 'calendar-outline' },
 };
 
-function AttendeeFace({
-  avatarUrl,
-  name,
-  style,
-}: {
-  avatarUrl: string | null;
-  name: string;
-  style: StyleProp<ImageStyle | ViewStyle>;
-}) {
-  if (avatarUrl) {
-    return <Image source={{ uri: avatarUrl }} style={style as StyleProp<ImageStyle>} />;
-  }
-  return (
-    <View style={[style, { backgroundColor: '#9CA3AF', alignItems: 'center', justifyContent: 'center' }]}>
-      <Ionicons name="person" size={12} color="#FFFFFF" accessibilityLabel={name} />
-    </View>
-  );
-}
-
 type ExploreEventCardProps = {
   event: ExploreEventCardModel;
 };
@@ -128,7 +107,7 @@ export function ExploreEventCard({ event }: ExploreEventCardProps) {
   const statusStyle = statusChip ? STATUS_VARIANT_STYLES[statusChip.variant] ?? STATUS_VARIANT_STYLES.neutral : null;
   const urgencyLabel = event.urgencyLabel;
   const categoryName = event.categoryName;
-  const showCategoryChip = Boolean(categoryName && !urgencyLabel);
+  const showCategoryChip = Boolean(categoryName);
   const isTerminalState = event.eventState === 'ended' || event.eventState === 'closed';
   const terminalBadgeSource =
     event.eventState === 'ended'
@@ -205,20 +184,22 @@ export function ExploreEventCard({ event }: ExploreEventCardProps) {
               <View style={styles.avatarStack}>
                 {showPreviews ? (
                   previews.map((p, idx) => (
-                    <AttendeeFace
+                    <MemberInitialAvatar
                       key={p.userId != null ? String(p.userId) : `${p.name}-${idx}`}
-                      avatarUrl={p.avatarUrl}
                       name={p.name}
-                      style={[styles.avatar, idx > 0 && styles.avatarOverlap]}
+                      size={28}
+                      borderWidth={2}
+                      style={idx > 0 ? styles.avatarOverlap : undefined}
                     />
                   ))
                 ) : showAnonymousGoing ? (
                   Array.from({ length: anonymousFaceCount }, (_, idx) => (
-                    <AttendeeFace
+                    <MemberInitialAvatar
                       key={`anon-${idx}`}
-                      avatarUrl={null}
-                      name="Attendee"
-                      style={[styles.avatar, idx > 0 && styles.avatarOverlap]}
+                      name={`Attendee ${idx + 1}`}
+                      size={28}
+                      borderWidth={2}
+                      style={idx > 0 ? styles.avatarOverlap : undefined}
                     />
                   ))
                 ) : (
@@ -244,7 +225,7 @@ export function ExploreEventCard({ event }: ExploreEventCardProps) {
                   isOnline ? styles.modeTagTextOnline : styles.modeTagTextInPerson,
                 ]}
               >
-                {isOnline ? 'ONLINE' : 'IN-PERSON'}
+                {isOnline ? 'Online' : 'In person'}
               </Text>
             </View>
           </View>

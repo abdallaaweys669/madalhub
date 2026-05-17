@@ -365,16 +365,14 @@ function deriveUrgencyLabel(startsAtIso) {
 
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
-  const startOfTomorrow = new Date(startOfToday);
-  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
   const startOfDayAfter = new Date(startOfToday);
   startOfDayAfter.setDate(startOfDayAfter.getDate() + 2);
 
   if (start < startOfDayAfter) return 'Tomorrow';
 
   const daysLeft = Math.ceil(msUntilStart / (1000 * 60 * 60 * 24));
-  if (daysLeft <= 7) return `${daysLeft}d left`;
-  return null;
+  if (daysLeft > 30) return null;
+  return `${daysLeft}d left`;
 }
 
 function deriveDiscoverySignals(args) {
@@ -604,8 +602,10 @@ export function mapApiEventToCard(event) {
         .filter((row) => row.id)
     : [];
 
-  const goingCount = event.goingCount ?? event.attendeesCount ?? 0;
-  const capacity = event.capacity ?? null;
+  const goingCount = Number(event.goingCount ?? event.attendeesCount ?? 0) || 0;
+  const capacityRaw = event.capacity ?? event.maxCapacity ?? null;
+  const capacityNum = Number(capacityRaw);
+  const capacity = Number.isFinite(capacityNum) && capacityNum > 0 ? capacityNum : null;
   const startsAtIso = startDate.toISOString();
   const eventState = deriveEventState(event, goingCount, capacity, startsAtIso);
   const urgencyLabel = deriveUrgencyLabel(startsAtIso);
@@ -623,6 +623,17 @@ export function mapApiEventToCard(event) {
   const rawOrganizerId = event?.organizerId;
   const organizerId =
     rawOrganizerId != null && Number.isFinite(Number(rawOrganizerId)) ? Number(rawOrganizerId) : null;
+
+  const rawOrganizerVerification =
+    event?.organizer?.verificationStatus ??
+    event?.organizer?.verification_status ??
+    event?.organizerVerificationStatus ??
+    event?.organizer_verification_status ??
+    null;
+  const organizerVerificationStatus =
+    typeof rawOrganizerVerification === 'string' && rawOrganizerVerification.trim()
+      ? rawOrganizerVerification.trim()
+      : null;
 
   const resolvedFormat = pickEventFormatFromPayload(event);
   const locationCoordinates = pickEventLocationCoordinates(event);
@@ -643,6 +654,7 @@ export function mapApiEventToCard(event) {
     organizerDescription,
     organizerLogoUrl,
     organizerInitials,
+    organizerVerificationStatus,
     sponsors,
     goingCount,
     capacity,
@@ -688,6 +700,8 @@ export function mapApiEventToCard(event) {
     discoverySignals,
     urgencyLabel,
     categoryName,
+    likeCount: Math.max(0, Number(event.likeCount ?? event.like_count ?? 0) || 0),
+    isLiked: Boolean(event.isLiked ?? event.is_liked),
   };
 }
 
@@ -778,6 +792,18 @@ export async function joinEvent(id) {
 
 export async function leaveEvent(id) {
   const response = await apiClient.delete(`/events/${id}/join`);
+  invalidateEventsListCache();
+  return response.data;
+}
+
+export async function likeEvent(id) {
+  const response = await apiClient.post(`/events/${id}/like`);
+  invalidateEventsListCache();
+  return response.data;
+}
+
+export async function unlikeEvent(id) {
+  const response = await apiClient.delete(`/events/${id}/like`);
   invalidateEventsListCache();
   return response.data;
 }

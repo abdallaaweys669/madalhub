@@ -7,14 +7,14 @@ import { spacing } from '@/theme';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /** Mirrors EventCard image block */
-const CARD_IMAGE_HEIGHT = 152;
+const CARD_IMAGE_HEIGHT = 148;
 /** Mirrors EventCard outer radius */
 const CARD_RADIUS = 16;
 /** Mirrors YourEventsSection tabs */
 const TAB_RADIUS = 14;
 
 export default function HomeSkeleton() {
-  const cardWidth = SCREEN_WIDTH - spacing.lg * 2;
+  const cardWidth = SCREEN_WIDTH - spacing.md * 2;
   const cardBodyInner = cardWidth - spacing.md * 2;
   const profileTextWidth =
     SCREEN_WIDTH -
@@ -40,12 +40,6 @@ export default function HomeSkeleton() {
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.logoBlock}>
-        <Skeleton containerStyle={styles.logoSkeleton}>
-          <SkeletonPiece width={Math.round((670 / 210) * 46)} height={46} style={styles.logoPiece} />
-        </Skeleton>
-      </View>
-
       <Skeleton containerStyle={styles.profileRow}>
         <View style={styles.profileInner}>
           <SkeletonPiece width={44} height={44} style={styles.profileAvatar} />
@@ -103,18 +97,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: spacing.xl,
   },
-  logoBlock: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  logoSkeleton: {
-    backgroundColor: 'transparent',
-  },
-  logoPiece: {
-    borderRadius: 6,
-  },
   profileRow: {
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
     marginHorizontal: spacing.md,
     borderRadius: 16,
     marginBottom: spacing.sm,
@@ -149,20 +133,16 @@ const styles = StyleSheet.create({
   },
   cardWrap: {
     alignSelf: 'center',
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    borderRadius: CARD_RADIUS,
+    marginHorizontal: spacing.md,
+    marginBottom: 20,
     backgroundColor: 'transparent',
   },
   cardImageWrap: {
-    borderTopLeftRadius: CARD_RADIUS,
-    borderTopRightRadius: CARD_RADIUS,
+    borderRadius: 14,
     overflow: 'hidden',
   },
   cardImage: {
-    borderTopLeftRadius: CARD_RADIUS,
-    borderTopRightRadius: CARD_RADIUS,
-    borderRadius: 0,
+    borderRadius: 14,
   },
   cardBody: {
     paddingHorizontal: spacing.md,

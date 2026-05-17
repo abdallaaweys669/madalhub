@@ -196,17 +196,23 @@ export default function LocationPickerModal({
     };
   };
 
-  const formatReverseAddress = (place) =>
-    [
-      place?.name,
-      place?.streetName || place?.street,
-      place?.district,
-      place?.city,
-      place?.region,
-      place?.country,
-    ]
-      .filter(Boolean)
-      .join(', ');
+  const formatReverseAddress = (place) => {
+    const areaParts = [place?.district, place?.subregion, place?.region, place?.city]
+      .filter((part) => typeof part === 'string' && part.trim())
+      .map((part) => part.trim());
+    const unique = [];
+    const seen = new Set();
+    areaParts.forEach((part) => {
+      const key = part.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      unique.push(part);
+    });
+    if (unique.length >= 3) {
+      return `${unique[unique.length - 3]}, ${unique[unique.length - 2]}, ${unique[unique.length - 1]}`;
+    }
+    return unique.join(', ');
+  };
 
   const dedupePlaces = (places) => {
     const seen = new Set();

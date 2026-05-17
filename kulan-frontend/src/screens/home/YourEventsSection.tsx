@@ -1,12 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { spacing, useThemeColors } from '@/theme';
 
 export type HomeEventTab = 'Upcoming' | 'Past' | 'Going' | 'Saved';
 
-const TABS: HomeEventTab[] = ['Upcoming', 'Past', 'Going', 'Saved'];
+/** Past last — single row on home (Upcoming → Going → Saved → Past). */
+const TABS: HomeEventTab[] = ['Upcoming', 'Going', 'Saved', 'Past'];
 const GUEST_TABS: HomeEventTab[] = ['Upcoming', 'Past'];
 
 const TAB_ICONS: Record<HomeEventTab, keyof typeof Ionicons.glyphMap> = {
@@ -38,7 +39,12 @@ export function YourEventsSection({
       <View style={styles.titleRow}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Events</Text>
       </View>
-      <View style={styles.tabs}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabsScroll}
+        nestedScrollEnabled
+      >
         {availableTabs.map((tab) => {
           const active = activeTab === tab;
           return (
@@ -57,21 +63,14 @@ export function YourEventsSection({
             >
               <Ionicons
                 name={TAB_ICONS[tab]}
-                size={18}
+                size={16}
                 color={active ? '#FFFFFF' : colors.text}
               />
-              <Text
-                style={[
-                  styles.tabLabel,
-                  { color: active ? '#FFFFFF' : colors.text },
-                ]}
-              >
-                {tab}
-              </Text>
+              <Text style={[styles.tabLabel, { color: active ? '#FFFFFF' : colors.text }]}>{tab}</Text>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -93,16 +92,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  tabs: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  tab: {
+  tabsScroll: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    paddingRight: 4,
+    flexGrow: 1,
+  },
+  tab: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 10,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 14,
     borderRadius: 14,
     gap: TAB_ICON_GAP,
   },

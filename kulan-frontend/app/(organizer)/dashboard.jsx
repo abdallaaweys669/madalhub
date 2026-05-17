@@ -710,7 +710,8 @@ export default function OrganizerDashboardScreen() {
             const capacity = Number(event.capacity ?? 0);
             const coverUrl = resolveOrganizerEventCoverUrl(event);
             const priceLabel = Number(event.totalPrice) > 0 ? `$${event.totalPrice}` : 'Free';
-            const locationKind = event.isPhysical ? 'IN-PERSON' : 'ONLINE';
+            const isOnlineVenue = !event.isPhysical;
+            const locationKindLabel = isOnlineVenue ? 'Online' : 'In person';
             const showProgressBar = capacity > 0;
             const isEnded = chip.label === 'Past';
             const terminalBadgeSource = require('../../src/assets/ended.png');
@@ -810,8 +811,8 @@ export default function OrganizerDashboardScreen() {
                   {/* Tags Row */}
                   <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                     <View style={{ backgroundColor: '#F8FAFC', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                      <Ionicons name={locationKind === 'ONLINE' ? 'videocam-outline' : 'location-outline'} size={12} color="#475569" />
-                      <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800' }}>{locationKind}</Text>
+                      <Ionicons name={isOnlineVenue ? 'videocam-outline' : 'location-outline'} size={12} color="#475569" />
+                      <Text style={{ color: '#475569', fontSize: 11, fontWeight: '800' }}>{locationKindLabel}</Text>
                     </View>
                     <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#BBF7D0' }}>
                       <Ionicons name={priceLabel === 'Free' ? 'cash-outline' : 'card-outline'} size={12} color="#166534" />

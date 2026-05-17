@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
-import { View, Animated, StyleSheet, Dimensions, Easing } from "react-native";
+import { View, Animated, StyleSheet, Dimensions, Easing, Platform } from "react-native";
 import { useRouter } from "expo-router";
+import * as NavigationBar from "expo-navigation-bar";
 import useAuth from "@/auth/useAuth";
 import organizerApi from "@/api/organizer";
 import { isOrganizerSubmissionReadyForReview } from "@/utils/organizerVerification";
@@ -11,12 +12,36 @@ const { width, height } = Dimensions.get("window");
 const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
 
+const BRAND_ORANGE = "#FF7B3F";
+
 export default function Splash() {
   const router = useRouter();
   const { user, profileCompleted, isHydrated, userRole, organizerStatus } = useAuth();
 
   const circleScale = useRef(new Animated.Value(0)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return undefined;
+    (async () => {
+      try {
+        await NavigationBar.setBackgroundColorAsync(BRAND_ORANGE);
+        await NavigationBar.setButtonStyleAsync("dark");
+      } catch {
+        /* older devices / gesture nav may ignore */
+      }
+    })();
+    return () => {
+      (async () => {
+        try {
+          await NavigationBar.setBackgroundColorAsync("#FFFFFF");
+          await NavigationBar.setButtonStyleAsync("dark");
+        } catch {
+          /* ignore */
+        }
+      })();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isHydrated) return;

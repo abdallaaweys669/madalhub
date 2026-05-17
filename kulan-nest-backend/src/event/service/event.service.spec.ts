@@ -10,6 +10,9 @@ import { EventSponsor } from 'src/database/entities/event-sponsor.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { Interest } from 'src/database/entities/interest.entity';
 import { SavedEvent } from 'src/database/entities/saved-event.entity';
+import { EventProgramRoster } from 'src/database/entities/event-program-roster.entity';
+import { EventCohost } from 'src/database/entities/event-cohost.entity';
+import { EventLike } from 'src/database/entities/event-like.entity';
 
 describe('EventService - Organizer Status Gating & Owner Scoping', () => {
   let service: EventService;
@@ -18,7 +21,7 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
 
   const mockRepo = () => ({
     findOne: jest.fn(),
-    find: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
     save: jest.fn(),
     delete: jest.fn(),
@@ -59,6 +62,12 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
         },
         { provide: getRepositoryToken(Interest), useFactory: mockRepo },
         { provide: getRepositoryToken(SavedEvent), useFactory: mockRepo },
+        {
+          provide: getRepositoryToken(EventProgramRoster),
+          useFactory: mockRepo,
+        },
+        { provide: getRepositoryToken(EventCohost), useFactory: mockRepo },
+        { provide: getRepositoryToken(EventLike), useFactory: mockRepo },
       ],
     }).compile();
 

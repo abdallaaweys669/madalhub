@@ -59,7 +59,7 @@ const EventCard = ({ event }) => {
           </View>
           <View style={[styles.typeBadge, { backgroundColor: event.location?.toLowerCase() === 'online' ? '#DFF7E7' : '#EFE9FF' }]}>
             <Text style={[styles.typeBadgeText, { color: event.location?.toLowerCase() === 'online' ? '#139E58' : '#6F57D9' }]}>
-              {event.location?.toLowerCase() === 'online' ? 'ONLINE' : 'IN-PERSON'}
+              {event.location?.toLowerCase() === 'online' ? 'Online' : 'In person'}
             </Text>
           </View>
         </View>

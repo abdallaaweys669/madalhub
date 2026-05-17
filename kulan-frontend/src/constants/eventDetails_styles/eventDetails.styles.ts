@@ -15,28 +15,40 @@ export const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 8,
     paddingBottom: 120,
     backgroundColor: '#FFFFFF',
   },
-  headerWrapper: {
-    height: 260,
-    position: 'relative',
+  detailIntro: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
+    backgroundColor: '#FFFFFF',
   },
-  headerActionsRow: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
+  detailIntroChips: {
+    marginBottom: 10,
+  },
+  headerWrapper: {
+    backgroundColor: '#FFFFFF',
+    paddingBottom: 4,
+  },
+  headerToolbar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  headerImage: {
+  headerBannerFrame: {
+    marginHorizontal: 16,
+    aspectRatio: 2,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+  },
+  headerBannerImage: {
     width: '100%',
-    height: 260,
-  },
-  headerGradient: {
-    ...StyleSheet.absoluteFillObject,
+    height: '100%',
   },
   iconButton: {
     width: 40,
@@ -45,6 +57,19 @@ export const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconButtonMeetup: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
   },
   rightHeaderActions: {
     flexDirection: 'row',
@@ -108,6 +133,13 @@ export const styles = StyleSheet.create({
     lineHeight: 30,
     fontWeight: '600',
     color: '#111111',
+  },
+  /** Matches home feed event card title (`EventCard` feedTitle). */
+  detailFeedTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700',
+    color: '#1C1C1E',
   },
   descriptionWrap: {
     marginTop: 8,
@@ -207,6 +239,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     alignItems: 'center',
+    gap: 10,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -230,6 +263,32 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
+  organizationCardMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  organizerFollowBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#FF7B3F',
+    flexShrink: 0,
+  },
+  organizerFollowBtnActive: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFB899',
+  },
+  organizerFollowBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  organizerFollowBtnTextActive: {
+    color: '#FF7B3F',
+  },
   organizationTextWrap: {
     flex: 1,
   },
@@ -242,14 +301,6 @@ export const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#111111',
-  },
-  verifiedBadge: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#22C55E',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   organizationCategory: {
     fontSize: 13,
@@ -371,6 +422,9 @@ export const styles = StyleSheet.create({
     minWidth: 88,
     maxWidth: 104,
   },
+  capacityBarInDetail: {
+    marginTop: 4,
+  },
   actionsSection: {
     marginTop: 6,
   },
@@ -389,7 +443,11 @@ export const styles = StyleSheet.create({
   },
   attendeeImages: {
     flexDirection: 'row',
+    alignItems: 'center',
     marginRight: 12,
+  },
+  attendeeAvatarOverlap: {
+    marginLeft: -10,
   },
   attendeeImage: {
     width: 42,
@@ -554,6 +612,17 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FF7A00',
   },
+  bottomAttendanceEditDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: '#FFD7BC',
+    marginHorizontal: 4,
+  },
+  bottomAttendanceEditLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FF7A00',
+  },
   bottomShareButton: {
     height: 44,
     borderRadius: 16,
@@ -566,5 +635,34 @@ export const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 14,
+  },
+  bottomGoingStatusCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  bottomYoureGoingLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  bottomEditAttendanceLink: {
+    marginTop: 2,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FF7B3F',
+  },
+  bottomTicketButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FF7B3F',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+  },
+  bottomTicketButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

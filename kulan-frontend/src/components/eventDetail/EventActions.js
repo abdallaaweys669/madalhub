@@ -1,44 +1,21 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+
+import { EventCapacityBar } from '@/components/event/EventCapacityBar';
+import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
 import { styles } from '../../constants/eventDetails_styles/eventDetails.styles';
 
-function AttendeePreviewImage({ att, index }) {
-  if (att?.isAnonymous) {
-    return (
-      <View
-        style={[
-          styles.attendeeImage,
-          styles.attendeeAnonymous,
-          { marginLeft: index > 0 ? -10 : 0 },
-        ]}
-      >
-        <Feather name="eye-off" size={14} color="#9CA3AF" />
-      </View>
-    );
-  }
-
-  if (att?.avatarUrl) {
-    return (
-      <Image
-        source={{ uri: att.avatarUrl }}
-        style={[styles.attendeeImage, { marginLeft: index > 0 ? -10 : 0 }]}
-      />
-    );
-  }
-
-  return (
-    <View
-      style={[styles.attendeeImage, styles.attendeeFallback, { marginLeft: index > 0 ? -10 : 0 }]}
-    >
-      <Feather name="user" size={15} color="#FFFFFF" />
-    </View>
-  );
-}
-
-const EventActions = ({ attendees = [], goingCount = 0, onViewAttendees }) => {
+const EventActions = ({
+  attendees = [],
+  goingCount = 0,
+  capacity = null,
+  eventState,
+  onViewAttendees,
+}) => {
   const previews = Array.isArray(attendees) ? attendees.slice(0, 3) : [];
   const displayGoing = Number.isFinite(Number(goingCount)) ? Number(goingCount) : previews.length;
+  const showCapacity = typeof capacity === 'number' && capacity > 0;
 
   return (
     <View style={styles.actionsSection}>
@@ -51,10 +28,11 @@ const EventActions = ({ attendees = [], goingCount = 0, onViewAttendees }) => {
         <View style={styles.attendeeImages}>
           {previews.length > 0
             ? previews.map((att, index) => (
-                <AttendeePreviewImage
+                <MemberInitialAvatar
                   key={att?.userId != null ? String(att.userId) : `attendee-${index}`}
-                  att={att}
-                  index={index}
+                  name={att?.isAnonymous ? 'Guest' : att?.name || 'Member'}
+                  size={36}
+                  style={index > 0 ? styles.attendeeAvatarOverlap : null}
                 />
               ))
             : null}
@@ -62,6 +40,14 @@ const EventActions = ({ attendees = [], goingCount = 0, onViewAttendees }) => {
         <Text style={styles.attendeesText}>{`${displayGoing} going`}</Text>
         <Feather name="chevron-right" size={22} color="#7D8796" style={styles.attendeesArrow} />
       </TouchableOpacity>
+      {showCapacity ? (
+        <EventCapacityBar
+          goingCount={displayGoing}
+          capacity={capacity}
+          eventState={eventState}
+          style={styles.capacityBarInDetail}
+        />
+      ) : null}
     </View>
   );
 };

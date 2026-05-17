@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
-  Linking,
-  Platform,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -11,20 +9,33 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import useAuth from '@/auth/useAuth';
 import { useSavedEvents } from '@/context/SavedEventsContext';
 import { getEventById, joinEvent, leaveEvent } from '@/api/events';
+import organizerApi from '@/api/organizer';
 import { styles } from '@/constants/eventDetails_styles/eventDetails.styles';
 import EventHeader from '@/components/eventDetail/EventHeader';
+import EventDetailIntro from '@/components/eventDetail/EventDetailIntro';
 import EventInfo from '@/components/eventDetail/EventInfo';
 import EventActions from '@/components/eventDetail/EventActions';
 import EventBottomBar from '@/components/eventDetail/EventBottomBar';
+import EditAttendanceSheet from '@/components/eventDetail/EditAttendanceSheet';
 import EventRoster from '@/components/eventDetail/EventRoster';
+import EventDirectionsMapModal from '@/components/eventDetail/EventDirectionsMapModal';
 import SponsorCarousel from '@/components/eventDetail/SponsorCarousel';
+import { openDirectionsToVenue } from '@/utils/openDirections';
 import EventDetailSkeleton from '@/components/skeletons/EventDetailSkeleton';
+import ImageGalleryModal from '@/components/common/ImageGalleryModal';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
+import {
+  formatAreaLineFromGeocode,
+  formatEventLocationDisplay,
+} from '@/utils/eventLocation';
+import { formatEventDetailDateTime } from '@/utils/eventDisplay';
+import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 
 const EventDetailScreen = () => {
   const { id } = useLocalSearchParams();
@@ -34,7 +45,14 @@ const EventDetailScreen = () => {
   const [event, setEvent] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [joined, setJoined] = useState(false);
-  const { isLoggedIn, user } = useAuth();
+  const [organizerVerifiedBadge, setOrganizerVerifiedBadge] = useState(false);
+  const [organizerFollowing, setOrganizerFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [mapAreaLine, setMapAreaLine] = useState('');
+  const [gallery, setGallery] = useState({ visible: false, items: [], index: 0 });
+  const [mapModalVisible, setMapModalVisible] = useState(false);
+  const [editAttendanceVisible, setEditAttendanceVisible] = useState(false);
+  const { isLoggedIn, isMember, userRole, user } = useAuth();
 
   const { savedEventIds, saveEvent, unsaveEvent } = useSavedEvents();
   const isSaved = event ? savedEventIds.includes(String(event.id)) : false;
@@ -67,6 +85,72 @@ const EventDetailScreen = () => {
       mounted = false;
     };
   }, [eventId]);
+
+  useEffect(() => {
+    if (!event?.organizerId) {
+      setOrganizerVerifiedBadge(false);
+      setOrganizerFollowing(false);
+      return;
+    }
+    const organizerIdNum = Number(event.organizerId);
+    if (!Number.isFinite(organizerIdNum) || organizerIdNum <= 0) {
+      setOrganizerVerifiedBadge(false);
+      return;
+    }
+    let alive = true;
+    organizerApi
+      .getPublicOrganizerProfile(organizerIdNum)
+      .then((profile) => {
+        if (!alive) return;
+        setOrganizerVerifiedBadge(profile?.verificationStatus === 'approved');
+        setOrganizerFollowing(Boolean(profile?.isFollowing));
+      })
+      .catch(() => {
+        if (!alive) {
+          setOrganizerVerifiedBadge(false);
+          setOrganizerFollowing(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [event?.id, event?.organizerId]);
+
+  const locationLatitude = Number(event?.locationLatitude);
+  const locationLongitude = Number(event?.locationLongitude);
+  const hasExactMapPin = Number.isFinite(locationLatitude) && Number.isFinite(locationLongitude);
+  const isOnlineEvent =
+    event?.isOnline === true ||
+    String(event?.locationName || '')
+      .trim()
+      .toLowerCase() === 'online';
+
+  useEffect(() => {
+    let alive = true;
+    setMapAreaLine('');
+
+    if (!event || isOnlineEvent || !hasExactMapPin) {
+      return () => {
+        alive = false;
+      };
+    }
+
+    Location.reverseGeocodeAsync({
+      latitude: locationLatitude,
+      longitude: locationLongitude,
+    })
+      .then((rows) => {
+        if (!alive || !rows?.length) return;
+        setMapAreaLine(formatAreaLineFromGeocode(rows[0]));
+      })
+      .catch(() => {
+        if (alive) setMapAreaLine('');
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [event?.id, hasExactMapPin, isOnlineEvent, locationLatitude, locationLongitude]);
 
   const handleJoinToggle = async () => {
     if (!event) return;
@@ -128,6 +212,7 @@ const EventDetailScreen = () => {
             attendeePreviews: currentPreviews.slice(0, 3),
           };
         });
+        router.push(`/events/${event.id}/going`);
       }
     } catch {
       // Keep current state on request error.
@@ -136,7 +221,7 @@ const EventDetailScreen = () => {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+      <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
         <EventDetailSkeleton />
       </SafeAreaView>
     );
@@ -157,44 +242,30 @@ const EventDetailScreen = () => {
     ? event.sponsors
         .map((row, index) => ({
           id: row?.id ? String(row.id) : `sponsor-${index}`,
+          name:
+            typeof row?.name === 'string' && row.name.trim() ? row.name.trim() : 'Sponsor',
           image: row?.logoUrl ? { uri: row.logoUrl } : null,
         }))
-        .filter((row) => row.image)
+        .filter((row) => row.name || row.image)
     : [];
   
-  let datePrimary = '';
-  let dateSecondary = '';
-  let locationPrimary = '';
-  let locationSecondary = '';
   const displayPrice =
     event.priceType === 'Paid'
       ? typeof event.priceAmount === 'number'
         ? `$${event.priceAmount}`
         : 'Paid'
       : 'Free';
-  if (event.details) {
-    const parts = event.details.split('·').map((item) => item.trim());
-    const dateRaw = parts[0] || '';
-    const locationRaw = parts[1] || '';
-    const datePieces = dateRaw.split(',').map((item) => item.trim());
-    datePrimary = datePieces[0] ? `${datePieces[0]}, ${datePieces[1] ?? ''}`.trim() : dateRaw;
-    dateSecondary = datePieces[2] || '7:00PM-10:00PM';
-    locationPrimary = locationRaw || '';
-    locationSecondary = locationRaw?.toLowerCase() === 'online' ? 'Online' : '';
-  }
+  const { datePrimary, dateSecondary } = formatEventDetailDateTime(event.startsAt, event.endsAt);
 
-  const isOnlineEvent = String(locationPrimary || event?.locationName || '')
-    .trim()
-    .toLowerCase() === 'online';
-  const locationLatitude = Number(event?.locationLatitude);
-  const locationLongitude = Number(event?.locationLongitude);
-  const hasExactMapPin = Number.isFinite(locationLatitude) && Number.isFinite(locationLongitude);
+  const parsedLocation = formatEventLocationDisplay(event);
+  const displayLocationPrimary = parsedLocation.venueLine;
+  const displayLocationSecondary = mapAreaLine || parsedLocation.areaLine;
+
   const preferredLocationQuery = [
-    event?.locationAddress,
     event?.locationName,
-    locationPrimary,
+    displayLocationSecondary,
+    event?.locationAddress,
     event?.city,
-    locationSecondary,
   ]
     .filter((part) => typeof part === 'string' && part.trim())
     .join(', ')
@@ -203,61 +274,98 @@ const EventDetailScreen = () => {
   const mapQuery = preferredLocationQuery || mapFallbackQuery;
   const showStickyMapButton = !isOnlineEvent && (hasExactMapPin || Boolean(mapQuery));
 
-  /** Venue title line — prefer parsed detail, then API venue name. */
-  const displayLocationPrimary = (
-    locationPrimary ||
-    event?.locationName ||
-    'Venue TBA'
-  ).trim();
-  /** Second line only when it adds info (avoid duplicating venue name as city/subtitle). */
-  const pickDistinctLocationSubtitle = (primary, candidates) => {
-    const p = String(primary || '')
-      .trim()
-      .toLowerCase();
-    for (const c of candidates) {
-      const t = typeof c === 'string' ? c.trim() : '';
-      if (t && t.toLowerCase() !== p) return t;
-    }
-    return '';
-  };
-  const displayLocationSecondary = pickDistinctLocationSubtitle(displayLocationPrimary, [
-    typeof event?.locationAddress === 'string' ? event.locationAddress : '',
-    locationSecondary,
-    typeof event?.city === 'string' ? event.city : '',
-  ]);
-
   const openAttendeesList = () => router.push(`/events/${String(event.id)}/attendees`);
-  const handleMapPress = async () => {
+
+  const startNavigation = async () => {
+    await openDirectionsToVenue({
+      latitude: hasExactMapPin ? locationLatitude : undefined,
+      longitude: hasExactMapPin ? locationLongitude : undefined,
+      label: displayLocationPrimary || 'Event venue',
+      addressQuery: mapQuery,
+    });
+  };
+
+  const handleMapPress = () => {
     if ((!mapQuery && !hasExactMapPin) || isOnlineEvent) {
       Alert.alert('Map unavailable', 'This event does not have a physical venue location yet.');
       return;
     }
+    if (hasExactMapPin) {
+      setMapModalVisible(true);
+      return;
+    }
+    void startNavigation();
+  };
 
-    const label = encodeURIComponent(displayLocationPrimary || 'Event venue');
-    const encoded = encodeURIComponent(mapQuery);
-    const coordQuery = `${locationLatitude},${locationLongitude}`;
-    const nativeScheme = hasExactMapPin
-      ? Platform.OS === 'ios'
-        ? `maps://?ll=${coordQuery}&q=${label}`
-        : `geo:${coordQuery}?q=${coordQuery}(${label})`
-      : Platform.OS === 'ios'
-        ? `maps:0,0?q=${encoded}`
-        : `geo:0,0?q=${encoded}`;
-    const webFallback = hasExactMapPin
-      ? `https://www.google.com/maps/search/?api=1&query=${coordQuery}`
-      : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+  const handleStartNavigationFromModal = async () => {
+    setMapModalVisible(false);
+    await startNavigation();
+  };
 
+  const handleEditAttendanceUpdate = async (stillGoing) => {
+    setEditAttendanceVisible(false);
+    if (stillGoing) return;
+    await handleJoinToggle();
+  };
+  const handleFollowOrganizer = async () => {
+    if (!event?.organizerId) return;
+    if (!isLoggedIn) {
+      router.push('/(auth)/welcome');
+      return;
+    }
+    if (userRole !== 1 || !isMember) {
+      Alert.alert('Members only', 'Switch to a member account to follow organizers.');
+      return;
+    }
+    setFollowBusy(true);
     try {
-      const canOpenNative = await Linking.canOpenURL(nativeScheme);
-      if (canOpenNative) {
-        await Linking.openURL(nativeScheme);
-        return;
+      if (organizerFollowing) {
+        await organizerApi.unfollowOrganizer(Number(event.organizerId));
+        setOrganizerFollowing(false);
+      } else {
+        await organizerApi.followOrganizer(Number(event.organizerId));
+        setOrganizerFollowing(true);
       }
-      await Linking.openURL(webFallback);
-    } catch {
-      Alert.alert('Unable to open map', 'Please try again in a moment.');
+    } catch (e) {
+      Alert.alert('Could not update', e?.message || 'Try again.');
+    } finally {
+      setFollowBusy(false);
     }
   };
+
+  const openRosterGallery = (index) => {
+    const roster = Array.isArray(event?.roster) ? event.roster : [];
+    setGallery({
+      visible: true,
+      index,
+      items: roster.map((person, idx) => {
+        const photoUri = resolveApiAssetUrl(person.photoUrl);
+        return {
+          id: String(person.id ?? `${person.displayName}-${idx}`),
+          kind: 'person',
+          seedName: person.displayName,
+          image: photoUri ? { uri: photoUri } : null,
+          title: person.displayName,
+          subtitle: person.title?.trim() || '',
+        };
+      }),
+    });
+  };
+
+  const openSponsorGallery = (index) => {
+    setGallery({
+      visible: true,
+      index,
+      items: sponsors.map((row) => ({
+        id: row.id,
+        kind: 'sponsor',
+        image: row.image,
+        title: row.name,
+        subtitle: '',
+      })),
+    });
+  };
+
   const handleSaveToggle = () => {
     if (!isLoggedIn) {
       router.push('/(auth)/welcome');
@@ -271,73 +379,94 @@ const EventDetailScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <EventHeader 
+        <EventHeader
           event={event}
           isSaved={isSaved}
           onBack={() => router.back()}
           onSave={handleSaveToggle}
         />
+        <EventDetailIntro event={event} />
         <View style={styles.contentContainer}>
           <EventInfo
-            title={event.title}
             description={event.description}
             datePrimary={datePrimary}
             dateSecondary={dateSecondary}
             locationPrimary={displayLocationPrimary}
             locationSecondary={displayLocationSecondary}
-            categoryName={event.categoryName}
-            eventFormat={event.eventFormat}
-            isOnline={typeof event.isOnline === 'boolean' ? event.isOnline : undefined}
           />
 
           <Text style={styles.sectionTitle}>Organized by</Text>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            disabled={!event.organizerId}
-            onPress={() => {
-              if (event.organizerId) {
-                router.push(`/organizer/${event.organizerId}`);
-              }
-            }}
-            style={[styles.organizationCard, !event.organizerId ? { opacity: 0.7 } : null]}
-          >
-            {event.organizerLogoUrl ? (
-              <Image source={{ uri: event.organizerLogoUrl }} style={styles.organizationLogo} />
-            ) : (
-              <View style={[styles.organizationLogo, styles.organizationLogoFallback]}>
-                <Text style={styles.organizationLogoFallbackText}>{organizerInitials}</Text>
-              </View>
-            )}
-            <View style={styles.organizationTextWrap}>
-              <View style={styles.organizationNameRow}>
-                <Text style={styles.organizationName}>{organizerName}</Text>
-                <View style={styles.verifiedBadge}>
-                  <Feather name="check" size={11} color="#FFFFFF" />
+          <View style={[styles.organizationCard, !event.organizerId ? { opacity: 0.7 } : null]}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={!event.organizerId}
+              onPress={() => {
+                if (event.organizerId) {
+                  router.push(`/organizer/${event.organizerId}`);
+                }
+              }}
+              style={styles.organizationCardMain}
+            >
+              {event.organizerLogoUrl ? (
+                <Image source={{ uri: event.organizerLogoUrl }} style={styles.organizationLogo} />
+              ) : (
+                <View style={[styles.organizationLogo, styles.organizationLogoFallback]}>
+                  <Text style={styles.organizationLogoFallbackText}>{organizerInitials}</Text>
                 </View>
+              )}
+              <View style={styles.organizationTextWrap}>
+                <View style={styles.organizationNameRow}>
+                  <Text style={styles.organizationName}>{organizerName}</Text>
+                  {organizerVerifiedBadge ? (
+                    <VerificationBadgeWhite width={18} height={18} style={{ marginLeft: 4 }} />
+                  ) : null}
+                </View>
+                <Text style={styles.organizationCategory}>{organizerDescription}</Text>
               </View>
-              <Text style={styles.organizationCategory}>{organizerDescription}</Text>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+            {event.organizerId ? (
+              <TouchableOpacity
+                style={[
+                  styles.organizerFollowBtn,
+                  organizerFollowing ? styles.organizerFollowBtnActive : null,
+                ]}
+                onPress={handleFollowOrganizer}
+                disabled={followBusy}
+                activeOpacity={0.88}
+              >
+                <Text
+                  style={[
+                    styles.organizerFollowBtnText,
+                    organizerFollowing ? styles.organizerFollowBtnTextActive : null,
+                  ]}
+                >
+                  {organizerFollowing ? 'Following' : 'Follow'}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
 
           {event?.roster?.length > 0 ? (
             <>
               <Text style={styles.sectionTitle}>Speakers & Guests</Text>
-              <EventRoster roster={event.roster} />
+              <EventRoster roster={event.roster} onPersonPress={(_, index) => openRosterGallery(index)} />
             </>
           ) : null}
 
           {sponsors.length > 0 ? (
             <>
               <Text style={styles.sectionTitle}>Sponsors</Text>
-              <SponsorCarousel logos={sponsors} />
+              <SponsorCarousel logos={sponsors} onLogoPress={openSponsorGallery} />
             </>
           ) : null}
 
           <EventActions
             attendees={attendees}
             goingCount={event.goingCount}
+            capacity={event.capacity}
+            eventState={event.eventState}
             onViewAttendees={openAttendeesList}
           />
         </View>
@@ -362,10 +491,37 @@ const EventDetailScreen = () => {
 
       <EventBottomBar
         joined={joined}
-        onToggleJoin={handleJoinToggle}
+        onRegister={handleJoinToggle}
+        onEditAttendance={() => setEditAttendanceVisible(true)}
         price={displayPrice}
         event={event}
       />
+
+      <EditAttendanceSheet
+        visible={editAttendanceVisible}
+        isGoing={joined}
+        onClose={() => setEditAttendanceVisible(false)}
+        onUpdate={handleEditAttendanceUpdate}
+      />
+
+      <ImageGalleryModal
+        visible={gallery.visible}
+        items={gallery.items}
+        initialIndex={gallery.index}
+        onClose={() => setGallery({ visible: false, items: [], index: 0 })}
+      />
+
+      {hasExactMapPin ? (
+        <EventDirectionsMapModal
+          visible={mapModalVisible}
+          latitude={locationLatitude}
+          longitude={locationLongitude}
+          venueLabel={displayLocationPrimary || 'Event venue'}
+          addressLine={[displayLocationPrimary, displayLocationSecondary].filter(Boolean).join(' · ')}
+          onNavigate={handleStartNavigationFromModal}
+          onClose={() => setMapModalVisible(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };

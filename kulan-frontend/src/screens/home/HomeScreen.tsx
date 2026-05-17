@@ -22,7 +22,6 @@ import { useSavedEvents } from '@/context/SavedEventsContext';
 import HomeSkeleton from '@/components/skeletons/HomeSkeleton';
 import { getEvents, invalidateEventsListCache, peekEventsListCache } from '@/api/events';
 import { spacing } from '@/theme';
-import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 import NoEventsIllustration from '@/assets/no events.svg';
 
 import { HomeHeader } from './HomeHeader';
@@ -146,10 +145,10 @@ function HomeScreen() {
 
   const displayName = pickDisplayName(user) || 'My profile';
   const location = pickLocationLabel(user) || 'Your location';
-  const rawAvatar = user?.avatarUrl?.trim() || user?.profileImg?.trim() || user?.profile_img?.trim();
-  const avatarUri = resolveApiAssetUrl(rawAvatar);
 
-  const renderItem: ListRenderItem<EventCardModel> = ({ item }) => <EventCard event={item} />;
+  const renderItem: ListRenderItem<EventCardModel> = ({ item }) => (
+    <EventCard event={item} variant="feed" homeTab={activeTab} />
+  );
 
   if (isLoading) {
     return (
@@ -171,6 +170,7 @@ function HomeScreen() {
           data={activeData}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderItem}
+          overScrollMode="never"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -183,12 +183,7 @@ function HomeScreen() {
           }
           ListHeaderComponent={
             <>
-              <HomeHeader
-                displayName={displayName}
-                location={location}
-                avatarUri={avatarUri}
-                isGuest={isGuest}
-              />
+              <HomeHeader displayName={displayName} location={location} isGuest={isGuest} />
               <YourEventsSection
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
@@ -219,6 +214,7 @@ function HomeScreen() {
               />
             )
           }
+          ItemSeparatorComponent={() => <View style={styles.feedSeparator} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
@@ -234,6 +230,13 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
     paddingBottom: spacing.xl,
+  },
+  feedSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: spacing.md,
+    marginTop: 4,
+    marginBottom: 16,
   },
   emptyWrap: {
     alignItems: 'center',

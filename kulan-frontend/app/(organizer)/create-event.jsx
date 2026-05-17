@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -36,6 +36,7 @@ import WysiwygSponsors from '@/components/createEvent/WysiwygSponsors';
 import CreateEventFloatingBar from '@/components/createEvent/CreateEventFloatingBar';
 import CreateEventSkeleton from '@/components/skeletons/CreateEventSkeleton';
 import AppPopup from '@/components/common/AppPopup';
+import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 
 const EDU_SUBTYPES = [
   { key: 'seminar', label: 'Seminar' },
@@ -546,7 +547,7 @@ export default function CreateEventScreen() {
               <View style={eventStyles.organizationTextWrap}>
                 <View style={eventStyles.organizationNameRow}>
                   <Text style={eventStyles.organizationName}>{user?.fullName || 'Organizer'}</Text>
-                  <View style={eventStyles.verifiedBadge}><Feather name="check" size={11} color="#fff" /></View>
+                  <VerificationBadgeWhite width={18} height={18} style={{ marginLeft: 4 }} />
                 </View>
                 <Text style={eventStyles.organizationCategory}>You are creating this event as organizer</Text>
               </View>

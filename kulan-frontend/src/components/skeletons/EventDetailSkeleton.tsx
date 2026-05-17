@@ -6,9 +6,9 @@ import { spacing } from '@/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-/** Matches `EventHeader` / `headerWrapper` */
-const HEADER_H = 260;
 const CONTENT_PAD_H = 20;
+const BANNER_W = SCREEN_W - 32;
+const BANNER_H = Math.round(BANNER_W / 2);
 const INNER_W = SCREEN_W - CONTENT_PAD_H * 2;
 
 export default function EventDetailSkeleton() {
@@ -21,9 +21,18 @@ export default function EventDetailSkeleton() {
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      <Skeleton containerStyle={styles.headerSkeleton}>
-        <SkeletonPiece width={SCREEN_W} height={HEADER_H} style={styles.headerImage} />
-      </Skeleton>
+      <View style={styles.headerSkeleton}>
+        <View style={styles.headerToolbarSkeleton}>
+          <SkeletonPiece width={40} height={40} style={styles.headerIcon} />
+          <View style={styles.headerToolbarRight}>
+            <SkeletonPiece width={40} height={40} style={styles.headerIcon} />
+            <SkeletonPiece width={40} height={40} style={styles.headerIcon} />
+          </View>
+        </View>
+        <Skeleton containerStyle={styles.headerBannerSkeleton}>
+          <SkeletonPiece width={BANNER_W} height={BANNER_H} style={styles.headerBannerPiece} />
+        </Skeleton>
+      </View>
 
       <View style={styles.body}>
         <Skeleton containerStyle={styles.chipsRow}>
@@ -86,11 +95,31 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl + 56,
   },
   headerSkeleton: {
-    backgroundColor: 'transparent',
-    alignSelf: 'stretch',
+    backgroundColor: '#FFFFFF',
+    paddingBottom: 4,
   },
-  headerImage: {
-    borderRadius: 0,
+  headerToolbarSkeleton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  headerToolbarRight: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  headerIcon: {
+    borderRadius: 20,
+  },
+  headerBannerSkeleton: {
+    marginHorizontal: 16,
+    alignSelf: 'center',
+    backgroundColor: 'transparent',
+  },
+  headerBannerPiece: {
+    borderRadius: 14,
   },
   body: {
     paddingHorizontal: CONTENT_PAD_H,

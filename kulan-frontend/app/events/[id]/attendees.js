@@ -1,58 +1,46 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { getEventAttendees } from '@/api/events';
-import { getAnonymousDisplayName, getAnonymousAvatar, canViewerSeeHiddenProfile } from '@/utils/anonymize';
+import { getAnonymousDisplayName, canViewerSeeHiddenProfile } from '@/utils/anonymize';
 import useAuth from '@/auth/useAuth';
-
-function AnonymousAvatar() {
-  return (
-    <View style={styles.anonymousAvatar} accessibilityLabel="Anonymous member avatar">
-      <Feather name="eye-off" size={16} color="#9CA3AF" />
-    </View>
-  );
-}
-
-function RealAvatar({ avatarUrl }) {
-  if (avatarUrl) {
-    return <Image source={{ uri: avatarUrl }} style={styles.avatarImage} accessibilityLabel="Member avatar" />;
-  }
-  return (
-    <View style={styles.avatarFallback} accessibilityLabel="Default member avatar">
-      <Feather name="user" size={16} color="#FFFFFF" />
-    </View>
-  );
-}
+import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
 
 const AttendeeRow = React.memo(({ item, onPress }) => {
   const isAnonymous = item.isAnonymous;
   const displayName = getAnonymousDisplayName(isAnonymous, item.name);
-  const avatarUrl = getAnonymousAvatar(item.avatarUrl, isAnonymous);
 
   return (
     <TouchableOpacity
-      style={styles.attendeeRow}
-      activeOpacity={isAnonymous ? 1 : 0.65}
+      style={styles.row}
+      activeOpacity={isAnonymous ? 1 : 0.7}
       onPress={() => onPress(item)}
       disabled={isAnonymous}
       accessibilityRole="button"
-      accessibilityLabel={isAnonymous ? `Anonymous attendee` : `View ${displayName}'s profile`}
-      accessibilityState={{ disabled: isAnonymous }}
+      accessibilityLabel={isAnonymous ? 'Anonymous attendee' : `View ${displayName}'s profile`}
     >
-      {isAnonymous ? <AnonymousAvatar /> : <RealAvatar avatarUrl={avatarUrl} />}
-      <View style={styles.attendeeTextCol}>
-        <Text style={[styles.attendeeName, isAnonymous && styles.anonymousName]} numberOfLines={1}>
-          {displayName}
-        </Text>
-        {isAnonymous ? (
-          <Text style={styles.anonymousBadge}>Private profile</Text>
-        ) : null}
-      </View>
-      {!isAnonymous ? (
-        <Feather name="chevron-right" size={18} color="#D1D5DB" />
-      ) : null}
+      {isAnonymous ? (
+        <View style={styles.anonAvatar}>
+          <Feather name="eye-off" size={16} color="#94A3B8" />
+        </View>
+      ) : (
+        <MemberInitialAvatar name={displayName} size={48} borderWidth={0} />
+      )}
+
+      <Text style={[styles.name, isAnonymous && styles.nameMuted]} numberOfLines={1}>
+        {displayName}
+      </Text>
+
+      {!isAnonymous ? <Feather name="chevron-right" size={20} color="#CBD5E1" /> : null}
     </TouchableOpacity>
   );
 });
@@ -67,9 +55,7 @@ function formatAttendees(rawItems, canReveal, viewerId) {
       originalUserId: uid,
       id: shouldHide ? null : uid,
       name: att.name || 'Member',
-      avatarUrl: shouldHide ? null : (att.avatarUrl ?? null),
       isAnonymous: shouldHide,
-      joinedAt: att.joinedAt ?? null,
     };
   });
 }
@@ -102,7 +88,7 @@ export default function EventAttendeesScreen() {
       setItems(formatAttendees(raw, canReveal, viewerId));
     } catch {
       if (!mountedRef.current) return;
-      setLoadError('Could not load attendees right now.');
+      setLoadError('Could not load attendees.');
     } finally {
       if (mountedRef.current) setIsLoading(false);
     }
@@ -120,54 +106,49 @@ export default function EventAttendeesScreen() {
     (att) => {
       if (att.isAnonymous) return;
       const uid = att.originalUserId ?? att.id;
-      if (uid != null) {
-        router.push(`/profile?memberId=${uid}`);
-      }
+      if (uid != null) router.push(`/profile?memberId=${uid}`);
     },
     [router],
   );
 
-  const keyExtractor = useCallback((item, index) => (item.originalUserId != null ? String(item.originalUserId) : `anon-${index}`), []);
+  const goBack = useCallback(() => router.back(), [router]);
+
+  const countLabel = useMemo(() => {
+    if (items.length === 0) return 'No one yet';
+    if (items.length === 1) return '1 person going';
+    return `${items.length} people going`;
+  }, [items.length]);
 
   const renderItem = useCallback(
     ({ item }) => <AttendeeRow item={item} onPress={handleAttendeePress} />,
     [handleAttendeePress],
   );
 
-  const listHeader = useMemo(
-    () => (
-      <View style={styles.listHeader}>
-        <Text style={styles.headerTitle}>Members going</Text>
-        <Text style={styles.headerCount}>{items.length} attending</Text>
-      </View>
-    ),
-    [items.length],
+  const keyExtractor = useCallback(
+    (item, index) => (item.originalUserId != null ? String(item.originalUserId) : `anon-${index}`),
+    [],
   );
 
-  const emptyComponent = useMemo(
-    () =>
-      !isLoading && !loadError ? (
-        <View style={styles.centeredState}>
-          <Feather name="users" size={32} color="#D1D5DB" />
-          <Text style={styles.emptyText}>No attendees yet.</Text>
-          <Text style={styles.emptySubtext}>Be the first to join this event.</Text>
-        </View>
-      ) : null,
-    [isLoading, loadError],
+  const listHeader = useMemo(
+    () => (
+      <View style={styles.listIntro}>
+        <Text style={styles.listIntroTitle}>Who&apos;s going</Text>
+        <Text style={styles.listIntroCount}>{countLabel}</Text>
+      </View>
+    ),
+    [countLabel],
   );
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8} accessibilityLabel="Go back">
-            <Feather name="arrow-left" size={22} color="#1F2937" />
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <View style={styles.nav}>
+          <TouchableOpacity onPress={goBack} style={styles.backBtn} hitSlop={8}>
+            <Feather name="arrow-left" size={22} color="#0F172A" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Members going</Text>
-          <View style={styles.headerSpacer} />
         </View>
-        <View style={styles.centeredState}>
-          <ActivityIndicator size="small" color="#FF7A00" />
+        <View style={styles.center}>
+          <ActivityIndicator color="#FF7B3F" />
         </View>
       </SafeAreaView>
     );
@@ -175,19 +156,16 @@ export default function EventAttendeesScreen() {
 
   if (loadError) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8} accessibilityLabel="Go back">
-            <Feather name="arrow-left" size={22} color="#1F2937" />
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <View style={styles.nav}>
+          <TouchableOpacity onPress={goBack} style={styles.backBtn} hitSlop={8}>
+            <Feather name="arrow-left" size={22} color="#0F172A" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Members going</Text>
-          <View style={styles.headerSpacer} />
         </View>
-        <View style={styles.centeredState}>
-          <Feather name="alert-circle" size={32} color="#9CA3AF" />
+        <View style={styles.center}>
           <Text style={styles.errorText}>{loadError}</Text>
-          <TouchableOpacity onPress={loadAttendees} style={styles.retryBtn} accessibilityRole="button" accessibilityLabel="Retry loading attendees">
-            <Text style={styles.retryText}>Retry</Text>
+          <TouchableOpacity onPress={loadAttendees} style={styles.retryBtn}>
+            <Text style={styles.retryText}>Try again</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -195,157 +173,128 @@ export default function EventAttendeesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8} accessibilityLabel="Go back">
-          <Feather name="arrow-left" size={22} color="#1F2937" />
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <View style={styles.nav}>
+        <TouchableOpacity onPress={goBack} style={styles.backBtn} hitSlop={8} accessibilityLabel="Go back">
+          <Feather name="arrow-left" size={22} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Members going</Text>
-        <View style={styles.headerSpacer} />
       </View>
+
       <FlatList
         data={items}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={items.length > 0 ? listHeader : null}
-        ListEmptyComponent={emptyComponent}
-        initialNumToRender={20}
-        maxToRenderPerBatch={15}
-        windowSize={10}
-        removeClippedSubviews
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={styles.list}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Feather name="users" size={32} color="#E2E8F0" />
+            <Text style={styles.emptyText}>No one has joined yet</Text>
+          </View>
+        }
+        showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  safe: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: '#FFFFFF',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  nav: {
+    paddingHorizontal: 8,
+    paddingBottom: 4,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  headerSpacer: {
-    width: 36,
-  },
-  listHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-  headerCount: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-  },
-  centeredState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 10,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    marginTop: 14,
+  list: {
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#FF7A00',
+    paddingBottom: 32,
   },
-  retryText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  listIntro: {
+    paddingTop: 4,
+    paddingBottom: 20,
   },
-  emptyText: {
+  listIntroTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+  },
+  listIntroCount: {
+    marginTop: 6,
     fontSize: 15,
-    color: '#9CA3AF',
-    marginTop: 10,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: '#94A3B8',
   },
-  emptySubtext: {
-    fontSize: 13,
-    color: '#D1D5DB',
-    marginTop: 4,
-  },
-  attendeeRow: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginBottom: 8,
+    gap: 14,
   },
-  attendeeTextCol: {
+  name: {
     flex: 1,
-    marginLeft: 12,
-    minWidth: 0,
-  },
-  attendeeName: {
-    fontSize: 15,
-    color: '#2D3440',
+    fontSize: 16,
     fontWeight: '600',
+    color: '#0F172A',
   },
-  anonymousName: {
-    color: '#9CA3AF',
+  nameMuted: {
+    color: '#94A3B8',
     fontStyle: 'italic',
   },
-  anonymousBadge: {
-    fontSize: 11,
-    color: '#D1D5DB',
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  avatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#9CA3AF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  anonymousAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+  anonAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#F1F5F9',
+    marginLeft: 62,
+  },
+  empty: {
+    alignItems: 'center',
+    paddingTop: 48,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 15,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#64748B',
+  },
+  retryBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#FF7B3F',
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

@@ -20,10 +20,10 @@ import { Link, useRouter, useLocalSearchParams } from 'expo-router';
 import useAuth from '@/auth/useAuth';
 import { useSavedEvents } from '@/context/SavedEventsContext';
 import { getEvents } from '@/api/events';
-import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 import Chip from '@/features/onboarding/components/Chip';
 import { INTEREST_ICON_MAP } from '@/features/onboarding/data/interestIconMap';
 import { MemberProfileEventsSection } from '@/components/member/MemberProfileEventsSection';
+import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
 import onboardingApi from '@/api/onboarding';
 import authApi from '@/api/auth';
 import { getMemberById } from '@/api/member';
@@ -81,7 +81,6 @@ const ProfileScreen = () => {
   const isProfileLimited = !isOwnProfile && profileHidden && viewerCanReveal;
 
   const displayName = isProfileBlocked ? 'Anonymous Member' : (pickDisplayName(displayUser) || 'Member');
-  const profilePicUri = isProfileBlocked ? null : resolveApiAssetUrl(displayUser?.profileImg || displayUser?.profile_img || displayUser?.avatarUrl);
   const locationLabelRaw = pickLocationLabel(displayUser);
   const locationLabel = locationLabelRaw ? locationLabelRaw : null;
   const joinedLabel = formatJoinedDate(displayUser?.createdAt ?? displayUser?.created_at);
@@ -253,13 +252,12 @@ const ProfileScreen = () => {
 
         <View style={styles.identityRow}>
           <View style={styles.avatarWrap}>
-            {profilePicUri ? (
-              <Image source={{ uri: profilePicUri }} style={[styles.profilePic, { borderColor: colors.card }]} />
-            ) : (
-              <View style={[styles.profilePic, styles.profilePicFallback, { borderColor: colors.border }]}>
-                <Text style={[styles.profilePicLetter, { color: colors.textSecondary }]}>{displayName.charAt(0).toUpperCase()}</Text>
-              </View>
-            )}
+            <MemberInitialAvatar
+              name={displayName}
+              size={88}
+              borderColor={colors.card}
+              borderWidth={3}
+            />
             {isProfileBlocked ? (
               <View style={styles.privateBadge}>
                 <Feather name="eye-off" size={12} color="#FFFFFF" />
