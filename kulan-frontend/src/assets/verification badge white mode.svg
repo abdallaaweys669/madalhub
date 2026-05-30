@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <polygon
+    points="60,6 72,16 88,14 97,28 113,34 110,50 118,63 108,75 109,91 94,97 86,112 70,109 60,120 50,109 34,112 26,97 11,91 12,75 2,63 10,50 7,34 23,28 32,14 48,16"
+    fill="#FF863D"
+  />
+  <polyline
+    points="42,61 54,73 79,48"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
