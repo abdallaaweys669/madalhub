@@ -185,55 +185,36 @@ export const uploadOrganizerProfileImage = async (formData) => {
 
 export const uploadMemberProfileImage = async (formData) => {
   const base = String(API_BASE_URL || '').replace(/\/$/, '');
-  const url = `${base}/onboarding/member/profile-image`;
   const headers = {};
-  const auth = apiClient.defaults.headers.common.Authorization;
-  if (auth) headers.Authorization = typeof auth === 'string' ? auth : String(auth);
   if (base.includes('ngrok')) headers['ngrok-skip-browser-warning'] = 'true';
 
-  const controller = new AbortController();
-  const timeoutMs = 120000;
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  console.log('FORMDATA INSTANCE:', formData);
+  console.log('IS FORMDATA:', formData instanceof FormData);
+  console.log('REQUEST HEADERS:', headers);
+  console.log('REQUEST BODY:', formData);
 
-  let res;
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: formData,
-      signal: controller.signal,
+    const response = await apiClient.post('/onboarding/member/profile-image', formData, {
+      headers: {
+        ...headers,
+        'Content-Type': 'multipart/form-data',
+      },
+      transformRequest: (data) => data,
+      timeout: 120000,
     });
+    console.log('UPLOAD RESPONSE', response.data);
+    return response.data;
   } catch (error) {
-    const isAbort = error?.name === 'AbortError';
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Failed to upload member profile image');
+    }
     const isLocal = /localhost|127\.0\.0\.1/i.test(base);
     throw new Error(
-      isAbort
-        ? `Upload timed out after ${timeoutMs / 1000}s.`
-        : isLocal
-          ? 'Cannot reach API (localhost on device). Set EXPO_PUBLIC_API_BASE_URL to your ngrok URL and restart Expo.'
-          : `Upload failed: ${error?.message || 'network'}. Check ngrok and backend.`,
+      isLocal
+        ? 'Cannot reach API (localhost on device). Set EXPO_PUBLIC_API_BASE_URL to your LAN/ngrok URL and restart Expo.'
+        : `Upload failed: ${error?.message || 'network'}. Check API server and network.`,
     );
-  } finally {
-    clearTimeout(timeoutId);
   }
-
-  const text = await res.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(res.ok ? 'Invalid JSON from server' : `Upload failed (${res.status})`);
-  }
-
-  if (!res.ok) {
-    const serverMsg =
-      (typeof data?.message === 'string' && data.message) ||
-      (Array.isArray(data?.message) && data.message.join(', ')) ||
-      `HTTP ${res.status}`;
-    throw new Error(serverMsg);
-  }
-
-  return data;
 };
 
 export default {

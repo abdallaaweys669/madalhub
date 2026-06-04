@@ -175,14 +175,18 @@ export default function EditProfileScreen() {
     try {
       if (selectedProfileImage?.uri) {
         const localUri = selectedProfileImage.uri;
-        const fileName = selectedProfileImage.fileName || `member-profile-${Date.now()}.jpg`;
+        const fileName =
+          selectedProfileImage.fileName ||
+          (typeof localUri === 'string' && localUri.split('/').pop()?.split('?')[0]) ||
+          `member-profile-${Date.now()}.jpg`;
         const inferredType = selectedProfileImage.mimeType || 'image/jpeg';
-
-        const fileResponse = await fetch(localUri);
-        const blob = await fileResponse.blob();
+        const file = { uri: localUri, name: fileName, type: inferredType };
 
         const formData = new FormData();
-        formData.append('file', blob, fileName);
+        formData.append('file', file);
+        console.log('Selected file:', file);
+        console.log('URI:', file?.uri);
+        console.log('FormData parts:', formData);
         await onboardingApi.uploadMemberProfileImage(formData);
       }
 

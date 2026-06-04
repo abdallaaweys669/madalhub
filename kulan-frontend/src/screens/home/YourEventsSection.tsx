@@ -4,17 +4,16 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { spacing, useThemeColors } from '@/theme';
 
-export type HomeEventTab = 'Upcoming' | 'Past' | 'Going' | 'Saved';
+export type HomeEventTab = 'Upcoming' | 'Joined' | 'Saved' | 'Past';
 
-/** Past last — single row on home (Upcoming → Going → Saved → Past). */
-const TABS: HomeEventTab[] = ['Upcoming', 'Going', 'Saved', 'Past'];
-const GUEST_TABS: HomeEventTab[] = ['Upcoming', 'Past'];
+const TABS: HomeEventTab[] = ['Upcoming', 'Joined', 'Saved', 'Past'];
+const GUEST_TABS: HomeEventTab[] = ['Upcoming'];
 
 const TAB_ICONS: Record<HomeEventTab, keyof typeof Ionicons.glyphMap> = {
   Upcoming: 'calendar-outline',
-  Past: 'time-outline',
-  Going: 'checkmark-circle-outline',
+  Joined: 'checkmark-circle-outline',
   Saved: 'bookmark-outline',
+  Past: 'time-outline',
 };
 
 /** Space between pill icon and label */
@@ -37,7 +36,7 @@ export function YourEventsSection({
   return (
     <View style={styles.section}>
       <View style={styles.titleRow}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Events</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>My Events</Text>
       </View>
       <ScrollView
         horizontal
@@ -55,7 +54,7 @@ export function YourEventsSection({
                 styles.tab,
                 active
                   ? { backgroundColor: colors.primary }
-                  : { backgroundColor: colors.backgroundMuted },
+                  : { backgroundColor: colors.card, borderColor: colors.border },
               ]}
               activeOpacity={0.85}
               accessibilityRole="tab"
@@ -77,13 +76,14 @@ export function YourEventsSection({
 
 const styles = StyleSheet.create({
   section: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   titleRow: {
     marginBottom: spacing.sm,
@@ -107,6 +107,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'transparent',
     gap: TAB_ICON_GAP,
   },
   tabLabel: {

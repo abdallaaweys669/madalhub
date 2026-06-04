@@ -1,34 +1,715 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
+  Image,
   Platform,
+  Pressable,
   RefreshControl,
+  ScrollView,
+  Share,
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
+  useWindowDimensions,
   View,
-  type ListRenderItem,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import useAuth from '@/auth/useAuth';
 import { mergeAuthenticatedUserFromMe } from '@/auth/mergeAuthenticatedUserFromMe';
 import { pickDisplayName, pickLocationLabel } from '@/auth/normalizeUser';
+import useGuardedRouter from '@/hooks/useGuardedRouter';
 import { Container } from '@/components/common/Container';
-import { EventCard, type EventCardModel } from '@/components/event/EventCard';
+import { type EventCardModel } from '@/components/event/EventCard';
 import EmptyState from '@/components/EmptyState';
 import { useSavedEvents } from '@/context/SavedEventsContext';
 import HomeSkeleton from '@/components/skeletons/HomeSkeleton';
-import { getEvents, invalidateEventsListCache, peekEventsListCache } from '@/api/events';
-import { spacing } from '@/theme';
-import NoEventsIllustration from '@/assets/no events.svg';
+import { getEvents, getRecommendedEvents, invalidateEventsListCache, peekEventsListCache, DEFAULT_COVER_GRADIENT } from '@/api/events';
+import { trackEventInteraction } from '@/api/trackEventInteraction';
+import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
+import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
+import { spacing, useThemeColors } from '@/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 
 import { HomeHeader } from './HomeHeader';
 import { YourEventsSection, type HomeEventTab } from './YourEventsSection';
 
 const HOME_EVENTS_PARAMS = { page: 1, limit: 50, sort: 'start-asc' as const };
-const GUEST_HOME_TABS: HomeEventTab[] = ['Upcoming', 'Past'];
+const GUEST_HOME_TABS: HomeEventTab[] = ['Upcoming'];
+const POPULAR_MIN_ATTENDEES = 20;
+const NO_EVENTS_IMAGE = require('../../assets/no events.png');
+
+const coverBannerImageStyle = {
+  ...StyleSheet.absoluteFillObject,
+  width: '100%',
+  height: '100%',
+} as const;
+
+type HomeInsightSection = {
+  id: 'discover';
+  title: string;
+  subtitle: string;
+  items: EventCardModel[];
+};
+
+function normalizeInterestIds(rawInterests: unknown): number[] {
+  if (!Array.isArray(rawInterests)) return [];
+  return rawInterests
+    .map((item) => {
+      if (typeof item === 'number' && Number.isFinite(item)) return item;
+      if (!item || typeof item !== 'object') return 0;
+      const record = item as Record<string, unknown>;
+      const id = record.id ?? record.interestId ?? record.interest_id;
+      const parsed = Number(id);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    })
+    .filter((id) => id > 0);
+}
+
+function normalizeInterestLabels(rawInterests: unknown): string[] {
+  if (!Array.isArray(rawInterests)) return [];
+  return rawInterests
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      if (!item || typeof item !== 'object') return '';
+      const record = item as Record<string, unknown>;
+      const candidate =
+        record.name ??
+        record.label ??
+        record.title ??
+        record.value ??
+        record.category ??
+        record.interest;
+      return typeof candidate === 'string' ? candidate : '';
+    })
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function getEventSearchText(event: EventCardModel): string {
+  return [event.title, event.details, event.categoryName, event.description]
+    .map((v) => String(v || '').toLowerCase())
+    .join(' ');
+}
+
+function getEventCreatedAtMs(event: EventCardModel): number {
+  const createdRaw = (event as { createdAt?: string | number | null }).createdAt;
+  if (createdRaw != null) {
+    const createdAt = new Date(createdRaw).getTime();
+    if (Number.isFinite(createdAt)) return createdAt;
+  }
+  const id = Number(event.id);
+  return Number.isFinite(id) ? id : 0;
+}
+
+function sortByNewestFirst(items: EventCardModel[]): EventCardModel[] {
+  return [...items].sort((a, b) => getEventCreatedAtMs(b) - getEventCreatedAtMs(a));
+}
+
+function eventId(event: EventCardModel): string {
+  return String(event.id);
+}
+
+function sortByStartsSoonest(items: EventCardModel[]): EventCardModel[] {
+  return [...items].sort((a, b) => {
+    const aTime = a.startsAt ? new Date(a.startsAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const bTime = b.startsAt ? new Date(b.startsAt).getTime() : Number.MAX_SAFE_INTEGER;
+    return aTime - bTime;
+  });
+}
+
+function getLocationMatchScore(event: EventCardModel, userLocation: string): number {
+  const locationText = userLocation.trim().toLowerCase();
+  if (!locationText) return 0;
+
+  const city = String((event as { city?: string }).city || '').trim().toLowerCase();
+  const locationName = String(event.locationName || '').trim().toLowerCase();
+  const searchable = getEventSearchText(event);
+  const locationParts = locationText.split(',').map((part) => part.trim()).filter(Boolean);
+
+  if (city && locationParts.some((part) => part.includes(city) || city.includes(part))) return 1;
+  if (locationName && locationParts.some((part) => part.includes(locationName) || locationName.includes(part))) {
+    return 0.85;
+  }
+  if (searchable.includes(locationText)) return 0.7;
+  if (locationParts.some((part) => part.length > 2 && searchable.includes(part))) return 0.5;
+  return 0;
+}
+
+function getInterestIdMatchScore(event: EventCardModel, interestIds: number[]): number {
+  const eventInterestId = Number((event as { interestId?: number | null }).interestId || 0);
+  if (!interestIds.length || !eventInterestId) return 0;
+  return interestIds.includes(eventInterestId) ? 1 : 0;
+}
+
+function getInterestMatchScore(event: EventCardModel, interestLabels: string[]): number {
+  if (!interestLabels.length) return 0;
+  const searchable = getEventSearchText(event);
+  const matches = interestLabels.reduce((acc, interest) => {
+    if (searchable.includes(interest)) return acc + 1;
+    return acc;
+  }, 0);
+  return Math.min(matches, 3);
+}
+
+function getCombinedInterestScore(
+  event: EventCardModel,
+  interestLabels: string[],
+  interestIds: number[],
+): number {
+  const idScore = getInterestIdMatchScore(event, interestIds);
+  const labelScore = getInterestMatchScore(event, interestLabels) / 3;
+  return Math.max(idScore, labelScore);
+}
+
+function scoreRecommendedEvent(
+  event: EventCardModel,
+  interestLabels: string[],
+  interestIds: number[],
+  userLocation: string,
+): number {
+  const interestScore = getCombinedInterestScore(event, interestLabels, interestIds);
+  const locationScore = getLocationMatchScore(event, userLocation);
+  return interestScore * 0.85 + locationScore * 0.15;
+}
+
+function rankEventsByScore(
+  items: EventCardModel[],
+  scorer: (event: EventCardModel) => number,
+): EventCardModel[] {
+  return [...items].sort((a, b) => {
+    const scoreDiff = scorer(b) - scorer(a);
+    if (scoreDiff !== 0) return scoreDiff;
+    const goingDiff = (Number(b.goingCount) || 0) - (Number(a.goingCount) || 0);
+    if (goingDiff !== 0) return goingDiff;
+    const aStarts = a.startsAt ? new Date(a.startsAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const bStarts = b.startsAt ? new Date(b.startsAt).getTime() : Number.MAX_SAFE_INTEGER;
+    return aStarts - bStarts;
+  });
+}
+
+function buildClientRecommendedEvents(
+  upcomingEvents: EventCardModel[],
+  interestLabels: string[],
+  interestIds: number[],
+  location: string,
+): EventCardModel[] {
+  const pool = upcomingEvents.filter((event: EventCardModel & { isJoined?: boolean }) => !event.isJoined);
+  return rankEventsByScore(pool, (event) =>
+    scoreRecommendedEvent(event, interestLabels, interestIds, location),
+  ).slice(0, 8);
+}
+
+function HomeInsightCard({ event }: { event: EventCardModel }) {
+  const router = useGuardedRouter();
+  const colors = useThemeColors();
+  const startsAtLabel = event.startsAt
+    ? new Date(event.startsAt).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : 'Date TBA';
+
+  return (
+    <TouchableOpacity
+      style={[styles.insightCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+      activeOpacity={0.9}
+      onPress={() => router.push(`/events/${event.id}`)}
+    >
+      <View style={styles.insightCover}>
+        {event.coverImageUrl ? (
+          <Image
+            source={{ uri: event.coverImageUrl }}
+            style={coverBannerImageStyle}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[styles.insightCoverFallback, { backgroundColor: colors.backgroundMuted }]}>
+            <Text style={[styles.insightCoverLetter, { color: colors.textSecondary }]}>
+              {(event.coverLetter || event.title || '?').trim().charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
+        <View style={styles.insightCoverOverlay} />
+        <View style={styles.insightCategoryPill}>
+          <Text style={styles.insightCategoryText}>{event.categoryName || 'Featured'}</Text>
+        </View>
+      </View>
+      <View style={styles.insightBody}>
+        <Text numberOfLines={2} style={[styles.insightTitle, { color: colors.text }]}>
+          {event.title}
+        </Text>
+        <View style={styles.insightMetaRow}>
+          <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+          <Text numberOfLines={1} style={[styles.insightMetaText, { color: colors.textSecondary }]}>
+            {startsAtLabel}
+          </Text>
+        </View>
+        <View style={styles.insightMetaRow}>
+          <Ionicons name="location-outline" size={13} color={colors.primary} />
+          <Text numberOfLines={1} style={[styles.insightMetaText, { color: colors.textSecondary }]}>
+            {event.locationName || event.categoryName || 'Near you'}
+          </Text>
+        </View>
+        <View style={styles.insightActionRow}>
+          <View style={styles.insightArrowCta}>
+            <Ionicons name="arrow-forward" size={14} color="#2563EB" />
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function HomeInsightSections({ sections }: { sections: HomeInsightSection[] }) {
+  const colors = useThemeColors();
+  return (
+    <View style={styles.insightsWrap}>
+      {sections.map((section) => {
+        if (!section.items.length) return null;
+        return (
+          <View key={section.id} style={styles.insightSection}>
+            <View style={styles.insightSectionHead}>
+              <Text style={[styles.insightSectionTitle, { color: colors.text }]}>{section.title}</Text>
+              {section.subtitle ? (
+                <Text style={[styles.insightSectionSubtitle, { color: colors.textSecondary }]}>
+                  {section.subtitle}
+                </Text>
+              ) : null}
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.insightRowContent}
+            >
+              {section.items.map((event) => (
+                <HomeInsightCard key={`${section.id}-${event.id}`} event={event} />
+              ))}
+            </ScrollView>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function formatRecommendedDateLabel(startsAt?: string): string {
+  if (!startsAt) return 'Date TBA';
+  const date = new Date(startsAt);
+  if (!Number.isFinite(date.getTime())) return 'Date TBA';
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+}
+
+function formatRecommendedTimeLabel(startsAt?: string): string {
+  if (!startsAt) return 'Time TBA';
+  const date = new Date(startsAt);
+  if (!Number.isFinite(date.getTime())) return 'Time TBA';
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function formatRecommendedLocationLabel(event: EventCardModel): string {
+  if (event.isOnline) return 'Online';
+  const city = String((event as { city?: string }).city || '').trim();
+  const locationName = String(event.locationName || '').trim();
+  if (locationName && city && locationName.toLowerCase() !== city.toLowerCase()) {
+    return `${locationName}, ${city}`;
+  }
+  return locationName || city || event.categoryName || 'Location TBD';
+}
+
+function RecommendedMiniCard({ event }: { event: EventCardModel }) {
+  const colors = useThemeColors();
+  const router = useGuardedRouter();
+  const { isLoggedIn } = useAuth();
+  const { savedEventIds, saveEvent, unsaveEvent } = useSavedEvents();
+  const isSaved = savedEventIds.includes(String(event.id));
+
+  const dateLabel = formatRecommendedDateLabel(event.startsAt);
+  const timeLabel = formatRecommendedTimeLabel(event.startsAt);
+  const locationLabel = formatRecommendedLocationLabel(event);
+  const categoryLabel = (event.categoryName || 'Featured').trim().toUpperCase();
+
+  useEffect(() => {
+    if (isLoggedIn) trackEventInteraction(event.id, 'viewed');
+  }, [event.id, isLoggedIn]);
+
+  const openDetail = () => {
+    if (isLoggedIn) trackEventInteraction(event.id, 'opened');
+    router.push(`/events/${event.id}`);
+  };
+
+  const shareEvent = async () => {
+    if (isLoggedIn) trackEventInteraction(event.id, 'shared');
+    try {
+      await Share.share({
+        message: `${event.title}\n${dateLabel} · ${timeLabel}`,
+      });
+    } catch {
+      /* user dismissed share sheet */
+    }
+  };
+
+  const toggleSave = () => {
+    if (!isLoggedIn) {
+      router.push('/(auth)/welcome');
+      return;
+    }
+    if (isSaved) unsaveEvent(event.id);
+    else saveEvent(event.id);
+  };
+
+  return (
+    <View style={[styles.recommendedCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={styles.recommendedLeftCol}>
+        <Pressable onPress={openDetail} style={styles.recommendedImageWrap}>
+          {event.coverImageUrl ? (
+            <Image
+              source={{ uri: event.coverImageUrl }}
+              style={coverBannerImageStyle}
+              resizeMode="cover"
+            />
+          ) : (
+            <CoverPlaceholder
+              letter={event.coverLetter ?? event.title}
+              gradient={(event.coverGradient ?? DEFAULT_COVER_GRADIENT) as readonly [string, string]}
+              borderRadius={12}
+              style={styles.coverBannerFill}
+              letterSize={36}
+            />
+          )}
+        </Pressable>
+        <View style={styles.recommendedActionsRow}>
+          <TouchableOpacity
+            style={styles.recommendedActionBtn}
+            onPress={() => void shareEvent()}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Share event"
+          >
+            <Feather name="share-2" size={15} color="#9CA3AF" />
+            <Text style={styles.recommendedActionText}>Share</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.recommendedActionBtn}
+            onPress={toggleSave}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? 'Remove bookmark' : 'Save event'}
+          >
+            <Ionicons
+              name={isSaved ? 'bookmark' : 'bookmark-outline'}
+              size={16}
+              color={isSaved ? colors.primary : '#9CA3AF'}
+            />
+            <Text style={[styles.recommendedActionText, isSaved && { color: colors.primary }]}>
+              {isSaved ? 'Saved' : 'Save'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <Pressable onPress={openDetail} style={styles.recommendedRightCol}>
+        <View style={styles.recommendedCategoryPill}>
+          <Text style={styles.recommendedCategoryText}>{categoryLabel}</Text>
+        </View>
+        <Text numberOfLines={1} style={[styles.recommendedCardTitle, { color: colors.text }]}>
+          {event.title}
+        </Text>
+        <View style={styles.recommendedMetaRow}>
+          <Ionicons name="calendar-outline" size={14} color="#9CA3AF" />
+          <Text numberOfLines={1} style={styles.recommendedMetaText}>
+            {dateLabel}
+          </Text>
+        </View>
+        <View style={styles.recommendedMetaRow}>
+          <Ionicons name="time-outline" size={14} color="#9CA3AF" />
+          <Text numberOfLines={1} style={styles.recommendedMetaText}>
+            {timeLabel}
+          </Text>
+        </View>
+        <View style={styles.recommendedMetaRow}>
+          <Ionicons name="location-outline" size={14} color="#9CA3AF" />
+          <Text numberOfLines={1} style={styles.recommendedMetaText}>
+            {locationLabel}
+          </Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+function HomeMyEventCard({
+  event,
+  activeTab,
+  cardWidth,
+}: {
+  event: EventCardModel;
+  activeTab: HomeEventTab;
+  cardWidth?: number;
+}) {
+  const colors = useThemeColors();
+  const router = useGuardedRouter();
+  const startsAtLabel = event.startsAt
+    ? new Date(event.startsAt).toLocaleString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      })
+    : 'Date TBA';
+  const timeLabel = event.startsAt
+    ? new Date(event.startsAt).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })
+    : 'Time TBA';
+  const goingLabel = `${Math.max(0, Number(event.goingCount) || 0)} going`;
+  const showGoingBadge = activeTab === 'Joined' || Boolean((event as { isJoined?: boolean }).isJoined);
+  const imageHeight = cardWidth ? Math.round(cardWidth * 0.62) : 176;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.92}
+      style={[
+        styles.myEventCard,
+        cardWidth ? { width: cardWidth } : null,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+      onPress={() => router.push(`/events/${event.id}`)}
+    >
+      <View style={[styles.myEventImageWrap, { height: imageHeight }]}>
+        {event.coverImageUrl ? (
+          <Image
+            source={{ uri: event.coverImageUrl }}
+            style={coverBannerImageStyle}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[styles.myEventImageFallback, { backgroundColor: colors.backgroundMuted }]}>
+            <Text style={[styles.myEventFallbackLetter, { color: colors.textSecondary }]}>
+              {(event.coverLetter || event.title || '?').trim().charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
+        {showGoingBadge ? (
+          <View style={styles.myEventBadge}>
+            <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+            <Text style={styles.myEventBadgeText}>Joined</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.myEventBody}>
+        <Text numberOfLines={2} style={[styles.myEventTitle, { color: colors.text }]}>
+          {event.title}
+        </Text>
+        <View style={styles.myEventMetaRow}>
+          <Ionicons name="calendar-outline" size={13} color={colors.textSecondary} />
+          <Text numberOfLines={1} style={[styles.myEventMetaText, { color: colors.textSecondary }]}>
+            {startsAtLabel}
+          </Text>
+        </View>
+        <View style={styles.myEventMetaRow}>
+          <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
+          <Text numberOfLines={1} style={[styles.myEventMetaText, { color: colors.textSecondary }]}>
+            {timeLabel}
+          </Text>
+        </View>
+        <View style={styles.myEventMetaRow}>
+          <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
+          <Text numberOfLines={1} style={[styles.myEventMetaText, { color: colors.textSecondary }]}>
+            {event.locationName || event.categoryName || 'Near you'}
+          </Text>
+        </View>
+        <View style={styles.myEventFooter}>
+          <View style={styles.myEventGoingWrap}>
+            <Ionicons name="people-outline" size={14} color={colors.textSecondary} />
+            <Text style={[styles.myEventGoingText, { color: colors.textSecondary }]}>{goingLabel}</Text>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function GuestUpcomingSection({
+  events,
+  cardWidth,
+  onSeeAll,
+}: {
+  events: EventCardModel[];
+  cardWidth: number;
+  onSeeAll: () => void;
+}) {
+  const colors = useThemeColors();
+  const router = useGuardedRouter();
+
+  return (
+    <View style={styles.guestUpcomingSection}>
+      <View style={styles.guestUpcomingHead}>
+        <Text style={[styles.guestUpcomingTitle, { color: colors.text }]}>Upcoming Events</Text>
+        {events.length > 2 ? (
+          <TouchableOpacity activeOpacity={0.8} onPress={onSeeAll}>
+            <Text style={[styles.guestUpcomingSeeAll, { color: colors.primary }]}>See all</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {events.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.myEventsRow}
+          nestedScrollEnabled
+        >
+          {events.map((event) => (
+            <HomeMyEventCard
+              key={`guest-upcoming-${event.id}`}
+              event={event}
+              activeTab="Upcoming"
+              cardWidth={cardWidth}
+            />
+          ))}
+        </ScrollView>
+      ) : (
+        <View style={[styles.emptyWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Image source={NO_EVENTS_IMAGE} style={styles.emptyIllustration} resizeMode="contain" />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No upcoming events</Text>
+          <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>
+            Discover events happening near you.
+          </Text>
+          <TouchableOpacity
+            style={[styles.emptyCta, { backgroundColor: colors.primary }]}
+            activeOpacity={0.9}
+            onPress={() => router.push('/(tabs)/explore')}
+          >
+            <Text style={styles.emptyCtaText}>Explore Events</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function getEventGoingCount(event: EventCardModel): number {
+  return Math.max(0, Number(event.goingCount) || 0);
+}
+
+function formatPopularAttendingLabel(count: number): string {
+  if (count >= 1000) {
+    const thousands = count / 1000;
+    const label = thousands % 1 === 0 ? `${thousands.toFixed(0)}k` : `${thousands.toFixed(1)}k`;
+    return `+${label} attending`;
+  }
+  return `+${count} attending`;
+}
+
+function scorePopularEvent(event: EventCardModel): number {
+  const going = getEventGoingCount(event);
+  const likes = Math.max(0, Number(event.likeCount) || 0);
+  const savesSignal = Math.max(0, Number((event as { saveCount?: number }).saveCount) || 0);
+  return going * 10 + likes * 3 + savesSignal;
+}
+
+function PopularHeroCard({ event }: { event: EventCardModel | null }) {
+  const router = useGuardedRouter();
+  const colors = useThemeColors();
+  if (!event) return null;
+
+  const goingCount = getEventGoingCount(event);
+  const showMostAttendedBadge = goingCount >= POPULAR_MIN_ATTENDEES;
+  const subtitle =
+    String(event.details || event.description || '').trim() ||
+    (event.categoryName ? `Join others exploring ${event.categoryName.toLowerCase()}.` : 'Join others at this event.');
+  const previews = event.attendeePreviews?.filter(Boolean).slice(0, 3) ?? [];
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.92}
+      style={[styles.popularHeroCard, { borderColor: colors.border }]}
+      onPress={() => router.push(`/events/${event.id}`)}
+    >
+      <View style={styles.popularHeroImageWrap}>
+        {event.coverImageUrl ? (
+          <Image
+            source={{ uri: event.coverImageUrl }}
+            style={coverBannerImageStyle}
+            resizeMode="cover"
+          />
+        ) : (
+          <LinearGradient
+            colors={['#0F172A', '#1E3A8A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.coverBannerFill}
+          />
+        )}
+        <LinearGradient
+          colors={['rgba(15,23,42,0.15)', 'rgba(15,23,42,0.82)']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.popularHeroOverlay}
+        />
+      </View>
+
+      {showMostAttendedBadge ? (
+        <View style={styles.popularMostAttendedChip}>
+          <Ionicons name="people" size={11} color="#FFFFFF" />
+          <Text style={styles.popularMostAttendedText}>Most attended</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.popularHeroContent}>
+        <View style={styles.popularHeroCopy}>
+          <Text numberOfLines={2} style={styles.popularHeroTitle}>
+            {event.title}
+          </Text>
+          <Text numberOfLines={2} style={styles.popularHeroSubtitle}>
+            {subtitle}
+          </Text>
+        </View>
+
+        <View style={styles.popularHeroFooter}>
+          <View style={styles.popularAttendingRow}>
+            {previews.length ? (
+              <View style={styles.popularAvatarStack}>
+                {previews.map((preview, index) => (
+                  <View
+                    key={preview.userId != null ? String(preview.userId) : `${preview.name}-${index}`}
+                    style={index > 0 ? styles.popularAvatarOverlap : undefined}
+                  >
+                    <MemberInitialAvatar name={preview.name} size={28} borderWidth={2} />
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.popularAvatarStack}>
+                {[0, 1, 2].map((index) => (
+                  <View key={index} style={[styles.popularAvatarPlaceholder, index > 0 && styles.popularAvatarOverlap]} />
+                ))}
+              </View>
+            )}
+            <Text style={styles.popularAttendingText}>{formatPopularAttendingLabel(goingCount)}</Text>
+          </View>
+
+          <View style={styles.popularCtaPill}>
+            <Text style={[styles.popularCtaText, { color: colors.primary }]}>View Event</Text>
+            <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 function dedupeEventsById(items: EventCardModel[]): EventCardModel[] {
   const seen = new Set<string>();
@@ -52,8 +733,12 @@ function isPastEvent(event: EventCardModel): boolean {
 }
 
 function HomeScreen() {
+  const colors = useThemeColors();
+  const router = useGuardedRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const { user, setUser, isLoggedIn } = useAuth();
   const isGuest = !isLoggedIn;
+  const guestEventCardWidth = Math.floor((screenWidth - spacing.md * 2 - spacing.sm) / 2);
 
   useFocusEffect(
     useCallback(() => {
@@ -78,8 +763,32 @@ function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [events, setEvents] = useState<EventCardModel[]>([]);
+  const [recommendedEvents, setRecommendedEvents] = useState<EventCardModel[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const hasCompletedInitialLoadRef = useRef(false);
+
+  const loadRecommended = useCallback(
+    async (upcomingPool: EventCardModel[], options?: { fallbackLabels?: string[]; fallbackIds?: number[]; fallbackLocation?: string }) => {
+      if (!isLoggedIn) {
+        setRecommendedEvents([]);
+        return;
+      }
+      try {
+        const { items } = await getRecommendedEvents({ limit: 8 });
+        setRecommendedEvents(items);
+      } catch {
+        setRecommendedEvents(
+          buildClientRecommendedEvents(
+            upcomingPool,
+            options?.fallbackLabels ?? [],
+            options?.fallbackIds ?? [],
+            options?.fallbackLocation ?? '',
+          ),
+        );
+      }
+    },
+    [isLoggedIn],
+  );
 
   const loadEvents = useCallback(async (options?: { manual?: boolean }) => {
     if (options?.manual) {
@@ -105,7 +814,27 @@ function HomeScreen() {
     setLoadError(null);
     try {
       const { items } = await getEvents(HOME_EVENTS_PARAMS);
-      setEvents(dedupeEventsById(items as EventCardModel[]));
+      const deduped = dedupeEventsById(items as EventCardModel[]);
+      setEvents(deduped);
+      if (isLoggedIn) {
+        const interestLabels = normalizeInterestLabels(
+          (user as { interests?: unknown } | null)?.interests,
+        );
+        const interestIds = normalizeInterestIds(
+          (user as { interests?: unknown } | null)?.interests,
+        );
+        const userLocation = pickLocationLabel(user) || '';
+        const upcomingPool = sortByStartsSoonest(
+          deduped.filter((event) => !isPastEvent(event)),
+        );
+        await loadRecommended(upcomingPool, {
+          fallbackLabels: interestLabels,
+          fallbackIds: interestIds,
+          fallbackLocation: userLocation,
+        });
+      } else {
+        setRecommendedEvents([]);
+      }
     } catch {
       setLoadError('Could not load events. Pull to retry later.');
     } finally {
@@ -113,29 +842,13 @@ function HomeScreen() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [isLoggedIn, loadRecommended, user]);
 
   useFocusEffect(
     useCallback(() => {
       loadEvents();
     }, [loadEvents]),
   );
-
-  const activeData = useMemo(() => {
-    switch (activeTab) {
-      case 'Past':
-        return events.filter((event) => isPastEvent(event));
-      case 'Going':
-        if (isGuest) return [];
-        return events.filter((event: any) => event.isJoined);
-      case 'Saved':
-        if (isGuest) return [];
-        return events.filter((e) => savedEventIds.includes(e.id));
-      case 'Upcoming':
-      default:
-        return events.filter((event) => !isPastEvent(event));
-    }
-  }, [activeTab, savedEventIds, events, isGuest]);
 
   useEffect(() => {
     if (isGuest && !GUEST_HOME_TABS.includes(activeTab)) {
@@ -145,9 +858,76 @@ function HomeScreen() {
 
   const displayName = pickDisplayName(user) || 'My profile';
   const location = pickLocationLabel(user) || 'Your location';
+  const interestLabels = useMemo(
+    () => normalizeInterestLabels((user as { interests?: unknown } | null)?.interests),
+    [user],
+  );
+  const upcomingEvents = useMemo(
+    () => sortByStartsSoonest(events.filter((event) => !isPastEvent(event))),
+    [events],
+  );
+  const pastEvents = useMemo(() => events.filter((event) => isPastEvent(event)), [events]);
+  const joinedUpcomingEvents = useMemo(
+    () => upcomingEvents.filter((event: any) => Boolean(event.isJoined)),
+    [upcomingEvents],
+  );
+  const upcomingNotJoinedEvents = useMemo(
+    () => upcomingEvents.filter((event: any) => !event.isJoined),
+    [upcomingEvents],
+  );
+  const savedEvents = useMemo(
+    () => events.filter((event) => savedEventIds.includes(event.id)),
+    [events, savedEventIds],
+  );
+  const activeData = useMemo(() => {
+    if (isGuest) return [];
 
-  const renderItem: ListRenderItem<EventCardModel> = ({ item }) => (
-    <EventCard event={item} variant="feed" homeTab={activeTab} />
+    switch (activeTab) {
+      case 'Past':
+        return pastEvents;
+      case 'Joined':
+        return joinedUpcomingEvents;
+      case 'Saved':
+        return savedEvents;
+      case 'Upcoming':
+      default:
+        return upcomingNotJoinedEvents.length ? upcomingNotJoinedEvents : upcomingEvents;
+    }
+  }, [
+    activeTab,
+    isGuest,
+    pastEvents,
+    joinedUpcomingEvents,
+    savedEvents,
+    upcomingNotJoinedEvents,
+    upcomingEvents,
+  ]);
+
+  const popularEvents = useMemo(() => {
+    const eligible = upcomingEvents.filter((event) => getEventGoingCount(event) >= POPULAR_MIN_ATTENDEES);
+    return rankEventsByScore(eligible, scorePopularEvent).slice(0, 6);
+  }, [upcomingEvents]);
+  const popularHeroEvent = popularEvents[0] ?? null;
+  const discoverMoreEvents = useMemo(() => {
+    const usedIds = new Set<string>();
+    for (const event of activeData) usedIds.add(eventId(event));
+    for (const event of recommendedEvents.slice(0, 2)) usedIds.add(eventId(event));
+    if (popularHeroEvent) usedIds.add(eventId(popularHeroEvent));
+
+    return sortByNewestFirst(
+      upcomingEvents.filter((event) => !usedIds.has(eventId(event))),
+    ).slice(0, 8);
+  }, [activeData, recommendedEvents, popularHeroEvent, upcomingEvents]);
+  const insightSections = useMemo<HomeInsightSection[]>(
+    () => [
+      {
+        id: 'discover',
+        title: 'Discover More',
+        subtitle: 'Newest upcoming events not shown above',
+        items: discoverMoreEvents,
+      },
+    ],
+    [discoverMoreEvents],
   );
 
   if (isLoading) {
@@ -167,9 +947,9 @@ function HomeScreen() {
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
         <FlatList
-          data={activeData}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderItem}
+          data={[]}
+          keyExtractor={(_, index) => `home-${index}`}
+          renderItem={() => null}
           overScrollMode="never"
           refreshControl={
             <RefreshControl
@@ -183,38 +963,92 @@ function HomeScreen() {
           }
           ListHeaderComponent={
             <>
-              <HomeHeader displayName={displayName} location={location} isGuest={isGuest} />
-              <YourEventsSection
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-                isGuest={isGuest}
-              />
+              <HomeHeader displayName={displayName} isGuest={isGuest} />
+              {isGuest ? (
+                <GuestUpcomingSection
+                  events={upcomingEvents}
+                  cardWidth={guestEventCardWidth}
+                  onSeeAll={() => router.push('/(tabs)/explore')}
+                />
+              ) : (
+                <>
+                  <YourEventsSection
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    isGuest={isGuest}
+                  />
+                  {activeData.length ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.myEventsRow}
+                    >
+                      {activeData.map((event) => (
+                        <HomeMyEventCard
+                          key={`active-${event.id}`}
+                          event={event}
+                          activeTab={activeTab}
+                        />
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <View style={[styles.emptyWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Image source={NO_EVENTS_IMAGE} style={styles.emptyIllustration} resizeMode="contain" />
+                      <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                        {activeTab === 'Upcoming' ? 'No upcoming events' : `No ${activeTab.toLowerCase()} events`}
+                      </Text>
+                      <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>
+                        {activeTab === 'Upcoming'
+                          ? 'Discover events happening near you.'
+                          : "You don't have any events right now. Let's find some!"}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.emptyCta, { backgroundColor: colors.primary }]}
+                        activeOpacity={0.9}
+                        onPress={() => router.push('/(tabs)/explore')}
+                      >
+                        <Text style={styles.emptyCtaText}>Explore Events</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
+              )}
             </>
           }
-          ListEmptyComponent={
-            loadError ? (
-              <EmptyState
-                title="Could not load events"
-                message={loadError}
-                icon="alert-circle"
-              />
-            ) : activeTab === 'Upcoming' ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyTitle}>No upcoming events</Text>
-                <Text style={styles.emptyMessage}>
-                  There are no upcoming events right now. Check Past events or come back soon.
-                </Text>
-                <NoEventsIllustration width={300} height={240} />
-              </View>
-            ) : (
-              <EmptyState
-                title={`No ${activeTab.toLowerCase()} events`}
-                message="You don't have any events right now. Let's find some!"
-                icon="calendar"
-              />
-            )
-          }
+          ListEmptyComponent={loadError ? <EmptyState title="Could not load events" message={loadError} icon="alert-circle" /> : null}
           ItemSeparatorComponent={() => <View style={styles.feedSeparator} />}
+          ListFooterComponent={
+            !loadError ? (
+              <>
+                {!isGuest && recommendedEvents.length > 0 ? (
+                  <View style={styles.recommendedSection}>
+                    <View style={styles.recommendedHead}>
+                      <Text style={[styles.recommendedTitle, { color: colors.text }]}>Recommended For You</Text>
+                      {recommendedEvents.length > 2 ? (
+                        <TouchableOpacity activeOpacity={0.8} onPress={() => router.push('/(tabs)/explore')}>
+                          <Text style={[styles.recommendedSeeAll, { color: colors.primary }]}>See all</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                    <View style={styles.recommendedList}>
+                      {recommendedEvents.slice(0, 2).map((event) => (
+                        <RecommendedMiniCard key={`rec-${event.id}`} event={event} />
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+                {popularHeroEvent ? (
+                  <View style={styles.popularSection}>
+                    <View style={styles.popularSectionHead}>
+                      <Text style={[styles.popularSectionTitle, { color: colors.text }]}>Popular This Week</Text>
+                    </View>
+                    <PopularHeroCard event={popularHeroEvent} />
+                  </View>
+                ) : null}
+                {!isGuest ? <HomeInsightSections sections={insightSections} /> : null}
+              </>
+            ) : null
+          }
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
@@ -229,35 +1063,651 @@ const styles = StyleSheet.create({
   },
   listContent: {
     flexGrow: 1,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.xl + 16,
   },
   feedSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: spacing.md,
-    marginTop: 4,
-    marginBottom: 16,
+    height: 8,
   },
-  emptyWrap: {
+  myEventsRow: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    gap: spacing.sm,
+  },
+  guestUpcomingSection: {
+    paddingBottom: spacing.xs,
+  },
+  guestUpcomingHead: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  guestUpcomingTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  guestUpcomingSeeAll: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  myEventCard: {
+    width: 342,
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  myEventImageWrap: {
+    width: '100%',
+    height: 176,
+    backgroundColor: '#E5E7EB',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  myEventImageFallback: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: spacing.xl,
-    paddingHorizontal: spacing.lg,
+  },
+  myEventFallbackLetter: {
+    fontSize: 34,
+    fontWeight: '700',
+  },
+  myEventBadge: {
+    position: 'absolute',
+    left: 10,
+    top: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(240,253,244,0.95)',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  myEventBadgeText: {
+    color: '#15803D',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+  },
+  myEventBody: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  myEventTitle: {
+    fontSize: 36 / 2,
+    lineHeight: 24,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  myEventMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  myEventMetaText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '500',
+    flex: 1,
+    minWidth: 0,
+  },
+  myEventFooter: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  myEventGoingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  myEventGoingText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  recommendedSection: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  recommendedHead: {
+    marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  recommendedTitle: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  recommendedSeeAll: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  recommendedList: {
+    gap: 12,
+  },
+  recommendedEmptyWrap: {
+    minHeight: 62,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recommendedEmptyText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  recommendedCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  recommendedLeftCol: {
+    width: 145,
+    flexShrink: 0,
+  },
+  recommendedImageWrap: {
+    width: 145,
+    height: 95,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#E5E7EB',
+    position: 'relative',
+  },
+  coverBannerFill: {
+    width: '100%',
+    height: '100%',
+  },
+  recommendedActionsRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  recommendedActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+  },
+  recommendedActionText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+    color: '#9CA3AF',
+  },
+  recommendedRightCol: {
+    flex: 1,
+    minWidth: 0,
+    paddingTop: 2,
+    gap: 6,
+  },
+  recommendedCategoryPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFEFE5',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  recommendedCategoryText: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    color: '#FF7B3F',
+  },
+  recommendedCardTitle: {
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  recommendedMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  recommendedMetaText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  spotlightWrap: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    borderRadius: 20,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    shadowColor: '#BE123C',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.26,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  spotlightGlowOne: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 30,
+    backgroundColor: 'rgba(37,99,235,0.2)',
+    right: -36,
+    top: -28,
+    transform: [{ rotate: '-12deg' }],
+  },
+  spotlightGlowTwo: {
+    position: 'absolute',
+    width: 114,
+    height: 114,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    left: -30,
+    bottom: -26,
+    transform: [{ rotate: '12deg' }],
+  },
+  spotlightTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  spotlightCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  spotlightKicker: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  spotlightTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '800',
+    letterSpacing: -0.25,
+  },
+  spotlightSubtitle: {
+    marginTop: 6,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+  },
+  spotlightMetricsRow: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  spotlightMetricCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.3)',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  spotlightMetricValue: {
+    color: '#FFFFFF',
+    fontSize: 21,
+    lineHeight: 24,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  spotlightMetricLabel: {
+    marginTop: 2,
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  spotlightCta: {
+    marginTop: spacing.md,
+    minHeight: 42,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  spotlightCtaText: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.1,
+  },
+  emptyWrap: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  emptyIllustration: {
+    width: 132,
+    height: 132,
+    marginBottom: 2,
   },
   emptyTitle: {
-    marginTop: spacing.md,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#111827',
     textAlign: 'center',
   },
   emptyMessage: {
-    marginTop: spacing.sm,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     textAlign: 'center',
-    color: '#6B7280',
+    marginBottom: 8,
+  },
+  emptyCta: {
+    minHeight: 38,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCtaText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  insightsWrap: {
+    marginTop: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  insightSection: {
+    marginBottom: spacing.lg,
+  },
+  insightSectionHead: {
+    marginHorizontal: spacing.md,
     marginBottom: spacing.md,
+    gap: 6,
+  },
+  insightSectionKicker: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  insightSectionKickerText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  insightSectionTitle: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  insightSectionSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  insightRowContent: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
+  },
+  insightCard: {
+    width: 264,
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  insightCover: {
+    width: '100%',
+    height: 134,
+    backgroundColor: '#F2F4F7',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  insightCoverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15,23,42,0.14)',
+  },
+  insightCategoryPill: {
+    position: 'absolute',
+    left: 10,
+    bottom: 9,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  insightCategoryText: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '700',
+    color: '#BE123C',
+    letterSpacing: 0.2,
+  },
+  insightCoverFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightCoverLetter: {
+    fontSize: 30,
+    fontWeight: '700',
+  },
+  insightBody: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  insightActionRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  insightArrowCta: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+  },
+  insightTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '700',
+    minHeight: 40,
+  },
+  insightMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  insightMetaText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  popularSection: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  popularSectionHead: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    gap: 2,
+  },
+  popularSectionTitle: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  popularSectionSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  popularHeroCard: {
+    marginHorizontal: spacing.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 4,
+    position: 'relative',
+  },
+  popularHeroImageWrap: {
+    width: '100%',
+    height: 182,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#E5E7EB',
+  },
+  popularHeroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  popularHeroContent: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    top: 14,
+    bottom: 14,
+    justifyContent: 'space-between',
+  },
+  popularMostAttendedChip: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    zIndex: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15,23,42,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  popularMostAttendedText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+  },
+  popularHeroCopy: {
+    paddingRight: 96,
+    gap: 6,
+  },
+  popularHeroTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  popularHeroSubtitle: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  popularHeroFooter: {
+    gap: 12,
+  },
+  popularAttendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  popularAvatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  popularAvatarOverlap: {
+    marginLeft: -10,
+  },
+  popularAvatarPlaceholder: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  popularAttendingText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  popularCtaPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  popularCtaText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '800',
   },
 });
 

@@ -19,7 +19,6 @@ import onboardingApi from "@/api/onboarding";
 import useAuth from "@/auth/useAuth";
 import { mergeAuthenticatedUserFromMe } from "@/auth/mergeAuthenticatedUserFromMe";
 import { logApiError } from "@/api/logApiError";
-
 import GenderSvg from "@/assets/gender.svg";
 
 const GENDERS = [

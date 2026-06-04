@@ -14,6 +14,9 @@ import { SavedEvent } from 'src/database/entities/saved-event.entity';
 import { EventProgramRoster } from 'src/database/entities/event-program-roster.entity';
 import { EventCohost } from 'src/database/entities/event-cohost.entity';
 import { EventLike } from 'src/database/entities/event-like.entity';
+import { MemberInterest } from 'src/database/entities/member-interest.entity';
+import { MemberEventInteraction } from 'src/database/entities/member-event-interaction.entity';
+import type { MemberEventInteractionAction } from 'src/database/entities/member-event-interaction.entity';
 import {
   BadRequestException,
   ForbiddenException,
@@ -23,6 +26,12 @@ import { QueryFailedError } from 'typeorm';
 
 const ROLE_ORGANIZER = 2;
 const ROLE_ADMIN = 3;
+
+const BROWSING_TASTE_WEIGHTS: Record<'viewed' | 'opened' | 'shared', number> = {
+  viewed: 0.5,
+  opened: 1,
+  shared: 2,
+};
 
 function canViewerSeeHiddenProfile(viewer?: { userId?: number; role?: number } | null): boolean {
   const role = viewer?.role != null ? Number(viewer.role) : null;
@@ -52,6 +61,10 @@ export class EventService {
     private eventCohostRepo: Repository<EventCohost>,
     @InjectRepository(EventLike)
     private eventLikeRepo: Repository<EventLike>,
+    @InjectRepository(MemberInterest)
+    private memberInterestRepo: Repository<MemberInterest>,
+    @InjectRepository(MemberEventInteraction)
+    private memberEventInteractionRepo: Repository<MemberEventInteraction>,
   ) {}
 
   private ensureMember(user: User) {
@@ -109,6 +122,7 @@ export class EventService {
       eventFormat: event.eventFormat ?? null,
       likeCount,
       isLiked,
+      createdAt: event.createdAt,
     };
   }
 
@@ -840,6 +854,342 @@ export class EventService {
     };
   }
 
+  private getLocationMatchScoreForEvent(event: Event, userLocation: string): number {
+    const locationText = String(userLocation || '').trim().toLowerCase();
+    if (!locationText) return 0;
+
+    const eventLocation = String(event.locationName || '').trim().toLowerCase();
+    const locationParts = locationText
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    if (
+      eventLocation &&
+      locationParts.some(
+        (part) => part.includes(eventLocation) || eventLocation.includes(part),
+      )
+    ) {
+      return 1;
+    }
+    if (locationParts.some((part) => part.length > 2 && eventLocation.includes(part))) {
+      return 0.65;
+    }
+    return 0;
+  }
+
+  private async recordMemberEventInteraction(
+    memberId: number,
+    eventId: number,
+    action: MemberEventInteractionAction,
+    interestId?: number | null,
+  ): Promise<void> {
+    const row = this.memberEventInteractionRepo.create({
+      memberId,
+      eventId,
+      interestId: interestId ?? null,
+      action,
+      createdAt: new Date(),
+    });
+    await this.memberEventInteractionRepo.save(row);
+  }
+
+  async trackEventInteraction(
+    memberId: number,
+    eventId: number,
+    action: MemberEventInteractionAction,
+  ) {
+    const member = await this.userRepo.findOne({ where: { id: memberId } });
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+    this.ensureMember(member);
+
+    const event = await this.eventRepo.findOne({ where: { id: eventId } });
+    if (!event || event.status !== 'published') {
+      throw new NotFoundException('Event not found');
+    }
+
+    await this.recordMemberEventInteraction(
+      memberId,
+      eventId,
+      action,
+      event.interestId,
+    );
+    return { tracked: true, action, eventId };
+  }
+
+  private buildNormalizedTasteProfile(
+    explicitInterestIds: number[],
+    attendanceByInterest: Map<number, number>,
+    savedByInterest: Map<number, number>,
+    browsingByInterest: Map<number, number>,
+  ): Map<number, number> {
+    const taste = new Map<number, number>();
+    const explicitSet = new Set(explicitInterestIds);
+
+    for (const interestId of explicitInterestIds) {
+      taste.set(interestId, (taste.get(interestId) ?? 0) + 1);
+    }
+
+    attendanceByInterest.forEach((count, interestId) => {
+      taste.set(interestId, (taste.get(interestId) ?? 0) + count * 0.35);
+    });
+
+    savedByInterest.forEach((count, interestId) => {
+      let boost = count * 0.25;
+      if (!explicitSet.has(interestId)) {
+        boost += count * 0.2;
+      }
+      taste.set(interestId, (taste.get(interestId) ?? 0) + boost);
+    });
+
+    browsingByInterest.forEach((weightedScore, interestId) => {
+      taste.set(interestId, (taste.get(interestId) ?? 0) + weightedScore * 0.12);
+    });
+
+    const max = Math.max(...Array.from(taste.values()), 1);
+    const normalized = new Map<number, number>();
+    taste.forEach((value, interestId) => {
+      normalized.set(interestId, value / max);
+    });
+    return normalized;
+  }
+
+  private scoreRecommendedCandidate(
+    event: Event,
+    tasteProfile: Map<number, number>,
+    userLocation: string,
+  ): number {
+    const tasteScore = tasteProfile.get(event.interestId) ?? 0;
+    const locationScore = this.getLocationMatchScoreForEvent(event, userLocation);
+    return tasteScore * 0.85 + locationScore * 0.15;
+  }
+
+  async getRecommendedEvents(
+    memberId: number,
+    viewerRole?: number,
+    limit = 8,
+  ) {
+    const member = await this.userRepo.findOne({ where: { id: memberId } });
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+    this.ensureMember(member);
+
+    const safeLimit = Math.min(20, Math.max(1, limit));
+    const now = new Date();
+
+    const explicitInterestRows = await this.memberInterestRepo.manager
+      .createQueryBuilder()
+      .select('mi.interest_id', 'interestId')
+      .from('member_interests', 'mi')
+      .where('mi.member_id = :memberId', { memberId })
+      .getRawMany<{ interestId: number | string }>();
+    const explicitInterestIds = explicitInterestRows
+      .map((row) => Number(row.interestId))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    const explicitInterestSet = new Set(explicitInterestIds);
+
+    const attendanceRows = await this.eventRegistrationRepo.manager
+      .createQueryBuilder()
+      .select('event.interest_id', 'interestId')
+      .addSelect('COUNT(*)', 'count')
+      .from('event_registrations', 'reg')
+      .innerJoin('events', 'event', 'event.id = reg.event_id')
+      .where('reg.member_id = :memberId', { memberId })
+      .andWhere('event.status = :status', { status: 'published' })
+      .groupBy('event.interest_id')
+      .getRawMany<{ interestId: number | string; count: string }>();
+
+    const savedInterestRows = await this.savedEventRepo.manager
+      .createQueryBuilder()
+      .select('event.interest_id', 'interestId')
+      .addSelect('COUNT(*)', 'count')
+      .from('saved_events', 'saved')
+      .innerJoin('events', 'event', 'event.id = saved.event_id')
+      .where('saved.user_id = :memberId', { memberId })
+      .andWhere('event.status = :status', { status: 'published' })
+      .groupBy('event.interest_id')
+      .getRawMany<{ interestId: number | string; count: string }>();
+
+    const attendanceByInterest = new Map<number, number>();
+    attendanceRows.forEach((row) => {
+      const interestId = Number(row.interestId);
+      if (!Number.isFinite(interestId) || interestId <= 0) return;
+      attendanceByInterest.set(interestId, parseInt(String(row.count), 10) || 0);
+    });
+
+    const savedByInterest = new Map<number, number>();
+    savedInterestRows.forEach((row) => {
+      const interestId = Number(row.interestId);
+      if (!Number.isFinite(interestId) || interestId <= 0) return;
+      savedByInterest.set(interestId, parseInt(String(row.count), 10) || 0);
+    });
+
+    const browsingRows = await this.memberEventInteractionRepo.manager
+      .createQueryBuilder()
+      .select('interaction.interest_id', 'interestId')
+      .addSelect('interaction.action', 'action')
+      .addSelect('COUNT(*)', 'count')
+      .from('member_event_interactions', 'interaction')
+      .where('interaction.member_id = :memberId', { memberId })
+      .andWhere('interaction.action IN (:...actions)', {
+        actions: ['viewed', 'opened', 'shared'],
+      })
+      .andWhere('interaction.interest_id IS NOT NULL')
+      .groupBy('interaction.interest_id')
+      .addGroupBy('interaction.action')
+      .getRawMany<{ interestId: number | string; action: string; count: string }>();
+
+    const browsingByInterest = new Map<number, number>();
+    browsingRows.forEach((row) => {
+      const interestId = Number(row.interestId);
+      const action = String(row.action) as keyof typeof BROWSING_TASTE_WEIGHTS;
+      const weight = BROWSING_TASTE_WEIGHTS[action];
+      if (!Number.isFinite(interestId) || interestId <= 0 || !weight) return;
+      const count = parseInt(String(row.count), 10) || 0;
+      browsingByInterest.set(
+        interestId,
+        (browsingByInterest.get(interestId) ?? 0) + count * weight,
+      );
+    });
+
+    const tasteProfile = this.buildNormalizedTasteProfile(
+      explicitInterestIds,
+      attendanceByInterest,
+      savedByInterest,
+      browsingByInterest,
+    );
+
+    const interestNameRows = await this.interestRepo.find({
+      select: ['id', 'name'],
+    });
+    const interestNames = new Map(
+      interestNameRows.map((row) => [row.id, row.name]),
+    );
+
+    const candidateEvents = await this.eventRepo
+      .createQueryBuilder('event')
+      .where('event.status = :status', { status: 'published' })
+      .andWhere('event.startDatetime >= :now', { now })
+      .andWhere(
+        `NOT EXISTS (
+          SELECT 1
+          FROM event_registrations reg
+          WHERE reg.event_id = event.id
+            AND reg.member_id = :memberId
+        )`,
+        { memberId },
+      )
+      .orderBy('event.startDatetime', 'ASC')
+      .take(120)
+      .getMany();
+
+    const candidateIds = candidateEvents.map((event) => event.id);
+    const countMap = new Map<number, number>();
+    if (candidateIds.length > 0) {
+      const countRows = await this.eventRegistrationRepo.manager
+        .createQueryBuilder()
+        .select('reg.event_id', 'eventId')
+        .addSelect('COUNT(*)', 'cnt')
+        .from('event_registrations', 'reg')
+        .where('reg.event_id IN (:...eventIds)', { eventIds: candidateIds })
+        .groupBy('reg.event_id')
+        .getRawMany<{ eventId: number | string; cnt: string }>();
+      countRows.forEach((row) => {
+        countMap.set(Number(row.eventId), parseInt(String(row.cnt), 10));
+      });
+    }
+
+    const scoredCandidates = candidateEvents
+      .map((event) => ({
+        event,
+        score: this.scoreRecommendedCandidate(
+          event,
+          tasteProfile,
+          member.location ?? '',
+        ),
+      }))
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return (
+          new Date(a.event.startDatetime).getTime() -
+          new Date(b.event.startDatetime).getTime()
+        );
+      });
+
+    const topEvents = scoredCandidates.slice(0, safeLimit).map((row) => row.event);
+    const topEventIds = topEvents.map((event) => event.id);
+
+    const savedRows = await this.savedEventRepo.find({
+      where: { userId: memberId },
+      select: ['eventId'],
+    });
+    const savedIds = new Set(savedRows.map((row) => row.eventId));
+
+    const attendeePreviewMap = await this.buildAttendeePreviewMap(topEventIds, 3, {
+      userId: memberId,
+      role: viewerRole,
+    });
+
+    const likeCountMap = new Map<number, number>();
+    let likedEventIdSet = new Set<number>();
+    if (topEventIds.length > 0) {
+      const likeCountRows = await this.eventLikeRepo.manager
+        .createQueryBuilder()
+        .select('el.event_id', 'eventId')
+        .addSelect('COUNT(*)', 'cnt')
+        .from('event_likes', 'el')
+        .where('el.event_id IN (:...eventIds)', { eventIds: topEventIds })
+        .groupBy('el.event_id')
+        .getRawMany<{ eventId: number | string; cnt: string }>();
+      likeCountRows.forEach((row) => {
+        likeCountMap.set(Number(row.eventId), parseInt(String(row.cnt), 10));
+      });
+
+      const likedRows = await this.eventLikeRepo.manager
+        .createQueryBuilder()
+        .select('el.event_id', 'eventId')
+        .from('event_likes', 'el')
+        .where('el.event_id IN (:...eventIds)', { eventIds: topEventIds })
+        .andWhere('el.member_id = :memberId', { memberId })
+        .getRawMany<{ eventId: number | string }>();
+      likedEventIdSet = new Set(likedRows.map((row) => Number(row.eventId)));
+    }
+
+    const tasteProfileMeta = Array.from(tasteProfile.entries())
+      .map(([interestId, score]) => ({
+        interestId,
+        name: interestNames.get(interestId) ?? 'Unknown',
+        score: Math.round(score * 100) / 100,
+        explicit: explicitInterestSet.has(interestId),
+        attended: attendanceByInterest.get(interestId) ?? 0,
+        saved: savedByInterest.get(interestId) ?? 0,
+        browsed: Math.round((browsingByInterest.get(interestId) ?? 0) * 10) / 10,
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    return {
+      items: topEvents.map((event) =>
+        this.mapEventSummary(
+          event,
+          countMap.get(event.id) ?? 0,
+          false,
+          savedIds.has(event.id),
+          attendeePreviewMap.get(event.id) ?? [],
+          likeCountMap.get(event.id) ?? 0,
+          likedEventIdSet.has(event.id),
+        ),
+      ),
+      meta: {
+        limit: safeLimit,
+        totalCandidates: candidateEvents.length,
+        tasteProfile: tasteProfileMeta,
+      },
+    };
+  }
+
   async getEventById(
     eventId: number,
     currentUserId?: number,
@@ -906,7 +1256,14 @@ export class EventService {
     });
 
     try {
-      return await this.eventRegistrationRepo.save(registration);
+      const savedRegistration = await this.eventRegistrationRepo.save(registration);
+      void this.recordMemberEventInteraction(
+        memberId,
+        event.id,
+        'registered',
+        event.interestId,
+      ).catch(() => undefined);
+      return savedRegistration;
     } catch (error) {
       const mysqlCode = (error as { code?: string })?.code;
       if (error instanceof QueryFailedError && mysqlCode === 'ER_DUP_ENTRY') {
@@ -1008,6 +1365,12 @@ export class EventService {
       savedAt: new Date(),
     });
     await this.savedEventRepo.save(saved);
+    void this.recordMemberEventInteraction(
+      memberId,
+      eventId,
+      'saved',
+      event.interestId,
+    ).catch(() => undefined);
     return { saved: true, message: 'Event saved successfully' };
   }
 

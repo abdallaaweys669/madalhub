@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   FlatList,
+  Image,
   Platform,
   RefreshControl,
   StatusBar,
@@ -12,7 +13,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
 import { Container } from '@/components/common/Container';
@@ -39,8 +39,10 @@ import {
   peekEventsListCache,
 } from '@/api/events';
 import { spacing } from '@/theme';
+import { formatEventScheduleLabels } from '@/utils/formatEventSchedule';
 
-const SECTION_GAP = 14;
+const SECTION_GAP = 8;
+const NO_EVENTS_IMAGE = require('../../assets/no events.png');
 
 const DEFAULT_EXPLORE_CATEGORIES: ExploreCategory[] = [{ id: 'All', icon: 'apps-outline' }];
 const CATEGORY_ICONS: ExploreCategory['icon'][] = [
@@ -128,10 +130,8 @@ function buildExploreParams(args: {
   }
 
   const dateBucket =
-    selectedFilters.date === 'Any time'
-      ? undefined
-      : selectedFilters.date === 'Upcoming'
-        ? 'upcoming'
+    selectedFilters.date === 'Any time' || selectedFilters.date === 'Upcoming'
+      ? 'upcoming'
         : selectedFilters.date === 'Today'
           ? 'today'
           : selectedFilters.date === 'Tomorrow'
@@ -146,12 +146,19 @@ function buildExploreParams(args: {
   return params;
 }
 
+function isEndedExploreEvent(row: ExploreRow): boolean {
+  if (row.eventState === 'ended' || row.eventState === 'closed') return true;
+  const startsAt = new Date(row.startsAt);
+  if (!Number.isFinite(startsAt.getTime())) return false;
+  return startsAt.getTime() < Date.now() && row.eventState !== 'live';
+}
+
 function applyClientFilters(
   rows: ExploreRow[],
   filters: ExploreFilters,
   nearMeCoords: Coordinates | null,
 ): ExploreRow[] {
-  let filteredRows = rows;
+  let filteredRows = rows.filter((row) => !isEndedExploreEvent(row));
 
   if (filters.location === 'Near me' && nearMeCoords) {
     filteredRows = filteredRows.filter((row) => {
@@ -177,31 +184,75 @@ function applyClientFilters(
   });
 }
 
+function formatEventFormatLabel(format?: string | null) {
+  if (!format || format === 'Any') return null;
+  return format.charAt(0).toUpperCase() + format.slice(1);
+}
+
+function buildEventChips(
+  categoryName?: string | null,
+  eventFormat?: string | null,
+  isOnline?: boolean,
+) {
+  const chips: { label: string; type: 'category' | 'format' | 'mode'; variant?: string }[] = [];
+  if (categoryName?.trim()) {
+    chips.push({ label: categoryName.trim(), type: 'category' });
+  }
+  const formatKey = eventFormat && eventFormat !== 'Any' ? String(eventFormat).toLowerCase() : null;
+  const formatLabel = formatEventFormatLabel(eventFormat);
+  if (
+    formatLabel &&
+    !chips.some((chip) => chip.label.toLowerCase() === formatLabel.toLowerCase())
+  ) {
+    chips.push({ label: formatLabel, type: 'format', variant: formatKey ?? undefined });
+  }
+  const modeKey = isOnline ? 'online' : 'in-person';
+  chips.push({
+    label: isOnline ? 'Online' : 'In-person',
+    type: 'mode',
+    variant: modeKey,
+  });
+  return chips;
+}
+
 function mapItemToExploreRow(event: any): ExploreRow {
   const card =
     event?.coverImageUrl !== undefined || event?.coverLetter !== undefined || event?.details !== undefined
       ? event
       : mapApiEventToCard(event);
   const startsAt = card.startsAt ?? event.startsAt ?? new Date().toISOString();
-  const startDate = new Date(startsAt);
-  const datePart = startDate.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-  const timePart = startDate.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  const endsAt = card.endsAt ?? event.endsAt ?? event.endDatetime ?? null;
+  const { dateLabel, timeLabel, dateTimeLabel } = formatEventScheduleLabels(startsAt, endsAt);
   const isOnline = Boolean(card.isOnline ?? event.isOnline);
   const city = card.city ?? event.city ?? '';
+  const locationName =
+    typeof card.locationName === 'string' && card.locationName.trim()
+      ? card.locationName.trim()
+      : typeof event.locationName === 'string' && event.locationName.trim()
+        ? event.locationName.trim()
+        : '';
+  const locationLabel = isOnline
+    ? 'Online'
+    : locationName && city
+      ? `${locationName}, ${city}`
+      : locationName || city || 'Location TBA';
+  const priceAmount = card.priceAmount ?? event.priceAmount ?? null;
+  const priceType = card.priceType ?? event.priceType ?? 'Free';
+  const priceLabel =
+    priceType === 'Paid' && typeof priceAmount === 'number' && priceAmount > 0
+      ? `$${priceAmount.toFixed(priceAmount % 1 === 0 ? 0 : 2)}`
+      : 'Free';
+  const eventFormat = card.eventFormat ?? event.eventFormat ?? null;
+  const categoryName = card.categoryName ?? null;
+  const eventChips = buildEventChips(categoryName, eventFormat, isOnline);
 
   return {
     id: card.id,
     title: card.title,
-    dateTimeLabel: `${datePart.toUpperCase()} • ${timePart}`,
-    location: isOnline ? 'Online' : city,
+    dateTimeLabel,
+    dateLabel,
+    timeLabel,
+    location: locationLabel,
     coverImageUrl: card.coverImageUrl,
     coverLetter: card.coverLetter,
     coverGradient: card.coverGradient,
@@ -213,11 +264,13 @@ function mapItemToExploreRow(event: any): ExploreRow {
     city,
     isOnline,
     priceType: card.priceType ?? event.priceType ?? 'Free',
-    eventFormat: card.eventFormat ?? event.eventFormat ?? null,
+    priceLabel,
+    eventFormat,
     interestId: typeof card.interestId === 'number' ? card.interestId : null,
     statusChip: card.statusChip,
     urgencyLabel: card.urgencyLabel,
-    categoryName: card.categoryName,
+    categoryName,
+    eventChips,
     eventState: card.eventState,
     locationLatitude: Number(card.locationLatitude),
     locationLongitude: Number(card.locationLongitude),
@@ -431,6 +484,8 @@ export default function ExploreScreen() {
     }
   }, [fetchExploreEvents]);
 
+  const sectionTitle = activeCategory === 'All' ? 'All Events' : `${activeCategory} Events`;
+
   const renderItem: ListRenderItem<ExploreRow> = useCallback(
     ({ item }) => <ExploreEventCard event={item} />,
     [],
@@ -465,7 +520,6 @@ export default function ExploreScreen() {
             activeId={activeCategory}
             onChange={setActiveCategory}
           />
-          <View style={styles.sectionSpacer} />
         </View>
 
         <FlatList
@@ -478,11 +532,17 @@ export default function ExploreScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF7B3F" />
           }
+          ListHeaderComponent={
+            rows.length ? <Text style={styles.sectionHeading}>{sectionTitle}</Text> : null
+          }
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={40} color="#CED4DA" />
+              <Image source={NO_EVENTS_IMAGE} style={styles.emptyIllustration} resizeMode="contain" />
+              <Text style={styles.emptyTitle}>
+                {loadError ? 'Could not load events' : 'No events found'}
+              </Text>
               <Text style={styles.emptyText}>
-                {loadError ?? 'No events found matching your criteria.'}
+                {loadError ?? 'Try adjusting your search or filters.'}
               </Text>
             </View>
           }
@@ -505,26 +565,46 @@ const styles = StyleSheet.create({
   },
   pad: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
+    paddingBottom: 2,
+  },
+  sectionHeading: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1C1C1E',
+    letterSpacing: -0.2,
+    marginBottom: 8,
   },
   sectionSpacer: {
     height: SECTION_GAP,
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 2,
+    paddingTop: 0,
     paddingBottom: spacing.xl,
     flexGrow: 1,
   },
   emptyState: {
     alignItems: 'center',
-    marginTop: 48,
+    marginTop: 32,
     paddingHorizontal: 24,
   },
+  emptyIllustration: {
+    width: 132,
+    height: 132,
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    textAlign: 'center',
+  },
   emptyText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#6c757d',
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#6E6E72',
     textAlign: 'center',
   },
 });

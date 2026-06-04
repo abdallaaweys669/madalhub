@@ -8,8 +8,5 @@ module.exports = (() => {
   config.resolver.assetExts = config.resolver.assetExts.filter(ext => ext !== 'svg');
   config.resolver.sourceExts.push('svg');
 
-  // Optional: Speed up startup (recommended)
-  config.transformer.inlineRequires = true;
-
   return config;
 })();

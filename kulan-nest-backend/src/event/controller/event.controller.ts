@@ -25,6 +25,7 @@ import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
 import { CreateEventDto } from '../DTO/create-event.dto';
 import { GetEventsQueryDto } from '../DTO/get-events-query.dto';
 import { UpdateEventDto } from '../DTO/update-event.dto';
+import { TrackEventInteractionDto } from '../DTO/track-event-interaction.dto';
 
 import { EventService } from '../service/event.service';
 
@@ -106,6 +107,28 @@ export class EventController {
   @Get('saved')
   getSavedEventsAlias(@CurrentUser() user) {
     return this.eventService.getSavedEvents(user.userId, user?.role);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(1)
+  @Post('interactions')
+  trackEventInteraction(@CurrentUser() user, @Body() dto: TrackEventInteractionDto) {
+    return this.eventService.trackEventInteraction(user.userId, dto.eventId, dto.action);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(1)
+  @Get('recommended')
+  getRecommendedEvents(
+    @CurrentUser() user,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? Number(limit) : 8;
+    return this.eventService.getRecommendedEvents(
+      user.userId,
+      user?.role,
+      Number.isFinite(parsedLimit) ? parsedLimit : 8,
+    );
   }
 
   @UseGuards(OptionalJwtAuthGuard)

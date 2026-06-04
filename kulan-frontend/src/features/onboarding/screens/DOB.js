@@ -20,7 +20,6 @@ import onboardingApi from "@/api/onboarding";
 import useAuth from "@/auth/useAuth";
 import { mergeAuthenticatedUserFromMe } from "@/auth/mergeAuthenticatedUserFromMe";
 import { logApiError } from "@/api/logApiError";
-
 import CalendarSvg from "@/assets/DOB.svg";
 
 export default function DOB() {
@@ -43,9 +42,39 @@ export default function DOB() {
     router.replace("/onboarding/WelcomeIntro");
   };
 
-  const handleDateChange = (event, date) => {
-    setOpen(false);
-    if (date) setDob(date);
+  const handleDateChange = (event, selectedDate) => {
+    console.log("[DOB] onValueChange before:", {
+      eventType: event?.type,
+      selectedDateType: typeof selectedDate,
+      isDateInstance: selectedDate instanceof Date,
+      selectedDate,
+    });
+
+    if (Platform.OS === "android") setOpen(false);
+    if (!selectedDate || !(selectedDate instanceof Date)) {
+      console.log("[DOB] onValueChange ignored: invalid selectedDate");
+      return;
+    }
+
+    setDob(selectedDate);
+    console.log("[DOB] onValueChange after setDob:", selectedDate.toISOString());
+  };
+
+  const getDobDisplayText = () => {
+    console.log("[DOB] before formatting dob:", {
+      dobType: typeof dob,
+      isDateInstance: dob instanceof Date,
+      dob,
+    });
+
+    if (!(dob instanceof Date) || Number.isNaN(dob.getTime())) {
+      console.log("[DOB] after formatting dob: fallback placeholder");
+      return "Select your date of birth";
+    }
+
+    const formatted = dob.toDateString();
+    console.log("[DOB] after formatting dob:", formatted);
+    return formatted;
   };
 
   const handleNext = async () => {
@@ -97,8 +126,8 @@ export default function DOB() {
           {apiError ? <Text style={styles.errorText}>{apiError}</Text> : null}
 
           <Pressable onPress={() => setOpen(true)} style={styles.input}>
-            <Text style={{ fontSize: 16, color: dob ? "#333" : "#B0B0B0" }}>
-              {dob ? dob.toDateString() : "Select your date of birth"}
+            <Text style={{ fontSize: 16, color: dob instanceof Date ? "#333" : "#B0B0B0" }}>
+              {getDobDisplayText()}
             </Text>
           </Pressable>
 
@@ -107,8 +136,8 @@ export default function DOB() {
               value={dob || new Date(2000, 0, 1)}
               mode="date"
               display={Platform.OS === "ios" ? "spinner" : "default"}
-              onValueChange={handleDateChange}
-              onDismiss={() => setOpen(false)}
+            onValueChange={handleDateChange}
+            onDismiss={() => setOpen(false)}
             />
           )}
 

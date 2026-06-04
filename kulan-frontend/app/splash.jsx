@@ -67,7 +67,7 @@ export default function Splash() {
         useNativeDriver: true,
       }).start(() => {
         if (!user) {
-          router.replace("/(tabs)/");
+          router.replace("/(tabs)/explore");
           return;
         }
 
@@ -99,7 +99,7 @@ export default function Splash() {
           return;
         }
 
-        router.replace("/(tabs)/");
+        router.replace("/(tabs)/explore");
       });
     });
   }, [isHydrated, profileCompleted, router, user, userRole, organizerStatus]);

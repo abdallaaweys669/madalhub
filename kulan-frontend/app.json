@@ -29,7 +29,21 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Kulan to access your camera to take a profile photo.",
+          "microphonePermission": false,
+          "photosPermission": "Allow Kulan to access your photos to set a profile photo."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Kulan to access your location to show nearby events."
+        }
+      ]
     ],
     "scheme": "kulanapp"
   }

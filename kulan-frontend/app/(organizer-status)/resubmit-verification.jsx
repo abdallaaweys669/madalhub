@@ -150,7 +150,6 @@ export default function ResubmitVerificationScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images',
       quality: 0.8,
-      base64: true,
     });
 
     if (!result.canceled && result.assets.length > 0) {
@@ -191,15 +190,19 @@ export default function ResubmitVerificationScreen() {
       // 3) upload verification document
       if (documentFile) {
         const docUri = documentFile.uri;
-        const docName = documentFile.fileName || 'document.jpg';
+        const docName =
+          documentFile.fileName ||
+          (typeof docUri === 'string' && docUri.split('/').pop()?.split('?')[0]) ||
+          'document.jpg';
         const docType = documentFile.mimeType || 'image/jpeg';
-
-        const docResponse = await fetch(docUri);
-        const docBlob = await docResponse.blob();
+        const file = { uri: docUri, name: docName, type: docType };
 
         const formData = new FormData();
-        formData.append('file', docBlob, docName);
+        formData.append('file', file);
         formData.append('document_type', values.documentType);
+        console.log('Selected file:', file);
+        console.log('URI:', file?.uri);
+        console.log('FormData parts:', formData);
 
         await onboardingApi.uploadOrganizerDocument(formData);
       }

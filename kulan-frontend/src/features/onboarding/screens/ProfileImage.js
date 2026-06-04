@@ -143,9 +143,11 @@ export default function ProfileImage() {
   const { user, setUser } = useAuth();
 
   const [imageUri, setImageUri] = useState(null);
+  const [imageAsset, setImageAsset] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [errorPopup, setErrorPopup] = useState(false);
+  const [permissionPopup, setPermissionPopup] = useState(false);
 
   const { fade, slideUp } = useOnboardingAnimation();
 
@@ -161,7 +163,10 @@ export default function ProfileImage() {
       let result;
       if (fromCamera) {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== "granted") return;
+        if (status !== "granted") {
+          setPermissionPopup(true);
+          return;
+        }
         result = await ImagePicker.launchCameraAsync({
           allowsEditing: true,
           aspect: [1, 1],
@@ -178,6 +183,7 @@ export default function ProfileImage() {
         });
       }
       if (!result.canceled && result.assets?.[0]?.uri) {
+        setImageAsset(result.assets[0]);
         setImageUri(result.assets[0].uri);
       }
     } catch (e) {
@@ -193,18 +199,24 @@ export default function ProfileImage() {
 
     setIsSubmitting(true);
     try {
-      const filename = imageUri.split("/").pop();
-      const ext = filename.split(".").pop()?.toLowerCase() || "jpg";
-      const mime = ext === "png" ? "image/png" : "image/jpeg";
-
-      const fileResponse = await fetch(imageUri);
-      const blob = await fileResponse.blob();
+      const selectedUri = imageAsset?.uri || imageUri;
+      const uriTail = typeof selectedUri === "string" ? selectedUri.split("/").pop()?.split("?")[0] : "";
+      const filename = imageAsset?.fileName || (uriTail && String(uriTail).trim()) || `member-profile-${Date.now()}.jpg`;
+      const ext = filename.includes(".") ? filename.split(".").pop()?.toLowerCase() : "jpg";
+      const mime = imageAsset?.mimeType || (ext === "png" ? "image/png" : "image/jpeg");
+      const file = { uri: selectedUri, name: filename, type: mime };
 
       const formData = new FormData();
-      formData.append("file", blob, filename);
+      console.log("FORMDATA INSTANCE:", formData);
+      console.log("IS FORMDATA:", formData instanceof FormData);
+      formData.append("file", file);
+      console.log("Selected file:", file);
+      console.log("URI:", file?.uri);
+      console.log("FormData parts:", formData);
 
       await onboardingApi.uploadMemberProfileImage(formData);
-      mergeAuthenticatedUserFromMe(setUser);
+      const updatedUser = await mergeAuthenticatedUserFromMe(setUser);
+      console.log("UPDATED USER", updatedUser);
       router.replace("/onboarding/OnboardingReady");
     } catch (error) {
       logApiError(error, "POST onboarding/member/profile-image");
@@ -238,6 +250,15 @@ export default function ProfileImage() {
         }}
         secondaryLabel="Try again"
         onSecondary={() => setErrorPopup(false)}
+      />
+
+      <AppPopup
+        visible={permissionPopup}
+        variant="warning"
+        title="Camera access needed"
+        message="Please enable camera access for Kulan in your device settings to take a photo."
+        primaryLabel="OK"
+        onPrimary={() => setPermissionPopup(false)}
       />
 
       <OnboardingHeader

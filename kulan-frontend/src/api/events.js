@@ -702,6 +702,7 @@ export function mapApiEventToCard(event) {
     categoryName,
     likeCount: Math.max(0, Number(event.likeCount ?? event.like_count ?? 0) || 0),
     isLiked: Boolean(event.isLiked ?? event.is_liked),
+    createdAt: event.createdAt ?? event.created_at ?? null,
   };
 }
 
@@ -825,6 +826,17 @@ export async function getSavedEvents() {
   const response = await apiClient.get('/events/saved/list');
   const items = Array.isArray(response.data) ? response.data : [];
   return items.map(mapApiEventToCard);
+}
+
+export async function getRecommendedEvents(params = {}) {
+  await ensureInterestLabelsLoaded();
+  const response = await apiClient.get('/events/recommended', { params });
+  const payload = response.data ?? {};
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  return {
+    items: items.map(mapApiEventToCard),
+    meta: payload.meta ?? null,
+  };
 }
 
 export async function getEventInterests() {

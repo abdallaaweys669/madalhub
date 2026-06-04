@@ -1,4 +1,4 @@
-/** Last member main tabs href so auth welcome "Cancel" can return to the correct tab (home vs explore, etc.). */
+/** Last member main tabs href so auth welcome "Cancel" can return to the correct tab (explore vs home, etc.). */
 let lastMemberTabsHref = '/(tabs)';
 
 export function rememberMemberTabsHref(href) {
@@ -16,6 +16,9 @@ export function hrefFromTabsSegments(segments) {
   const parts = segments.slice(1).filter(Boolean);
   if (parts.length === 0 || (parts.length === 1 && parts[0] === 'index')) {
     return '/(tabs)';
+  }
+  if (parts.length === 1 && parts[0] === 'home') {
+    return '/(tabs)/home';
   }
   return `/(tabs)/${parts.join('/')}`;
 }

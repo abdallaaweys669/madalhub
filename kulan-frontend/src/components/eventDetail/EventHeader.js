@@ -6,11 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { styles } from '../../constants/eventDetails_styles/eventDetails.styles';
 import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
 import { DEFAULT_COVER_GRADIENT } from '@/api/events';
+import { trackEventInteraction } from '@/api/trackEventInteraction';
 
-const EventHeader = ({ event, onBack, onSave, isSaved }) => {
+const EventHeader = ({ event, onBack, onSave, isSaved, trackShare = true }) => {
   const insets = useSafeAreaInsets();
 
   const handleShare = async () => {
+    if (trackShare && event?.id) trackEventInteraction(event.id, 'shared');
     try {
       await Share.share({
         message: `${event.title}\n${event.details ?? ''}`,

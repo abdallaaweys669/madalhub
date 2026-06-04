@@ -5,8 +5,14 @@ import { normalizeUser } from '@/auth/normalizeUser';
 export async function mergeAuthenticatedUserFromMe(setUser) {
   try {
     const me = await authApi.getMe();
-    setUser((prev) => (prev ? normalizeUser(prev, me) : prev));
+    let mergedUser = null;
+    setUser((prev) => {
+      mergedUser = prev ? normalizeUser(prev, me) : prev;
+      return mergedUser;
+    });
+    return mergedUser;
   } catch {
     /* ignore */
+    return null;
   }
 }

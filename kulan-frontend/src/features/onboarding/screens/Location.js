@@ -23,7 +23,6 @@ import useAuth from "@/auth/useAuth";
 import { mergeAuthenticatedUserFromMe } from "@/auth/mergeAuthenticatedUserFromMe";
 import OnboardingHeader from "@/features/onboarding/components/OnboardingHeader";
 import { logApiError } from "@/api/logApiError";
-
 import LocationSvg from "@/assets/location.svg";
 
 // Updated Somalia districts list - Banadir now has 18 districts per 2023 reorganization

@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import useAuth from '@/auth/useAuth';
 import { useSavedEvents } from '@/context/SavedEventsContext';
 import { getEventById, joinEvent, leaveEvent } from '@/api/events';
+import { trackEventInteraction } from '@/api/trackEventInteraction';
 import organizerApi from '@/api/organizer';
 import { styles } from '@/constants/eventDetails_styles/eventDetails.styles';
 import EventHeader from '@/components/eventDetail/EventHeader';
@@ -73,6 +74,7 @@ const EventDetailScreen = () => {
         if (!mounted) return;
         setEvent(payload);
         setJoined(Boolean(payload?.isJoined));
+        if (isLoggedIn) trackEventInteraction(eventId, 'opened');
       } catch {
         if (!mounted) return;
         setEvent(null);
@@ -85,7 +87,7 @@ const EventDetailScreen = () => {
     return () => {
       mounted = false;
     };
-  }, [eventId]);
+  }, [eventId, isLoggedIn]);
 
   useEffect(() => {
     if (!event?.organizerId) {

@@ -11,6 +11,8 @@ import { SavedEvent } from 'src/database/entities/saved-event.entity';
 import { EventProgramRoster } from 'src/database/entities/event-program-roster.entity';
 import { EventCohost } from 'src/database/entities/event-cohost.entity';
 import { EventLike } from 'src/database/entities/event-like.entity';
+import { MemberInterest } from 'src/database/entities/member-interest.entity';
+import { MemberEventInteraction } from 'src/database/entities/member-event-interaction.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Module({
@@ -26,6 +28,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       EventProgramRoster,
       EventCohost,
       EventLike,
+      MemberInterest,
+      MemberEventInteraction,
     ]),
   ],
   controllers: [EventController],

@@ -34,7 +34,7 @@ export function CategoryTabs({ categories, activeId, onChange }: CategoryTabsPro
           >
             <Ionicons
               name={cat.icon}
-              size={16}
+              size={14}
               color={active ? '#FFFFFF' : '#596273'}
             />
             <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{cat.id}</Text>
@@ -49,31 +49,30 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 2,
-    paddingRight: 10,
-    gap: 9,
+    paddingVertical: 0,
+    paddingRight: 8,
+    gap: 6,
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 17,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'transparent',
   },
   tabActive: {
-    backgroundColor: '#FF7A3D',
-    borderColor: '#FF7A3D',
+    backgroundColor: '#FF7B3F',
+    borderColor: '#FF7B3F',
   },
   tabInactive: {
-    backgroundColor: '#F1F3F5',
-    borderColor: '#E7EAF0',
+    backgroundColor: '#FFF6F2',
+    borderColor: '#FFE1D3',
   },
   tabLabel: {
-    marginLeft: 6,
-    fontSize: 14,
+    marginLeft: 5,
+    fontSize: 13,
     fontWeight: '600',
     color: '#596273',
   },
