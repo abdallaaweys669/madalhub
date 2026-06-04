@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 /**
  * A single, reusable piece of a skeleton layout.
  * Use this to build the shapes of your skeleton.
+ *
+ * @param {{ width: number|string, height: number, style?: import('react-native').StyleProp<import('react-native').ViewStyle> }} props
  */
 export const SkeletonPiece = ({ width, height, style }) => (
   <View style={[{ width, height, backgroundColor: '#e0e0e0', borderRadius: 4 }, style]} />

@@ -15,7 +15,7 @@ export default function HomeSkeleton() {
       <View style={styles.header}>
         <SkeletonPiece width={120} height={12} style={styles.mb8} />
         <SkeletonPiece width={180} height={24} style={styles.mb8} />
-        <SkeletonPiece width={150} height={14} />
+        <SkeletonPiece width={150} height={14} style={styles.bone} />
       </View>
 
       <View style={styles.section}>
@@ -33,16 +33,16 @@ export default function HomeSkeleton() {
 
       <View style={styles.section}>
         <View style={styles.recommendedHeadSkeleton}>
-          <SkeletonPiece width={210} height={24} />
-          <SkeletonPiece width={52} height={14} />
+          <SkeletonPiece width={210} height={24} style={styles.bone} />
+          <SkeletonPiece width={52} height={14} style={styles.bone} />
         </View>
         {[0, 1].map((i) => (
           <View key={i} style={styles.recommendedRow}>
             <View style={styles.recommendedLeftSkeleton}>
               <SkeletonPiece width={145} height={95} style={styles.recommendedImage} />
               <View style={styles.recommendedActionsSkeleton}>
-                <SkeletonPiece width={52} height={12} />
-                <SkeletonPiece width={48} height={12} />
+                <SkeletonPiece width={52} height={12} style={styles.bone} />
+                <SkeletonPiece width={48} height={12} style={styles.bone} />
               </View>
             </View>
             <View style={styles.recommendedCopy}>
@@ -50,7 +50,7 @@ export default function HomeSkeleton() {
               <SkeletonPiece width="92%" height={16} style={styles.mb8} />
               <SkeletonPiece width="78%" height={12} style={styles.mb8} />
               <SkeletonPiece width="62%" height={12} style={styles.mb8} />
-              <SkeletonPiece width="70%" height={12} />
+              <SkeletonPiece width="70%" height={12} style={styles.bone} />
             </View>
           </View>
         ))}
@@ -69,7 +69,7 @@ export default function HomeSkeleton() {
               <SkeletonPiece width={208} height={126} style={styles.discoverImage} />
               <View style={styles.discoverCopy}>
                 <SkeletonPiece width={170} height={14} style={styles.mb8} />
-                <SkeletonPiece width={120} height={12} />
+                <SkeletonPiece width={120} height={12} style={styles.bone} />
               </View>
             </View>
           ))}
@@ -92,6 +92,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   mb8: { marginBottom: 8 },
+  bone: {},
   section: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
