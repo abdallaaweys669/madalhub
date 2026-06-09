@@ -200,9 +200,6 @@ export default function ResubmitVerificationScreen() {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('document_type', values.documentType);
-        console.log('Selected file:', file);
-        console.log('URI:', file?.uri);
-        console.log('FormData parts:', formData);
 
         await onboardingApi.uploadOrganizerDocument(formData);
       }

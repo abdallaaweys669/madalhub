@@ -1,10 +1,15 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { SkeletonPiece } from '@/components/Skeleton';
 import { spacing } from '@/theme';
 
+const MY_EVENT_CARD_PEEK = 52;
+
 export default function HomeSkeleton() {
+  const { width: screenWidth } = useWindowDimensions();
+  const myEventCardWidth = Math.floor(screenWidth - spacing.md * 2 - MY_EVENT_CARD_PEEK);
+
   return (
     <ScrollView
       style={styles.scroll}
@@ -27,9 +32,14 @@ export default function HomeSkeleton() {
         </View>
       </View>
 
-      <View style={styles.myEventsCardWrap}>
-        <SkeletonPiece width="100%" height={186} style={styles.cardImage} />
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.myEventsRow}
+      >
+        <SkeletonPiece width={myEventCardWidth} height={186} style={styles.cardImage} />
+        <SkeletonPiece width={myEventCardWidth * 0.28} height={186} style={styles.cardImage} />
+      </ScrollView>
 
       <View style={styles.section}>
         <View style={styles.recommendedHeadSkeleton}>
@@ -106,9 +116,11 @@ const styles = StyleSheet.create({
   tabPiece: {
     borderRadius: 14,
   },
-  myEventsCardWrap: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
+  myEventsRow: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+    gap: spacing.sm,
   },
   cardImage: {
     borderRadius: 14,

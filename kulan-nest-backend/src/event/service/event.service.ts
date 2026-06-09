@@ -96,6 +96,8 @@ export class EventService {
       startsAt: event.startDatetime,
       endsAt: event.endDatetime,
       city: event.locationName ?? null,
+      locationName: event.locationName ?? null,
+      locationAddress: event.locationAddress ?? null,
       isOnline: !event.isPhysical,
       priceType: event.totalPrice > 0 ? 'Paid' : 'Free',
       priceAmount: event.totalPrice > 0 ? event.totalPrice : null,
@@ -758,14 +760,12 @@ export class EventService {
       qb.orderBy('event.startDatetime', 'DESC');
     } else if (query.sort === 'start-desc') {
       qb.orderBy('event.startDatetime', 'DESC');
-    } else if (query.sort === 'popular') {
-      qb.leftJoin(
-        'event_registrations',
-        'reg_count',
-        'reg_count.event_id = event.id',
+    } else if (query.sort === 'popular' || query.sort === 'trending') {
+      qb.addOrderBy(
+        '(SELECT COUNT(*) FROM event_registrations reg_pop WHERE reg_pop.event_id = event.id)',
+        'DESC',
       );
-      qb.groupBy('event.id');
-      qb.orderBy('COUNT(reg_count.id)', 'DESC');
+      qb.addOrderBy('event.startDatetime', 'ASC');
     } else {
       qb.orderBy('event.startDatetime', 'ASC');
     }
@@ -1625,6 +1625,8 @@ export class EventService {
       startsAt: event.startDatetime,
       endsAt: event.endDatetime,
       city: event.locationName ?? null,
+      locationName: event.locationName ?? null,
+      locationAddress: event.locationAddress ?? null,
       isOnline: !event.isPhysical,
       priceType: event.totalPrice > 0 ? 'Paid' : 'Free',
       priceAmount: event.totalPrice > 0 ? event.totalPrice : null,

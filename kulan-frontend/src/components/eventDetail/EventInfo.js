@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { styles } from '../../constants/eventDetails_styles/eventDetails.styles';
-import { Feather } from '@expo/vector-icons';
+
+import { EventDateLocationRows } from '@/components/event/EventDateLocationRows';
 
 const EventInfo = ({
   description,
@@ -25,26 +26,12 @@ const EventInfo = ({
         </View>
       ) : null}
       <View style={styles.infoSpacing} />
-      <View style={styles.infoRow}>
-        <View style={styles.infoIconBg}>
-          <Feather name="calendar" size={18} color="#FF7A00" />
-        </View>
-        <View>
-          <Text style={styles.infoText}>{datePrimary}</Text>
-          <Text style={styles.infoSubText}>{dateSecondary}</Text>
-        </View>
-      </View>
-      <View style={styles.infoRow}>
-        <View style={styles.infoIconBg}>
-          <Feather name="map-pin" size={18} color="#FF7A00" />
-        </View>
-        <View>
-          <Text style={styles.infoText}>{locationPrimary}</Text>
-          {locationSecondary ? (
-            <Text style={styles.infoSubText}>{locationSecondary}</Text>
-          ) : null}
-        </View>
-      </View>
+      <EventDateLocationRows
+        datePrimary={datePrimary}
+        dateSecondary={dateSecondary}
+        locationPrimary={locationPrimary}
+        locationSecondary={locationSecondary}
+      />
     </View>
   );
 };

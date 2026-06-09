@@ -207,16 +207,10 @@ export default function ProfileImage() {
       const file = { uri: selectedUri, name: filename, type: mime };
 
       const formData = new FormData();
-      console.log("FORMDATA INSTANCE:", formData);
-      console.log("IS FORMDATA:", formData instanceof FormData);
       formData.append("file", file);
-      console.log("Selected file:", file);
-      console.log("URI:", file?.uri);
-      console.log("FormData parts:", formData);
 
       await onboardingApi.uploadMemberProfileImage(formData);
-      const updatedUser = await mergeAuthenticatedUserFromMe(setUser);
-      console.log("UPDATED USER", updatedUser);
+      await mergeAuthenticatedUserFromMe(setUser);
       router.replace("/onboarding/OnboardingReady");
     } catch (error) {
       logApiError(error, "POST onboarding/member/profile-image");

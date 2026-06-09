@@ -37,10 +37,17 @@ import { Feather } from '@expo/vector-icons';
 
 import { HomeHeader } from './HomeHeader';
 import { YourEventsSection, type HomeEventTab } from './YourEventsSection';
+import { buildEventMetaBadgeLabels, EventMetaBadgeRow } from '@/components/event/EventMetaBadgeRow';
+import { EventDateLocationRows } from '@/components/event/EventDateLocationRows';
+import { buildEventScheduleLocationFields } from '@/utils/eventDisplay';
 
 const HOME_EVENTS_PARAMS = { page: 1, limit: 50, sort: 'start-asc' as const };
 const GUEST_HOME_TABS: HomeEventTab[] = ['Upcoming'];
-const POPULAR_MIN_ATTENDEES = 20;
+const TRENDING_MIN_ATTENDEES = 20;
+/** Visible sliver of the next My Events card in the horizontal carousel. */
+const MY_EVENT_CARD_PEEK = 52;
+/** Extra breathing room below the status bar (Home + Explore). */
+const SCREEN_TOP_EXTRA = 10;
 const NO_EVENTS_IMAGE = require('../../assets/no events.png');
 
 const coverBannerImageStyle = {
@@ -204,66 +211,135 @@ function buildClientRecommendedEvents(
   ).slice(0, 8);
 }
 
+function HomeEventCoverActions({
+  eventId,
+  shareMessage,
+}: {
+  eventId: string | number;
+  shareMessage: string;
+}) {
+  const router = useGuardedRouter();
+  const { isLoggedIn } = useAuth();
+  const { savedEventIds, saveEvent, unsaveEvent } = useSavedEvents();
+  const isSaved = savedEventIds.includes(String(eventId));
+
+  const toggleSave = () => {
+    if (!isLoggedIn) {
+      router.push('/(auth)/welcome');
+      return;
+    }
+    if (isSaved) unsaveEvent(eventId);
+    else saveEvent(eventId);
+  };
+
+  const shareEvent = async () => {
+    if (isLoggedIn) trackEventInteraction(eventId, 'shared');
+    try {
+      await Share.share({ message: shareMessage });
+    } catch {
+      /* user dismissed share sheet */
+    }
+  };
+
+  return (
+    <View style={styles.coverHeroActions}>
+      <TouchableOpacity
+        style={[styles.coverHeroActionBtn, styles.coverHeroActionBtnGlass]}
+        activeOpacity={0.85}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        onPress={() => void shareEvent()}
+        accessibilityRole="button"
+        accessibilityLabel="Share event"
+      >
+        <Feather name="share-2" size={16} color="#FFFFFF" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[
+          styles.coverHeroActionBtn,
+          isSaved ? styles.coverHeroActionBtnSaved : styles.coverHeroActionBtnGlass,
+        ]}
+        activeOpacity={0.85}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        onPress={toggleSave}
+        accessibilityRole="button"
+        accessibilityLabel={isSaved ? 'Remove bookmark' : 'Bookmark event'}
+      >
+        <Ionicons
+          name={isSaved ? 'bookmark' : 'bookmark-outline'}
+          size={16}
+          color="#FFFFFF"
+        />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function getEventScheduleLocation(event: EventCardModel & { city?: string }) {
+  return buildEventScheduleLocationFields({
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    locationName: event.locationName,
+    locationAddress: event.locationAddress,
+    city: event.city,
+    isOnline: event.isOnline,
+  });
+}
+
 function HomeInsightCard({ event }: { event: EventCardModel }) {
   const router = useGuardedRouter();
   const colors = useThemeColors();
-  const startsAtLabel = event.startsAt
-    ? new Date(event.startsAt).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : 'Date TBA';
+  const { isLoggedIn } = useAuth();
+  const scheduleLocation = getEventScheduleLocation(event as EventCardModel & { city?: string });
+  const shareDateLabel = scheduleLocation.datePrimary || 'Date TBA';
+
+  useEffect(() => {
+    if (isLoggedIn) trackEventInteraction(event.id, 'viewed');
+  }, [event.id, isLoggedIn]);
+
+  const openDetail = () => {
+    if (isLoggedIn) trackEventInteraction(event.id, 'opened');
+    router.push(`/events/${event.id}`);
+  };
 
   return (
-    <TouchableOpacity
-      style={[styles.insightCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-      activeOpacity={0.9}
-      onPress={() => router.push(`/events/${event.id}`)}
-    >
+    <View style={[styles.insightCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.insightCover}>
-        {event.coverImageUrl ? (
-          <Image
-            source={{ uri: event.coverImageUrl }}
-            style={coverBannerImageStyle}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[styles.insightCoverFallback, { backgroundColor: colors.backgroundMuted }]}>
-            <Text style={[styles.insightCoverLetter, { color: colors.textSecondary }]}>
-              {(event.coverLetter || event.title || '?').trim().charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <Pressable onPress={openDetail} style={StyleSheet.absoluteFill}>
+          {event.coverImageUrl ? (
+            <Image
+              source={{ uri: event.coverImageUrl }}
+              style={coverBannerImageStyle}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.insightCoverFallback, { backgroundColor: colors.backgroundMuted }]}>
+              <Text style={[styles.insightCoverLetter, { color: colors.textSecondary }]}>
+                {(event.coverLetter || event.title || '?').trim().charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </Pressable>
         <View style={styles.insightCoverOverlay} />
+        <HomeEventCoverActions
+          eventId={event.id}
+          shareMessage={`${event.title}\n${shareDateLabel}`}
+        />
         <View style={styles.insightCategoryPill}>
           <Text style={styles.insightCategoryText}>{event.categoryName || 'Featured'}</Text>
         </View>
       </View>
-      <View style={styles.insightBody}>
+      <Pressable onPress={openDetail} style={styles.insightBody}>
         <Text numberOfLines={2} style={[styles.insightTitle, { color: colors.text }]}>
           {event.title}
         </Text>
-        <View style={styles.insightMetaRow}>
-          <Ionicons name="calendar-outline" size={13} color={colors.primary} />
-          <Text numberOfLines={1} style={[styles.insightMetaText, { color: colors.textSecondary }]}>
-            {startsAtLabel}
-          </Text>
-        </View>
-        <View style={styles.insightMetaRow}>
-          <Ionicons name="location-outline" size={13} color={colors.primary} />
-          <Text numberOfLines={1} style={[styles.insightMetaText, { color: colors.textSecondary }]}>
-            {event.locationName || event.categoryName || 'Near you'}
-          </Text>
-        </View>
-        <View style={styles.insightActionRow}>
-          <View style={styles.insightArrowCta}>
-            <Ionicons name="arrow-forward" size={14} color="#2563EB" />
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
+        <EventDateLocationRows
+          datePrimary={scheduleLocation.datePrimary}
+          dateSecondary={scheduleLocation.dateSecondary}
+          locationPrimary={scheduleLocation.locationPrimary}
+          locationSecondary={scheduleLocation.locationSecondary}
+        />
+      </Pressable>
+    </View>
   );
 }
 
@@ -299,38 +375,6 @@ function HomeInsightSections({ sections }: { sections: HomeInsightSection[] }) {
   );
 }
 
-function formatRecommendedDateLabel(startsAt?: string): string {
-  if (!startsAt) return 'Date TBA';
-  const date = new Date(startsAt);
-  if (!Number.isFinite(date.getTime())) return 'Date TBA';
-  return date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-}
-
-function formatRecommendedTimeLabel(startsAt?: string): string {
-  if (!startsAt) return 'Time TBA';
-  const date = new Date(startsAt);
-  if (!Number.isFinite(date.getTime())) return 'Time TBA';
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
-function formatRecommendedLocationLabel(event: EventCardModel): string {
-  if (event.isOnline) return 'Online';
-  const city = String((event as { city?: string }).city || '').trim();
-  const locationName = String(event.locationName || '').trim();
-  if (locationName && city && locationName.toLowerCase() !== city.toLowerCase()) {
-    return `${locationName}, ${city}`;
-  }
-  return locationName || city || event.categoryName || 'Location TBD';
-}
-
 function RecommendedMiniCard({ event }: { event: EventCardModel }) {
   const colors = useThemeColors();
   const router = useGuardedRouter();
@@ -338,9 +382,7 @@ function RecommendedMiniCard({ event }: { event: EventCardModel }) {
   const { savedEventIds, saveEvent, unsaveEvent } = useSavedEvents();
   const isSaved = savedEventIds.includes(String(event.id));
 
-  const dateLabel = formatRecommendedDateLabel(event.startsAt);
-  const timeLabel = formatRecommendedTimeLabel(event.startsAt);
-  const locationLabel = formatRecommendedLocationLabel(event);
+  const scheduleLocation = getEventScheduleLocation(event as EventCardModel & { city?: string });
   const categoryLabel = (event.categoryName || 'Featured').trim().toUpperCase();
 
   useEffect(() => {
@@ -356,7 +398,7 @@ function RecommendedMiniCard({ event }: { event: EventCardModel }) {
     if (isLoggedIn) trackEventInteraction(event.id, 'shared');
     try {
       await Share.share({
-        message: `${event.title}\n${dateLabel} · ${timeLabel}`,
+        message: `${event.title}\n${scheduleLocation.datePrimary} · ${scheduleLocation.dateSecondary}`,
       });
     } catch {
       /* user dismissed share sheet */
@@ -429,27 +471,24 @@ function RecommendedMiniCard({ event }: { event: EventCardModel }) {
         <Text numberOfLines={1} style={[styles.recommendedCardTitle, { color: colors.text }]}>
           {event.title}
         </Text>
-        <View style={styles.recommendedMetaRow}>
-          <Ionicons name="calendar-outline" size={14} color="#9CA3AF" />
-          <Text numberOfLines={1} style={styles.recommendedMetaText}>
-            {dateLabel}
-          </Text>
-        </View>
-        <View style={styles.recommendedMetaRow}>
-          <Ionicons name="time-outline" size={14} color="#9CA3AF" />
-          <Text numberOfLines={1} style={styles.recommendedMetaText}>
-            {timeLabel}
-          </Text>
-        </View>
-        <View style={styles.recommendedMetaRow}>
-          <Ionicons name="location-outline" size={14} color="#9CA3AF" />
-          <Text numberOfLines={1} style={styles.recommendedMetaText}>
-            {locationLabel}
-          </Text>
-        </View>
+        <EventDateLocationRows
+          datePrimary={scheduleLocation.datePrimary}
+          dateSecondary={scheduleLocation.dateSecondary}
+          locationPrimary={scheduleLocation.locationPrimary}
+          locationSecondary={scheduleLocation.locationSecondary}
+        />
       </Pressable>
     </View>
   );
+}
+
+function formatMyEventPriceLabel(event: EventCardModel): string {
+  const priceType = event.priceType ?? 'Free';
+  const priceAmount = event.priceAmount;
+  if (priceType === 'Paid' && typeof priceAmount === 'number' && priceAmount > 0) {
+    return `$${priceAmount.toFixed(priceAmount % 1 === 0 ? 0 : 2)}`;
+  }
+  return 'Free';
 }
 
 function HomeMyEventCard({
@@ -463,81 +502,120 @@ function HomeMyEventCard({
 }) {
   const colors = useThemeColors();
   const router = useGuardedRouter();
-  const startsAtLabel = event.startsAt
-    ? new Date(event.startsAt).toLocaleString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      })
-    : 'Date TBA';
-  const timeLabel = event.startsAt
-    ? new Date(event.startsAt).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })
-    : 'Time TBA';
-  const goingLabel = `${Math.max(0, Number(event.goingCount) || 0)} going`;
+  const { isLoggedIn } = useAuth();
+  const scheduleLocation = getEventScheduleLocation(event as EventCardModel & { city?: string });
+  const goingCountN = Math.max(0, Number(event.goingCount) || 0);
+  const goingLabel = `${goingCountN} going`;
+  const previews = event.attendeePreviews?.filter(Boolean) ?? [];
+  const showPreviews = previews.length > 0;
+  const showAnonymousGoing = !showPreviews && goingCountN > 0;
+  const anonymousFaceCount = Math.min(3, Math.max(1, goingCountN));
+  const statusLabel = event.urgencyLabel || event.statusChip?.label;
+  const priceLabel = formatMyEventPriceLabel(event);
   const showGoingBadge = activeTab === 'Joined' || Boolean((event as { isJoined?: boolean }).isJoined);
   const imageHeight = cardWidth ? Math.round(cardWidth * 0.62) : 176;
 
+  const openDetail = () => {
+    if (isLoggedIn) trackEventInteraction(event.id, 'opened');
+    router.push(`/events/${event.id}`);
+  };
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.92}
+    <View
       style={[
         styles.myEventCard,
-        cardWidth ? { width: cardWidth } : null,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        { width: cardWidth ?? 300, backgroundColor: colors.card, borderColor: colors.border },
       ]}
-      onPress={() => router.push(`/events/${event.id}`)}
     >
       <View style={[styles.myEventImageWrap, { height: imageHeight }]}>
-        {event.coverImageUrl ? (
-          <Image
-            source={{ uri: event.coverImageUrl }}
-            style={coverBannerImageStyle}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[styles.myEventImageFallback, { backgroundColor: colors.backgroundMuted }]}>
-            <Text style={[styles.myEventFallbackLetter, { color: colors.textSecondary }]}>
-              {(event.coverLetter || event.title || '?').trim().charAt(0).toUpperCase()}
-            </Text>
+        <Pressable onPress={openDetail} style={StyleSheet.absoluteFill}>
+          {event.coverImageUrl ? (
+            <Image
+              source={{ uri: event.coverImageUrl }}
+              style={coverBannerImageStyle}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.myEventImageFallback, { backgroundColor: colors.backgroundMuted }]}>
+              <Text style={[styles.myEventFallbackLetter, { color: colors.textSecondary }]}>
+                {(event.coverLetter || event.title || '?').trim().charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+        <HomeEventCoverActions
+          eventId={event.id}
+          shareMessage={`${event.title}\n${scheduleLocation.datePrimary} · ${scheduleLocation.dateSecondary}`}
+        />
+        <View style={styles.myEventHeroTopLeft}>
+          <View style={styles.myEventPriceBadge}>
+            <Text style={styles.myEventPriceBadgeText}>{priceLabel}</Text>
           </View>
-        )}
-        {showGoingBadge ? (
-          <View style={styles.myEventBadge}>
-            <Ionicons name="checkmark-circle" size={12} color="#15803D" />
-            <Text style={styles.myEventBadgeText}>Joined</Text>
+          {showGoingBadge ? (
+            <View style={styles.myEventJoinedBadge}>
+              <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+              <Text style={styles.myEventBadgeText}>Joined</Text>
+            </View>
+          ) : null}
+        </View>
+        {statusLabel ? (
+          <View style={styles.myEventStatusBadge}>
+            <Ionicons name="timer-outline" size={12} color="#FFFFFF" />
+            <Text style={styles.myEventStatusBadgeText}>{statusLabel}</Text>
           </View>
         ) : null}
       </View>
-      <View style={styles.myEventBody}>
+      <Pressable onPress={openDetail} style={styles.myEventBody}>
+        <EventMetaBadgeRow
+          labels={buildEventMetaBadgeLabels({
+            categoryName: event.categoryName,
+            eventFormat: event.eventFormat,
+            isOnline: event.isOnline,
+          })}
+        />
         <Text numberOfLines={2} style={[styles.myEventTitle, { color: colors.text }]}>
           {event.title}
         </Text>
-        <View style={styles.myEventMetaRow}>
-          <Ionicons name="calendar-outline" size={13} color={colors.textSecondary} />
-          <Text numberOfLines={1} style={[styles.myEventMetaText, { color: colors.textSecondary }]}>
-            {startsAtLabel}
-          </Text>
-        </View>
-        <View style={styles.myEventMetaRow}>
-          <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
-          <Text numberOfLines={1} style={[styles.myEventMetaText, { color: colors.textSecondary }]}>
-            {timeLabel}
-          </Text>
-        </View>
-        <View style={styles.myEventMetaRow}>
-          <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
-          <Text numberOfLines={1} style={[styles.myEventMetaText, { color: colors.textSecondary }]}>
-            {event.locationName || event.categoryName || 'Near you'}
-          </Text>
-        </View>
+        <EventDateLocationRows
+          datePrimary={scheduleLocation.datePrimary}
+          dateSecondary={scheduleLocation.dateSecondary}
+          locationPrimary={scheduleLocation.locationPrimary}
+          locationSecondary={scheduleLocation.locationSecondary}
+        />
         <View style={styles.myEventFooter}>
-          <View style={styles.myEventGoingWrap}>
-            <Ionicons name="people-outline" size={14} color={colors.textSecondary} />
-            <Text style={[styles.myEventGoingText, { color: colors.textSecondary }]}>{goingLabel}</Text>
+          <View style={styles.myEventAvatarStack}>
+            {showPreviews ? (
+              previews.slice(0, 3).map((preview, index) => (
+                <MemberInitialAvatar
+                  key={
+                    preview.userId != null
+                      ? String(preview.userId)
+                      : `${preview.name}-${index}`
+                  }
+                  name={preview.name}
+                  size={26}
+                  borderWidth={2}
+                  style={index > 0 ? styles.myEventAvatarOverlap : undefined}
+                />
+              ))
+            ) : showAnonymousGoing ? (
+              Array.from({ length: anonymousFaceCount }, (_, index) => (
+                <MemberInitialAvatar
+                  key={`anon-${index}`}
+                  name={`Attendee ${index + 1}`}
+                  size={26}
+                  borderWidth={2}
+                  style={index > 0 ? styles.myEventAvatarOverlap : undefined}
+                />
+              ))
+            ) : (
+              <Ionicons name="people-outline" size={14} color={colors.textSecondary} />
+            )}
           </View>
+          <Text style={[styles.myEventGoingText, { color: colors.textSecondary }]}>{goingLabel}</Text>
         </View>
-      </View>
-    </TouchableOpacity>
+      </Pressable>
+    </View>
   );
 }
 
@@ -604,7 +682,7 @@ function getEventGoingCount(event: EventCardModel): number {
   return Math.max(0, Number(event.goingCount) || 0);
 }
 
-function formatPopularAttendingLabel(count: number): string {
+function formatTrendingAttendingLabel(count: number): string {
   if (count >= 1000) {
     const thousands = count / 1000;
     const label = thousands % 1 === 0 ? `${thousands.toFixed(0)}k` : `${thousands.toFixed(1)}k`;
@@ -613,20 +691,17 @@ function formatPopularAttendingLabel(count: number): string {
   return `+${count} attending`;
 }
 
-function scorePopularEvent(event: EventCardModel): number {
-  const going = getEventGoingCount(event);
-  const likes = Math.max(0, Number(event.likeCount) || 0);
-  const savesSignal = Math.max(0, Number((event as { saveCount?: number }).saveCount) || 0);
-  return going * 10 + likes * 3 + savesSignal;
+function scoreTrendingEvent(event: EventCardModel): number {
+  return getEventGoingCount(event);
 }
 
-function PopularHeroCard({ event }: { event: EventCardModel | null }) {
+function TrendingHeroCard({ event }: { event: EventCardModel | null }) {
   const router = useGuardedRouter();
   const colors = useThemeColors();
   if (!event) return null;
 
   const goingCount = getEventGoingCount(event);
-  const showMostAttendedBadge = goingCount >= POPULAR_MIN_ATTENDEES;
+  const showTrendingBadge = goingCount >= TRENDING_MIN_ATTENDEES;
   const subtitle =
     String(event.details || event.description || '').trim() ||
     (event.categoryName ? `Join others exploring ${event.categoryName.toLowerCase()}.` : 'Join others at this event.');
@@ -661,10 +736,10 @@ function PopularHeroCard({ event }: { event: EventCardModel | null }) {
         />
       </View>
 
-      {showMostAttendedBadge ? (
+      {showTrendingBadge ? (
         <View style={styles.popularMostAttendedChip}>
-          <Ionicons name="people" size={11} color="#FFFFFF" />
-          <Text style={styles.popularMostAttendedText}>Most attended</Text>
+          <Ionicons name="flame" size={11} color="#FFFFFF" />
+          <Text style={styles.popularMostAttendedText}>Trending</Text>
         </View>
       ) : null}
 
@@ -698,7 +773,7 @@ function PopularHeroCard({ event }: { event: EventCardModel | null }) {
                 ))}
               </View>
             )}
-            <Text style={styles.popularAttendingText}>{formatPopularAttendingLabel(goingCount)}</Text>
+            <Text style={styles.popularAttendingText}>{formatTrendingAttendingLabel(goingCount)}</Text>
           </View>
 
           <View style={styles.popularCtaPill}>
@@ -739,6 +814,10 @@ function HomeScreen() {
   const { user, setUser, isLoggedIn } = useAuth();
   const isGuest = !isLoggedIn;
   const guestEventCardWidth = Math.floor((screenWidth - spacing.md * 2 - spacing.sm) / 2);
+  const myEventCardWidth = useMemo(
+    () => Math.floor(screenWidth - spacing.md * 2 - MY_EVENT_CARD_PEEK),
+    [screenWidth],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -903,21 +982,21 @@ function HomeScreen() {
     upcomingEvents,
   ]);
 
-  const popularEvents = useMemo(() => {
-    const eligible = upcomingEvents.filter((event) => getEventGoingCount(event) >= POPULAR_MIN_ATTENDEES);
-    return rankEventsByScore(eligible, scorePopularEvent).slice(0, 6);
+  const trendingEvents = useMemo(() => {
+    const eligible = upcomingEvents.filter((event) => getEventGoingCount(event) >= TRENDING_MIN_ATTENDEES);
+    return rankEventsByScore(eligible, scoreTrendingEvent).slice(0, 6);
   }, [upcomingEvents]);
-  const popularHeroEvent = popularEvents[0] ?? null;
+  const trendingHeroEvent = trendingEvents[0] ?? null;
   const discoverMoreEvents = useMemo(() => {
     const usedIds = new Set<string>();
     for (const event of activeData) usedIds.add(eventId(event));
     for (const event of recommendedEvents.slice(0, 2)) usedIds.add(eventId(event));
-    if (popularHeroEvent) usedIds.add(eventId(popularHeroEvent));
+    if (trendingHeroEvent) usedIds.add(eventId(trendingHeroEvent));
 
     return sortByNewestFirst(
       upcomingEvents.filter((event) => !usedIds.has(eventId(event))),
     ).slice(0, 8);
-  }, [activeData, recommendedEvents, popularHeroEvent, upcomingEvents]);
+  }, [activeData, recommendedEvents, trendingHeroEvent, upcomingEvents]);
   const insightSections = useMemo<HomeInsightSection[]>(
     () => [
       {
@@ -933,7 +1012,7 @@ function HomeScreen() {
   if (isLoading) {
     return (
       <Container>
-        <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={[styles.flex, styles.screenTopInset]} edges={['top', 'left', 'right']}>
           <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
           <HomeSkeleton />
         </SafeAreaView>
@@ -943,7 +1022,7 @@ function HomeScreen() {
 
   return (
     <Container>
-      <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.flex, styles.screenTopInset]} edges={['top', 'left', 'right']}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
         <FlatList
@@ -982,12 +1061,18 @@ function HomeScreen() {
                       horizontal
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={styles.myEventsRow}
+                      nestedScrollEnabled
+                      decelerationRate="fast"
+                      snapToInterval={myEventCardWidth + spacing.sm}
+                      snapToAlignment="start"
+                      disableIntervalMomentum
                     >
                       {activeData.map((event) => (
                         <HomeMyEventCard
                           key={`active-${event.id}`}
                           event={event}
                           activeTab={activeTab}
+                          cardWidth={myEventCardWidth}
                         />
                       ))}
                     </ScrollView>
@@ -1037,12 +1122,12 @@ function HomeScreen() {
                     </View>
                   </View>
                 ) : null}
-                {popularHeroEvent ? (
+                {trendingHeroEvent ? (
                   <View style={styles.popularSection}>
                     <View style={styles.popularSectionHead}>
-                      <Text style={[styles.popularSectionTitle, { color: colors.text }]}>Popular This Week</Text>
+                      <Text style={[styles.popularSectionTitle, { color: colors.text }]}>Trending Now</Text>
                     </View>
-                    <PopularHeroCard event={popularHeroEvent} />
+                    <TrendingHeroCard event={trendingHeroEvent} />
                   </View>
                 ) : null}
                 {!isGuest ? <HomeInsightSections sections={insightSections} /> : null}
@@ -1061,6 +1146,9 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  screenTopInset: {
+    paddingTop: SCREEN_TOP_EXTRA,
+  },
   listContent: {
     flexGrow: 1,
     paddingBottom: spacing.xl + 16,
@@ -1071,6 +1159,7 @@ const styles = StyleSheet.create({
   myEventsRow: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
     gap: spacing.sm,
   },
   guestUpcomingSection: {
@@ -1095,7 +1184,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   myEventCard: {
-    width: 342,
     borderRadius: 18,
     borderWidth: 1,
     overflow: 'hidden',
@@ -1122,10 +1210,32 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: '700',
   },
-  myEventBadge: {
+  myEventHeroTopLeft: {
     position: 'absolute',
-    left: 10,
     top: 10,
+    left: 10,
+    zIndex: 2,
+    gap: 6,
+    alignItems: 'flex-start',
+  },
+  myEventPriceBadge: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  myEventPriceBadgeText: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: '#FF7B3F',
+  },
+  myEventJoinedBadge: {
     borderRadius: 999,
     backgroundColor: 'rgba(240,253,244,0.95)',
     borderWidth: 1,
@@ -1141,6 +1251,61 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
     fontWeight: '700',
+  },
+  myEventStatusBadge: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FF7B3F',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    zIndex: 2,
+  },
+  myEventStatusBadgeText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  coverHeroActions: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 2,
+  },
+  coverHeroActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverHeroActionBtnGlass: {
+    backgroundColor: 'rgba(15, 23, 42, 0.52)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  coverHeroActionBtnSaved: {
+    backgroundColor: '#FF7B3F',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 4,
+    elevation: 3,
   },
   myEventBody: {
     paddingHorizontal: 12,
@@ -1169,11 +1334,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  myEventGoingWrap: {
+  myEventAvatarStack: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+  },
+  myEventAvatarOverlap: {
+    marginLeft: -8,
   },
   myEventGoingText: {
     fontSize: 13,
@@ -1544,19 +1712,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     gap: 6,
-  },
-  insightActionRow: {
-    marginTop: 2,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  insightArrowCta: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EFF6FF',
   },
   insightTitle: {
     fontSize: 15,

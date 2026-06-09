@@ -8,6 +8,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+const BRAND = '#FF7B3F';
+const SEARCH_HEIGHT = 52;
+const SEARCH_RADIUS = 26;
+
 type SearchBarProps = {
   value: string;
   onChangeText: (text: string) => void;
@@ -19,17 +23,17 @@ export function SearchBar({
   onChangeText,
   onFilterPress,
   editable = true,
-  placeholder = "Find what's happening near you",
+  placeholder = 'Find events near you',
 }: SearchBarProps) {
   return (
     <View style={styles.row}>
       <View style={styles.searchField}>
-        <Ionicons name="search-outline" size={20} color={stylesConst.iconMuted} />
+        <Ionicons name="search-outline" size={20} color="#9CA3AF" />
         <TextInput
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={stylesConst.placeholder}
+          placeholderTextColor="#A1A1AA"
           style={styles.input}
           editable={editable}
           returnKeyType="search"
@@ -49,46 +53,36 @@ export function SearchBar({
   );
 }
 
-const stylesConst = {
-  iconMuted: '#8E9299',
-  placeholder: '#A1A1AA',
-};
-
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   searchField: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    height: SEARCH_HEIGHT,
+    borderRadius: SEARCH_RADIUS,
+    paddingHorizontal: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    minHeight: 44,
     borderWidth: 1,
-    borderColor: '#EEF0F2',
+    borderColor: '#EAEAEA',
   },
   input: {
     flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
+    marginLeft: 10,
+    fontSize: 15,
     color: '#1C1C1E',
-    paddingVertical: 9,
+    paddingVertical: 0,
   },
   filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#FF7B3F',
+    width: SEARCH_HEIGHT,
+    height: SEARCH_HEIGHT,
+    borderRadius: SEARCH_RADIUS,
+    backgroundColor: BRAND,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FF7B3F',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    elevation: 3,
   },
 });

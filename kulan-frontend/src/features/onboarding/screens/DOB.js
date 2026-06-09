@@ -43,38 +43,20 @@ export default function DOB() {
   };
 
   const handleDateChange = (event, selectedDate) => {
-    console.log("[DOB] onValueChange before:", {
-      eventType: event?.type,
-      selectedDateType: typeof selectedDate,
-      isDateInstance: selectedDate instanceof Date,
-      selectedDate,
-    });
-
     if (Platform.OS === "android") setOpen(false);
     if (!selectedDate || !(selectedDate instanceof Date)) {
-      console.log("[DOB] onValueChange ignored: invalid selectedDate");
       return;
     }
 
     setDob(selectedDate);
-    console.log("[DOB] onValueChange after setDob:", selectedDate.toISOString());
   };
 
   const getDobDisplayText = () => {
-    console.log("[DOB] before formatting dob:", {
-      dobType: typeof dob,
-      isDateInstance: dob instanceof Date,
-      dob,
-    });
-
     if (!(dob instanceof Date) || Number.isNaN(dob.getTime())) {
-      console.log("[DOB] after formatting dob: fallback placeholder");
       return "Select your date of birth";
     }
 
-    const formatted = dob.toDateString();
-    console.log("[DOB] after formatting dob:", formatted);
-    return formatted;
+    return dob.toDateString();
   };
 
   const handleNext = async () => {

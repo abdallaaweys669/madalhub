@@ -184,9 +184,6 @@ export default function EditProfileScreen() {
 
         const formData = new FormData();
         formData.append('file', file);
-        console.log('Selected file:', file);
-        console.log('URI:', file?.uri);
-        console.log('FormData parts:', formData);
         await onboardingApi.uploadMemberProfileImage(formData);
       }
 

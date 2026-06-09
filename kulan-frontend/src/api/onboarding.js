@@ -2,13 +2,7 @@ import apiClient, { API_BASE_URL } from './client';
 
 export const getInterests = async () => {
   try {
-    console.log('Fetching interests...');
-    const url = '/interests';
-    const response = await apiClient.get(url);
-    console.log('Response:', response.data);
-    if (!response.data?.interests?.length) {
-      console.log('No interests found');
-    }
+    const response = await apiClient.get('/interests');
     return response.data?.interests || [];
   } catch (error) {
     if (error.response) {
@@ -188,11 +182,6 @@ export const uploadMemberProfileImage = async (formData) => {
   const headers = {};
   if (base.includes('ngrok')) headers['ngrok-skip-browser-warning'] = 'true';
 
-  console.log('FORMDATA INSTANCE:', formData);
-  console.log('IS FORMDATA:', formData instanceof FormData);
-  console.log('REQUEST HEADERS:', headers);
-  console.log('REQUEST BODY:', formData);
-
   try {
     const response = await apiClient.post('/onboarding/member/profile-image', formData, {
       headers: {
@@ -202,7 +191,6 @@ export const uploadMemberProfileImage = async (formData) => {
       transformRequest: (data) => data,
       timeout: 120000,
     });
-    console.log('UPLOAD RESPONSE', response.data);
     return response.data;
   } catch (error) {
     if (error.response) {

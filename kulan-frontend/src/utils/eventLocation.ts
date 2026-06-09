@@ -28,17 +28,27 @@ function uniqueParts(parts: string[]) {
 }
 
 /** District, region, city — up to 3 parts (e.g. Hodan, Benadir, Mogadishu). */
-export function parseAreaLineFromAddress(rawAddress?: string | null, cityFallback?: string | null) {
+export function parseAreaLineFromAddress(
+  rawAddress?: string | null,
+  cityFallback?: string | null,
+  venueName?: string | null,
+) {
+  const venueNorm = String(venueName || '').trim().toLowerCase();
   const parts = String(rawAddress || '')
     .replace(PLUS_CODE_PATTERN, '')
     .split(',')
     .map((p) => p.trim())
     .filter((p) => p.length > 1 && !isPlusCodeSegment(p));
 
-  const filtered = parts.filter((p) => !TRAILING_COUNTRIES.has(p.toLowerCase()));
+  const filtered = parts
+    .filter((p) => !TRAILING_COUNTRIES.has(p.toLowerCase()))
+    .filter((p) => !venueNorm || p.trim().toLowerCase() !== venueNorm);
+
   if (filtered.length === 0) {
     const city = String(cityFallback || '').trim();
-    return city && !isPlusCodeSegment(city) ? titleCaseWords(city) : '';
+    if (!city || isPlusCodeSegment(city)) return '';
+    if (venueNorm && city.toLowerCase() === venueNorm) return '';
+    return titleCaseWords(city);
   }
 
   const unique = uniqueParts(filtered);
@@ -72,11 +82,37 @@ export function formatAreaLineFromGeocode(place?: GeocodePlace | null) {
   return candidates.join(', ');
 }
 
+export function resolveEventAreaLine(input: {
+  locationAddress?: string | null;
+  locationName?: string | null;
+  city?: string | null;
+  mapAreaLine?: string | null;
+}): string {
+  const mapLine = String(input.mapAreaLine || '').trim();
+  if (mapLine) return mapLine;
+
+  const venueNorm = String(input.locationName || '').trim().toLowerCase();
+  const cityRaw = String(input.city || '').trim();
+  const cityFallback =
+    cityRaw && cityRaw.toLowerCase() !== venueNorm ? cityRaw : null;
+
+  const areaLine = parseAreaLineFromAddress(
+    input.locationAddress,
+    cityFallback,
+    input.locationName,
+  );
+
+  if (!areaLine) return '';
+  if (venueNorm && areaLine.toLowerCase() === venueNorm) return '';
+  return areaLine;
+}
+
 export function formatEventLocationDisplay(event?: {
   locationName?: string | null;
   locationAddress?: string | null;
   city?: string | null;
   isOnline?: boolean;
+  mapAreaLine?: string | null;
 } | null) {
   if (!event) {
     return { venueLine: 'Venue TBA', areaLine: '' };
@@ -96,7 +132,12 @@ export function formatEventLocationDisplay(event?: {
 
   const venueLine =
     venueRaw && !isPlusCodeSegment(venueRaw) ? titleCaseWords(venueRaw) : 'Venue TBA';
-  const areaLine = parseAreaLineFromAddress(event.locationAddress, event.city);
+  const areaLine = resolveEventAreaLine({
+    locationAddress: event.locationAddress,
+    locationName: event.locationName,
+    city: event.city,
+    mapAreaLine: event.mapAreaLine,
+  });
 
   return { venueLine, areaLine };
 }

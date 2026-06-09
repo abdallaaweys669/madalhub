@@ -32,11 +32,8 @@ import { openDirectionsToVenue } from '@/utils/openDirections';
 import EventDetailSkeleton from '@/components/skeletons/EventDetailSkeleton';
 import ImageGalleryModal from '@/components/common/ImageGalleryModal';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
-import {
-  formatAreaLineFromGeocode,
-  formatEventLocationDisplay,
-} from '@/utils/eventLocation';
-import { formatEventDetailDateTime } from '@/utils/eventDisplay';
+import { formatAreaLineFromGeocode } from '@/utils/eventLocation';
+import { buildEventScheduleLocationFields, formatEventDetailDateTime } from '@/utils/eventDisplay';
 import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 
 const EventDetailScreen = () => {
@@ -260,9 +257,17 @@ const EventDetailScreen = () => {
       : 'Free';
   const { datePrimary, dateSecondary } = formatEventDetailDateTime(event.startsAt, event.endsAt);
 
-  const parsedLocation = formatEventLocationDisplay(event);
-  const displayLocationPrimary = parsedLocation.venueLine;
-  const displayLocationSecondary = mapAreaLine || parsedLocation.areaLine;
+  const scheduleLocation = buildEventScheduleLocationFields({
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    locationName: event.locationName,
+    locationAddress: event.locationAddress,
+    city: event.city,
+    isOnline: isOnlineEvent,
+    mapAreaLine,
+  });
+  const displayLocationPrimary = scheduleLocation.locationPrimary;
+  const displayLocationSecondary = scheduleLocation.locationSecondary;
 
   const preferredLocationQuery = [
     event?.locationName,

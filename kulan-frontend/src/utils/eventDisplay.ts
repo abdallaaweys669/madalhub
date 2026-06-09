@@ -1,8 +1,32 @@
+import { formatEventLocationDisplay } from '@/utils/eventLocation';
+
 function formatTimeLabel(iso?: string | null) {
   if (!iso) return null;
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return null;
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+export type EventScheduleLocationInput = {
+  startsAt?: string | null;
+  endsAt?: string | null;
+  locationName?: string | null;
+  locationAddress?: string | null;
+  city?: string | null;
+  isOnline?: boolean;
+  mapAreaLine?: string | null;
+};
+
+export function buildEventScheduleLocationFields(input: EventScheduleLocationInput) {
+  const { datePrimary, dateSecondary } = formatEventDetailDateTime(input.startsAt, input.endsAt);
+  const { venueLine, areaLine } = formatEventLocationDisplay(input);
+
+  return {
+    datePrimary,
+    dateSecondary,
+    locationPrimary: venueLine,
+    locationSecondary: areaLine,
+  };
 }
 
 export function formatEventDetailDateTime(startsAt?: string | null, endsAt?: string | null) {

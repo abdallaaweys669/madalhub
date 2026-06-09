@@ -1,8 +1,10 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 
-import { EventFeedKindChipsRow } from '@/components/event/EventFeedKindChipsRow';
-import { formatKeyToDisplayLabel } from '@/constants/eventFormatLabels';
+import {
+  buildEventMetaBadgeLabels,
+  EventMetaBadgeRow,
+} from '@/components/event/EventMetaBadgeRow';
 import { styles } from '@/constants/eventDetails_styles/eventDetails.styles';
 import { toDisplayTitle } from '@/utils/eventDisplay';
 
@@ -13,23 +15,16 @@ export default function EventDetailIntro({ event }) {
       : String(event.locationName || event.city || '')
           .trim()
           .toLowerCase() === 'online';
-  const formatLabel = formatKeyToDisplayLabel(event.eventFormat);
-  const showCountdown =
-    Boolean(event.urgencyLabel) && event.eventState !== 'live' && event.eventState !== 'ended';
+
+  const badgeLabels = buildEventMetaBadgeLabels({
+    categoryName: event.categoryName,
+    eventFormat: event.eventFormat,
+    isOnline,
+  });
 
   return (
     <View style={styles.detailIntro}>
-      <EventFeedKindChipsRow
-        categoryName={event.categoryName}
-        formatLabel={formatLabel}
-        isOnline={isOnline}
-        urgencyLabel={event.urgencyLabel}
-        showCategory={Boolean(event.categoryName)}
-        showFormat={Boolean(formatLabel)}
-        showDelivery
-        showCountdown={showCountdown}
-        style={styles.detailIntroChips}
-      />
+      <EventMetaBadgeRow labels={badgeLabels} style={styles.detailIntroChips} />
       <Text style={styles.detailFeedTitle}>{toDisplayTitle(event.title)}</Text>
     </View>
   );

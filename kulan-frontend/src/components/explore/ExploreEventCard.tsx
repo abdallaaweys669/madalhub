@@ -18,6 +18,9 @@ import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
 import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
 import { DEFAULT_COVER_GRADIENT } from '@/api/events';
 import { trackEventInteraction } from '@/api/trackEventInteraction';
+import { EventMetaBadgeRow } from '@/components/event/EventMetaBadgeRow';
+import { EventDateLocationRows } from '@/components/event/EventDateLocationRows';
+import { buildEventScheduleLocationFields } from '@/utils/eventDisplay';
 
 const ORANGE = '#FF7B3F';
 const COVER_RADIUS = 16;
@@ -152,6 +155,12 @@ export type ExploreEventCardModel = {
   dateLabel?: string;
   timeLabel?: string;
   location: string;
+  startsAt?: string;
+  endsAt?: string | null;
+  locationName?: string | null;
+  locationAddress?: string | null;
+  city?: string | null;
+  isOnline?: boolean;
   coverImageUrl?: string | null;
   coverLetter?: string;
   coverGradient?: readonly [string, string];
@@ -210,10 +219,16 @@ export function ExploreEventCard({ event }: ExploreEventCardProps) {
   const anonymousFaceCount = Math.min(3, Math.max(1, goingCountN));
 
   const statusLabel = event.urgencyLabel || event.statusChip?.label;
-  const dateLabel = event.dateLabel || event.dateTimeLabel.split('•')[0]?.trim();
-  const timeLabel = event.timeLabel || event.dateTimeLabel.split('•')[1]?.trim();
   const priceLabel = event.priceLabel || 'Free';
-  const eventChips = resolveEventChips(event);
+  const badgeLabels = resolveEventChips(event).map((chip) => chip.label);
+  const scheduleLocation = buildEventScheduleLocationFields({
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    locationName: event.locationName,
+    locationAddress: event.locationAddress,
+    city: event.city,
+    isOnline: event.isOnline ?? event.mode === 'online',
+  });
 
   useEffect(() => {
     if (isLoggedIn) trackEventInteraction(event.id, 'viewed');
@@ -292,45 +307,18 @@ export function ExploreEventCard({ event }: ExploreEventCardProps) {
         </View>
 
         <View style={styles.content}>
-          {eventChips.length ? (
-            <View style={styles.chipRow}>
-              {eventChips.map((chip) => (
-                <EventMetaChip key={`${chip.type}-${chip.label}`} chip={chip} />
-              ))}
-            </View>
-          ) : null}
+          <EventMetaBadgeRow labels={badgeLabels} />
 
           <Text style={styles.title} numberOfLines={2}>
             {event.title}
           </Text>
 
-          {dateLabel || timeLabel ? (
-            <View style={styles.dateTimeRow}>
-              {dateLabel ? (
-                <View style={styles.dateTimePart}>
-                  <Ionicons name="calendar-outline" size={16} color={ORANGE} />
-                  <Text style={styles.metaTextMuted} numberOfLines={1}>
-                    {dateLabel}
-                  </Text>
-                </View>
-              ) : null}
-              {timeLabel ? (
-                <View style={styles.dateTimePart}>
-                  <Ionicons name="time-outline" size={16} color={ORANGE} />
-                  <Text style={styles.metaTextMuted} numberOfLines={1}>
-                    {timeLabel}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
-          <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={16} color={ORANGE} />
-            <Text style={styles.metaTextMuted} numberOfLines={2}>
-              {event.location}
-            </Text>
-          </View>
+          <EventDateLocationRows
+            datePrimary={scheduleLocation.datePrimary}
+            dateSecondary={scheduleLocation.dateSecondary}
+            locationPrimary={scheduleLocation.locationPrimary}
+            locationSecondary={scheduleLocation.locationSecondary}
+          />
 
           <View style={styles.footerRow}>
             <View style={styles.avatarStack}>

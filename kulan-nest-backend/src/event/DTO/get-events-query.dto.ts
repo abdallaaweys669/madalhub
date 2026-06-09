@@ -62,8 +62,8 @@ export class GetEventsQueryDto {
 
   @IsOptional()
   @Transform(({ value }) => String(value).toLowerCase())
-  @IsIn(['start-asc', 'start-desc', 'popular'])
-  sort?: 'start-asc' | 'start-desc' | 'popular';
+  @IsIn(['start-asc', 'start-desc', 'popular', 'trending'])
+  sort?: 'start-asc' | 'start-desc' | 'popular' | 'trending';
 
   @IsOptional()
   @Type(() => Number)

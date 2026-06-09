@@ -1,8 +1,9 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
+import useAuth from '@/auth/useAuth';
 import { Ionicons } from '@expo/vector-icons';
 
 import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
@@ -10,9 +11,9 @@ import {
   authFontAssets,
   FONT_JAKARTA_BOLD,
   FONT_JAKARTA_REGULAR,
-  FONT_PLAYFAIR_BOLD,
 } from '@/features/auth/theme/authTypography';
 import { spacing, useThemeColors } from '@/theme';
+import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 
 type HomeHeaderProps = {
   displayName?: string;
@@ -21,9 +22,25 @@ type HomeHeaderProps = {
 
 function getDayGreeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good Morning,';
-  if (hour < 17) return 'Good Afternoon,';
-  return 'Good Evening,';
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 21) return 'Good evening';
+  return 'Good night';
+}
+
+function formatHomeHeaderName(raw: string): string {
+  const name = raw.trim() || 'Member';
+  const parts = name.split(/\s+/).filter(Boolean);
+
+  if (parts.length >= 2) {
+    return parts[0];
+  }
+
+  if (name.length > 20) {
+    return `${name.slice(0, 18).trim()}…`;
+  }
+
+  return name;
 }
 
 function GuestWelcomeCard() {
@@ -69,33 +86,62 @@ function GuestWelcomeCard() {
 export function HomeHeader({ displayName, isGuest = false }: HomeHeaderProps) {
   const colors = useThemeColors();
   const router = useGuardedRouter();
+  const { user } = useAuth();
   const [fontsLoaded] = useFonts(authFontAssets);
+
+  const avatarUrl = useMemo(() => {
+    const raw = user?.profileImg || user?.avatarUrl || null;
+    return resolveApiAssetUrl(raw);
+  }, [user?.profileImg, user?.avatarUrl]);
 
   if (isGuest) {
     return <GuestWelcomeCard />;
   }
 
-  const firstName = (displayName || 'there').trim().split(/\s+/)[0] || 'there';
+  const fullName = (displayName || 'Member').trim() || 'Member';
+  const headerName = formatHomeHeaderName(fullName);
   const greeting = getDayGreeting();
   const greetingFont = fontsLoaded ? { fontFamily: FONT_JAKARTA_REGULAR } : null;
-  const nameFont = fontsLoaded ? { fontFamily: FONT_PLAYFAIR_BOLD } : null;
+  const nameFont = fontsLoaded ? { fontFamily: FONT_JAKARTA_BOLD } : null;
 
   return (
-    <View style={[styles.root, { borderBottomColor: colors.border }]}>
-      <View style={styles.textWrap}>
-        <Text style={[styles.greetingTime, greetingFont, { color: colors.textSecondary }]}>{greeting}</Text>
-        <Text style={[styles.nameHighlight, nameFont, { color: colors.primary }]}>{firstName}</Text>
-      </View>
-
+    <View style={styles.root}>
       <TouchableOpacity
-        style={[styles.actionPill, { backgroundColor: colors.backgroundMuted }]}
+        style={styles.profileTap}
         onPress={() => router.push('/profile')}
         activeOpacity={0.88}
         accessibilityRole="button"
         accessibilityLabel="Open profile"
       >
-        <MemberInitialAvatar name={displayName || 'Member'} size={34} borderWidth={0} />
-        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+        {avatarUrl ? (
+          <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
+        ) : (
+          <MemberInitialAvatar name={fullName} size={48} borderWidth={0} />
+        )}
+
+        <View style={styles.textWrap}>
+          <Text style={[styles.greetingTime, greetingFont, { color: colors.textSecondary }]}>
+            {greeting}
+          </Text>
+          <Text
+            style={[styles.displayName, nameFont, { color: colors.text }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            accessibilityLabel={fullName}
+          >
+            {headerName}
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.notificationBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => router.push('/(tabs)/notifications')}
+        activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityLabel="Open notifications"
+      >
+        <Ionicons name="notifications-outline" size={22} color={colors.text} />
       </TouchableOpacity>
     </View>
   );
@@ -152,36 +198,52 @@ const styles = StyleSheet.create({
   root: {
     marginHorizontal: spacing.md,
     marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  profileTap: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E5E7EB',
+  },
   textWrap: {
     flex: 1,
     minWidth: 0,
+    gap: 2,
   },
   greetingTime: {
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '400',
   },
-  nameHighlight: {
-    marginTop: 2,
-    fontSize: 24,
-    lineHeight: 28,
-    letterSpacing: 0.1,
+  displayName: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
-  actionPill: {
-    minHeight: 42,
-    borderRadius: 999,
-    paddingLeft: 5,
-    paddingRight: 8,
+  notificationBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
 });

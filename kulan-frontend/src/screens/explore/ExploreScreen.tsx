@@ -41,7 +41,8 @@ import {
 import { spacing } from '@/theme';
 import { formatEventScheduleLabels } from '@/utils/formatEventSchedule';
 
-const SECTION_GAP = 8;
+const SECTION_GAP = 16;
+const SCREEN_TOP_EXTRA = 10;
 const NO_EVENTS_IMAGE = require('../../assets/no events.png');
 
 const DEFAULT_EXPLORE_CATEGORIES: ExploreCategory[] = [{ id: 'All', icon: 'apps-outline' }];
@@ -105,7 +106,7 @@ function buildExploreParams(args: {
   const params: Record<string, string | number> = {
     page: 1,
     limit: 20,
-    sort: selectedFilters.quickPickRule === 'sortByAttendees' ? 'popular' : 'start-asc',
+    sort: selectedFilters.quickPickRule === 'sortByAttendees' ? 'trending' : 'start-asc',
   };
 
   if (debouncedSearchQuery) params.q = debouncedSearchQuery;
@@ -130,17 +131,17 @@ function buildExploreParams(args: {
   }
 
   const dateBucket =
-    selectedFilters.date === 'Any time' || selectedFilters.date === 'Upcoming'
+    selectedFilters.date === 'Upcoming'
       ? 'upcoming'
-        : selectedFilters.date === 'Today'
-          ? 'today'
-          : selectedFilters.date === 'Tomorrow'
-            ? 'tomorrow'
-            : selectedFilters.date === 'This weekend'
-              ? 'this-weekend'
-              : selectedFilters.date === 'Next week'
-                ? 'next-week'
-                : undefined;
+      : selectedFilters.date === 'Today'
+        ? 'today'
+        : selectedFilters.date === 'Tomorrow'
+          ? 'tomorrow'
+          : selectedFilters.date === 'This weekend'
+            ? 'this-weekend'
+            : selectedFilters.date === 'Next week'
+              ? 'next-week'
+              : undefined;
   if (dateBucket) params.dateBucket = dateBucket;
 
   return params;
@@ -261,8 +262,16 @@ function mapItemToExploreRow(event: any): ExploreRow {
     attendeePreviews: card.attendeePreviews,
     mode: isOnline ? 'online' : 'in-person',
     startsAt,
+    endsAt,
     city,
     isOnline,
+    locationName: locationName || null,
+    locationAddress:
+      typeof card.locationAddress === 'string' && card.locationAddress.trim()
+        ? card.locationAddress.trim()
+        : typeof event.locationAddress === 'string' && event.locationAddress.trim()
+          ? event.locationAddress.trim()
+          : null,
     priceType: card.priceType ?? event.priceType ?? 'Free',
     priceLabel,
     eventFormat,
@@ -496,7 +505,7 @@ export default function ExploreScreen() {
   if (isLoading) {
     return (
       <Container>
-        <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={[styles.flex, styles.screenTopInset]} edges={['top', 'left', 'right']}>
           <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
           <ExploreSkeleton />
         </SafeAreaView>
@@ -506,13 +515,14 @@ export default function ExploreScreen() {
 
   return (
     <Container>
-      <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.flex, styles.screenTopInset]} edges={['top', 'left', 'right']}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         <View style={styles.pad}>
           <SearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
             onFilterPress={handleFilterPress}
+            placeholder="Find events near you"
           />
           <View style={styles.sectionSpacer} />
           <CategoryTabs
@@ -563,10 +573,13 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  screenTopInset: {
+    paddingTop: SCREEN_TOP_EXTRA,
+  },
   pad: {
     paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 2,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   sectionHeading: {
     fontSize: 16,

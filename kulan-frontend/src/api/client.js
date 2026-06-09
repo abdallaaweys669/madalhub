@@ -24,26 +24,11 @@ if (typeof baseURL === 'string' && baseURL.includes('ngrok')) {
 }
 
 if (__DEV__) {
-  console.log('API BASE URL:', baseURL);
-  console.log('BASE_URL', baseURL);
+  console.log('[API] Using base URL:', baseURL);
 }
 
 /** Same base URL as axios — used by `eventAssets` multipart upload (fetch). */
 export const API_BASE_URL = baseURL;
-
-apiClient.interceptors.request.use(
-  (config) => {
-    console.log('BASE_URL', config?.baseURL);
-    console.log('REQUEST_URL', `${config?.baseURL || ''}${config?.url || ''}`);
-    console.log('METHOD:', config?.method);
-    console.log('URL:', config?.url);
-    console.log('REQUEST HEADERS:', config.headers);
-    console.log('REQUEST BODY:', config.data);
-    console.log('IS_FORMDATA:', config?.data instanceof FormData);
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
 
 apiClient.interceptors.response.use(
   (response) => response,

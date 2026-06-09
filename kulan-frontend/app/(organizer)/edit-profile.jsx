@@ -145,9 +145,6 @@ export default function OrganizerEditProfileScreen() {
 
         const formData = new FormData();
         formData.append('file', file);
-        console.log('Selected file:', file);
-        console.log('URI:', file?.uri);
-        console.log('FormData parts:', formData);
         await uploadOrganizerProfileImage(formData);
       }
       await updateOrganizerProfile({

@@ -19,9 +19,16 @@ export function logApiError(error) {
     message = data.error;
   }
 
+  const baseURL = error?.config?.baseURL;
+  const fullUrl =
+    baseURL && url
+      ? `${String(baseURL).replace(/\/$/, '')}${String(url).startsWith('/') ? url : `/${url}`}`
+      : null;
   const line = status
     ? `[API] ${method} ${url} → ${status}: ${message}`
-    : `[API] ${method} ${url}: ${message}`;
+    : fullUrl
+      ? `[API] ${method} ${url}: ${message} (${fullUrl})`
+      : `[API] ${method} ${url}: ${message}`;
 
   const isExpectedClientError =
     typeof status === 'number' && status >= 400 && status < 500;

@@ -13,6 +13,7 @@ import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { formatAreaLineFromGeocode } from '@/utils/eventLocation';
 
 const MOGADISHU_REGION = {
   latitude: 2.0469,
@@ -197,23 +198,7 @@ export default function LocationPickerModal({
     };
   };
 
-  const formatReverseAddress = (place) => {
-    const areaParts = [place?.district, place?.subregion, place?.region, place?.city]
-      .filter((part) => typeof part === 'string' && part.trim())
-      .map((part) => part.trim());
-    const unique = [];
-    const seen = new Set();
-    areaParts.forEach((part) => {
-      const key = part.toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      unique.push(part);
-    });
-    if (unique.length >= 3) {
-      return `${unique[unique.length - 3]}, ${unique[unique.length - 2]}, ${unique[unique.length - 1]}`;
-    }
-    return unique.join(', ');
-  };
+  const formatReverseAddress = (place) => formatAreaLineFromGeocode(place);
 
   const dedupePlaces = (places) => {
     const seen = new Set();
