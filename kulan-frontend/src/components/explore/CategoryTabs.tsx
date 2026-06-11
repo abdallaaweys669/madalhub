@@ -2,16 +2,21 @@ import React, { type ComponentProps } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { toFilledCategoryIcon } from '@/components/explore/exploreCategoryIcons';
+
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 const BRAND = '#FF7B3F';
-const INACTIVE = '#333333';
+const CHIP_BG = '#FFF0E6';
+const CHIP_BG_ACTIVE = '#FFDFCC';
+const LABEL_COLOR = '#374151';
 
-const TAB_WIDTH = 72;
-const TAB_GAP = 12;
-const ICON_SIZE = 24;
+const TAB_WIDTH = 78;
+const TAB_GAP = 18;
+const CHIP_SIZE = 58;
+const ICON_SIZE = 26;
 const LABEL_SIZE = 13;
-const ICON_LABEL_GAP = 4;
+const ICON_LABEL_GAP = 8;
 
 export type ExploreCategory = {
   id: string;
@@ -24,15 +29,6 @@ type CategoryTabsProps = {
   onChange: (id: string) => void;
 };
 
-function resolveCategoryIcon(icon: IoniconName, active: boolean): IoniconName {
-  if (active) {
-    return icon.endsWith('-outline')
-      ? (icon.slice(0, -'-outline'.length) as IoniconName)
-      : icon;
-  }
-  return icon.endsWith('-outline') ? icon : (`${icon}-outline` as IoniconName);
-}
-
 function CategoryTabItem({
   cat,
   active,
@@ -42,7 +38,7 @@ function CategoryTabItem({
   active: boolean;
   onPress: () => void;
 }) {
-  const iconName = resolveCategoryIcon(cat.icon, active);
+  const iconName = toFilledCategoryIcon(cat.icon);
 
   return (
     <TouchableOpacity
@@ -51,9 +47,10 @@ function CategoryTabItem({
       activeOpacity={0.85}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityLabel={`${cat.id} category`}
     >
       <View style={[styles.chip, active && styles.chipActive]}>
-        <Ionicons name={iconName} size={ICON_SIZE} color={active ? BRAND : INACTIVE} />
+        <Ionicons name={iconName} size={ICON_SIZE} color={BRAND} />
       </View>
       <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>
         {cat.id}
@@ -87,35 +84,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: TAB_GAP,
-    paddingRight: 4,
-    paddingTop: 4,
-    paddingBottom: 4,
+    paddingRight: 8,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
   tabItem: {
     width: TAB_WIDTH,
     alignItems: 'center',
   },
   chip: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: CHIP_SIZE,
+    height: CHIP_SIZE,
+    borderRadius: CHIP_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHIP_BG,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   chipActive: {
-    backgroundColor: '#FFEFE5',
+    backgroundColor: CHIP_BG_ACTIVE,
+    borderColor: BRAND,
   },
   tabLabel: {
     marginTop: ICON_LABEL_GAP,
     fontSize: LABEL_SIZE,
     lineHeight: 16,
     fontWeight: '500',
-    color: INACTIVE,
+    color: LABEL_COLOR,
     textAlign: 'center',
+    maxWidth: TAB_WIDTH,
   },
   tabLabelActive: {
     color: BRAND,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

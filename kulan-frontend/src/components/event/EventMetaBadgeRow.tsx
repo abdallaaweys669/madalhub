@@ -22,6 +22,35 @@ export function buildEventMetaBadgeLabels(input: {
   return badges;
 }
 
+/** Feed card tags: category, format, delivery mode, urgency (Meetup-style text row). */
+export function buildEventFeedTagLabels(input: {
+  categoryName?: string | null;
+  eventFormat?: string | null;
+  isOnline?: boolean;
+  urgencyLabel?: string | null;
+  mode?: 'online' | 'in-person';
+}): string[] {
+  const badges: string[] = [];
+
+  const category = String(input.categoryName || '').trim();
+  if (category) badges.push(category);
+
+  const formatLabel = formatKeyToDisplayLabel(input.eventFormat);
+  if (formatLabel) badges.push(formatLabel);
+
+  const isOnline =
+    input.mode != null ? input.mode === 'online' : Boolean(input.isOnline);
+  badges.push(isOnline ? 'Online' : 'In-person');
+
+  const urgency = String(input.urgencyLabel || '').trim();
+  if (urgency) badges.push(urgency);
+
+  return badges;
+}
+
+/** @deprecated Use buildEventFeedTagLabels */
+export const buildHomeEventTagLabels = buildEventFeedTagLabels;
+
 type EventMetaBadgeRowProps = {
   labels: string[];
   style?: StyleProp<ViewStyle>;

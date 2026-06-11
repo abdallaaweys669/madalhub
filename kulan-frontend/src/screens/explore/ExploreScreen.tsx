@@ -20,10 +20,9 @@ import {
   CategoryTabs,
   type ExploreCategory,
 } from '@/components/explore/CategoryTabs';
-import {
-  ExploreEventCard,
-  type ExploreEventCardModel,
-} from '@/components/explore/ExploreEventCard';
+import { resolveExploreCategoryIcon } from '@/components/explore/exploreCategoryIcons';
+import { KulanEventFeedCard } from '@/components/event/feed/KulanEventFeedCard';
+import type { ExploreEventCardModel } from '@/components/explore/ExploreEventCard';
 import {
   FilterModal,
   type ExploreFilters,
@@ -45,15 +44,8 @@ const SECTION_GAP = 16;
 const SCREEN_TOP_EXTRA = 10;
 const NO_EVENTS_IMAGE = require('../../assets/no events.png');
 
-const DEFAULT_EXPLORE_CATEGORIES: ExploreCategory[] = [{ id: 'All', icon: 'apps-outline' }];
-const CATEGORY_ICONS: ExploreCategory['icon'][] = [
-  'ticket-outline',
-  'football-outline',
-  'color-palette-outline',
-  'briefcase-outline',
-  'school-outline',
-  'mic-outline',
-  'people-outline',
+const DEFAULT_EXPLORE_CATEGORIES: ExploreCategory[] = [
+  { id: 'All', icon: resolveExploreCategoryIcon('All') },
 ];
 
 type ExploreRow = ExploreEventCardModel & {
@@ -386,7 +378,7 @@ export default function ExploreScreen() {
         if (!mounted) return;
         const mapped = interests.map((interest: { id: number; name: string }, idx: number) => ({
           id: interest.name,
-          icon: CATEGORY_ICONS[idx % CATEGORY_ICONS.length],
+          icon: resolveExploreCategoryIcon(interest.name, idx),
         }));
         setCategories([DEFAULT_EXPLORE_CATEGORIES[0], ...mapped]);
         setInterestIdByName(
@@ -496,7 +488,7 @@ export default function ExploreScreen() {
   const sectionTitle = activeCategory === 'All' ? 'All Events' : `${activeCategory} Events`;
 
   const renderItem: ListRenderItem<ExploreRow> = useCallback(
-    ({ item }) => <ExploreEventCard event={item} />,
+    ({ item }) => <KulanEventFeedCard event={item} variant="flat" />,
     [],
   );
 
@@ -587,12 +579,12 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     letterSpacing: -0.2,
     marginBottom: 8,
+    marginHorizontal: 16,
   },
   sectionSpacer: {
     height: SECTION_GAP,
   },
   listContent: {
-    paddingHorizontal: 16,
     paddingTop: 0,
     paddingBottom: spacing.xl,
     flexGrow: 1,

@@ -37,7 +37,7 @@ import { Feather } from '@expo/vector-icons';
 
 import { HomeHeader } from './HomeHeader';
 import { YourEventsSection, type HomeEventTab } from './YourEventsSection';
-import { buildEventMetaBadgeLabels, EventMetaBadgeRow } from '@/components/event/EventMetaBadgeRow';
+import { HomeMyEventCard } from '@/components/event/home/HomeMyEventCard';
 import { EventDateLocationRows } from '@/components/event/EventDateLocationRows';
 import { buildEventScheduleLocationFields } from '@/utils/eventDisplay';
 
@@ -482,202 +482,6 @@ function RecommendedMiniCard({ event }: { event: EventCardModel }) {
   );
 }
 
-function formatMyEventPriceLabel(event: EventCardModel): string {
-  const priceType = event.priceType ?? 'Free';
-  const priceAmount = event.priceAmount;
-  if (priceType === 'Paid' && typeof priceAmount === 'number' && priceAmount > 0) {
-    return `$${priceAmount.toFixed(priceAmount % 1 === 0 ? 0 : 2)}`;
-  }
-  return 'Free';
-}
-
-function HomeMyEventCard({
-  event,
-  activeTab,
-  cardWidth,
-}: {
-  event: EventCardModel;
-  activeTab: HomeEventTab;
-  cardWidth?: number;
-}) {
-  const colors = useThemeColors();
-  const router = useGuardedRouter();
-  const { isLoggedIn } = useAuth();
-  const scheduleLocation = getEventScheduleLocation(event as EventCardModel & { city?: string });
-  const goingCountN = Math.max(0, Number(event.goingCount) || 0);
-  const goingLabel = `${goingCountN} going`;
-  const previews = event.attendeePreviews?.filter(Boolean) ?? [];
-  const showPreviews = previews.length > 0;
-  const showAnonymousGoing = !showPreviews && goingCountN > 0;
-  const anonymousFaceCount = Math.min(3, Math.max(1, goingCountN));
-  const statusLabel = event.urgencyLabel || event.statusChip?.label;
-  const priceLabel = formatMyEventPriceLabel(event);
-  const showGoingBadge = activeTab === 'Joined' || Boolean((event as { isJoined?: boolean }).isJoined);
-  const imageHeight = cardWidth ? Math.round(cardWidth * 0.62) : 176;
-
-  const openDetail = () => {
-    if (isLoggedIn) trackEventInteraction(event.id, 'opened');
-    router.push(`/events/${event.id}`);
-  };
-
-  return (
-    <View
-      style={[
-        styles.myEventCard,
-        { width: cardWidth ?? 300, backgroundColor: colors.card, borderColor: colors.border },
-      ]}
-    >
-      <View style={[styles.myEventImageWrap, { height: imageHeight }]}>
-        <Pressable onPress={openDetail} style={StyleSheet.absoluteFill}>
-          {event.coverImageUrl ? (
-            <Image
-              source={{ uri: event.coverImageUrl }}
-              style={coverBannerImageStyle}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.myEventImageFallback, { backgroundColor: colors.backgroundMuted }]}>
-              <Text style={[styles.myEventFallbackLetter, { color: colors.textSecondary }]}>
-                {(event.coverLetter || event.title || '?').trim().charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-        </Pressable>
-        <HomeEventCoverActions
-          eventId={event.id}
-          shareMessage={`${event.title}\n${scheduleLocation.datePrimary} · ${scheduleLocation.dateSecondary}`}
-        />
-        <View style={styles.myEventHeroTopLeft}>
-          <View style={styles.myEventPriceBadge}>
-            <Text style={styles.myEventPriceBadgeText}>{priceLabel}</Text>
-          </View>
-          {showGoingBadge ? (
-            <View style={styles.myEventJoinedBadge}>
-              <Ionicons name="checkmark-circle" size={12} color="#15803D" />
-              <Text style={styles.myEventBadgeText}>Joined</Text>
-            </View>
-          ) : null}
-        </View>
-        {statusLabel ? (
-          <View style={styles.myEventStatusBadge}>
-            <Ionicons name="timer-outline" size={12} color="#FFFFFF" />
-            <Text style={styles.myEventStatusBadgeText}>{statusLabel}</Text>
-          </View>
-        ) : null}
-      </View>
-      <Pressable onPress={openDetail} style={styles.myEventBody}>
-        <EventMetaBadgeRow
-          labels={buildEventMetaBadgeLabels({
-            categoryName: event.categoryName,
-            eventFormat: event.eventFormat,
-            isOnline: event.isOnline,
-          })}
-        />
-        <Text numberOfLines={2} style={[styles.myEventTitle, { color: colors.text }]}>
-          {event.title}
-        </Text>
-        <EventDateLocationRows
-          datePrimary={scheduleLocation.datePrimary}
-          dateSecondary={scheduleLocation.dateSecondary}
-          locationPrimary={scheduleLocation.locationPrimary}
-          locationSecondary={scheduleLocation.locationSecondary}
-        />
-        <View style={styles.myEventFooter}>
-          <View style={styles.myEventAvatarStack}>
-            {showPreviews ? (
-              previews.slice(0, 3).map((preview, index) => (
-                <MemberInitialAvatar
-                  key={
-                    preview.userId != null
-                      ? String(preview.userId)
-                      : `${preview.name}-${index}`
-                  }
-                  name={preview.name}
-                  size={26}
-                  borderWidth={2}
-                  style={index > 0 ? styles.myEventAvatarOverlap : undefined}
-                />
-              ))
-            ) : showAnonymousGoing ? (
-              Array.from({ length: anonymousFaceCount }, (_, index) => (
-                <MemberInitialAvatar
-                  key={`anon-${index}`}
-                  name={`Attendee ${index + 1}`}
-                  size={26}
-                  borderWidth={2}
-                  style={index > 0 ? styles.myEventAvatarOverlap : undefined}
-                />
-              ))
-            ) : (
-              <Ionicons name="people-outline" size={14} color={colors.textSecondary} />
-            )}
-          </View>
-          <Text style={[styles.myEventGoingText, { color: colors.textSecondary }]}>{goingLabel}</Text>
-        </View>
-      </Pressable>
-    </View>
-  );
-}
-
-function GuestUpcomingSection({
-  events,
-  cardWidth,
-  onSeeAll,
-}: {
-  events: EventCardModel[];
-  cardWidth: number;
-  onSeeAll: () => void;
-}) {
-  const colors = useThemeColors();
-  const router = useGuardedRouter();
-
-  return (
-    <View style={styles.guestUpcomingSection}>
-      <View style={styles.guestUpcomingHead}>
-        <Text style={[styles.guestUpcomingTitle, { color: colors.text }]}>Upcoming Events</Text>
-        {events.length > 2 ? (
-          <TouchableOpacity activeOpacity={0.8} onPress={onSeeAll}>
-            <Text style={[styles.guestUpcomingSeeAll, { color: colors.primary }]}>See all</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
-      {events.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.myEventsRow}
-          nestedScrollEnabled
-        >
-          {events.map((event) => (
-            <HomeMyEventCard
-              key={`guest-upcoming-${event.id}`}
-              event={event}
-              activeTab="Upcoming"
-              cardWidth={cardWidth}
-            />
-          ))}
-        </ScrollView>
-      ) : (
-        <View style={[styles.emptyWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Image source={NO_EVENTS_IMAGE} style={styles.emptyIllustration} resizeMode="contain" />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No upcoming events</Text>
-          <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>
-            Discover events happening near you.
-          </Text>
-          <TouchableOpacity
-            style={[styles.emptyCta, { backgroundColor: colors.primary }]}
-            activeOpacity={0.9}
-            onPress={() => router.push('/(tabs)/explore')}
-          >
-            <Text style={styles.emptyCtaText}>Explore Events</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-}
-
 function getEventGoingCount(event: EventCardModel): number {
   return Math.max(0, Number(event.goingCount) || 0);
 }
@@ -813,7 +617,6 @@ function HomeScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { user, setUser, isLoggedIn } = useAuth();
   const isGuest = !isLoggedIn;
-  const guestEventCardWidth = Math.floor((screenWidth - spacing.md * 2 - spacing.sm) / 2);
   const myEventCardWidth = useMemo(
     () => Math.floor(screenWidth - spacing.md * 2 - MY_EVENT_CARD_PEEK),
     [screenWidth],
@@ -959,8 +762,6 @@ function HomeScreen() {
     [events, savedEventIds],
   );
   const activeData = useMemo(() => {
-    if (isGuest) return [];
-
     switch (activeTab) {
       case 'Past':
         return pastEvents;
@@ -972,15 +773,12 @@ function HomeScreen() {
       default:
         return upcomingNotJoinedEvents.length ? upcomingNotJoinedEvents : upcomingEvents;
     }
-  }, [
-    activeTab,
-    isGuest,
-    pastEvents,
-    joinedUpcomingEvents,
-    savedEvents,
-    upcomingNotJoinedEvents,
-    upcomingEvents,
-  ]);
+  }, [activeTab, pastEvents, joinedUpcomingEvents, savedEvents, upcomingNotJoinedEvents, upcomingEvents]);
+
+  const myEventsData = useMemo(
+    () => (isGuest ? upcomingEvents : activeData),
+    [isGuest, upcomingEvents, activeData],
+  );
 
   const trendingEvents = useMemo(() => {
     const eligible = upcomingEvents.filter((event) => getEventGoingCount(event) >= TRENDING_MIN_ATTENDEES);
@@ -1043,60 +841,50 @@ function HomeScreen() {
           ListHeaderComponent={
             <>
               <HomeHeader displayName={displayName} isGuest={isGuest} />
-              {isGuest ? (
-                <GuestUpcomingSection
-                  events={upcomingEvents}
-                  cardWidth={guestEventCardWidth}
-                  onSeeAll={() => router.push('/(tabs)/explore')}
-                />
+              <YourEventsSection
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                isGuest={isGuest}
+              />
+              {myEventsData.length ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.myEventsRow}
+                  nestedScrollEnabled
+                  decelerationRate="fast"
+                  snapToInterval={myEventCardWidth + spacing.sm}
+                  snapToAlignment="start"
+                  disableIntervalMomentum
+                >
+                  {myEventsData.map((event) => (
+                    <HomeMyEventCard
+                      key={`active-${event.id}`}
+                      event={event}
+                      activeTab={isGuest ? 'Upcoming' : activeTab}
+                      cardWidth={myEventCardWidth}
+                    />
+                  ))}
+                </ScrollView>
               ) : (
-                <>
-                  <YourEventsSection
-                    activeTab={activeTab}
-                    onTabChange={setActiveTab}
-                    isGuest={isGuest}
-                  />
-                  {activeData.length ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.myEventsRow}
-                      nestedScrollEnabled
-                      decelerationRate="fast"
-                      snapToInterval={myEventCardWidth + spacing.sm}
-                      snapToAlignment="start"
-                      disableIntervalMomentum
-                    >
-                      {activeData.map((event) => (
-                        <HomeMyEventCard
-                          key={`active-${event.id}`}
-                          event={event}
-                          activeTab={activeTab}
-                          cardWidth={myEventCardWidth}
-                        />
-                      ))}
-                    </ScrollView>
-                  ) : (
-                    <View style={[styles.emptyWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Image source={NO_EVENTS_IMAGE} style={styles.emptyIllustration} resizeMode="contain" />
-                      <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                        {activeTab === 'Upcoming' ? 'No upcoming events' : `No ${activeTab.toLowerCase()} events`}
-                      </Text>
-                      <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>
-                        {activeTab === 'Upcoming'
-                          ? 'Discover events happening near you.'
-                          : "You don't have any events right now. Let's find some!"}
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.emptyCta, { backgroundColor: colors.primary }]}
-                        activeOpacity={0.9}
-                        onPress={() => router.push('/(tabs)/explore')}
-                      >
-                        <Text style={styles.emptyCtaText}>Explore Events</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </>
+                <View style={[styles.emptyWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Image source={NO_EVENTS_IMAGE} style={styles.emptyIllustration} resizeMode="contain" />
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                    {activeTab === 'Upcoming' ? 'No upcoming events' : `No ${activeTab.toLowerCase()} events`}
+                  </Text>
+                  <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>
+                    {activeTab === 'Upcoming'
+                      ? 'Discover events happening near you.'
+                      : "You don't have any events right now. Let's find some!"}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.emptyCta, { backgroundColor: colors.primary }]}
+                    activeOpacity={0.9}
+                    onPress={() => router.push('/(tabs)/explore')}
+                  >
+                    <Text style={styles.emptyCtaText}>Explore Events</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </>
           }
@@ -1162,115 +950,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
     gap: spacing.sm,
   },
-  guestUpcomingSection: {
-    paddingBottom: spacing.xs,
-  },
-  guestUpcomingHead: {
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  guestUpcomingTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  guestUpcomingSeeAll: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  myEventCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  myEventImageWrap: {
-    width: '100%',
-    height: 176,
-    backgroundColor: '#E5E7EB',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  myEventImageFallback: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  myEventFallbackLetter: {
-    fontSize: 34,
-    fontWeight: '700',
-  },
-  myEventHeroTopLeft: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    zIndex: 2,
-    gap: 6,
-    alignItems: 'flex-start',
-  },
-  myEventPriceBadge: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  myEventPriceBadgeText: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '700',
-    color: '#FF7B3F',
-  },
-  myEventJoinedBadge: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(240,253,244,0.95)',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  myEventBadgeText: {
-    color: '#15803D',
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '700',
-  },
-  myEventStatusBadge: {
-    position: 'absolute',
-    left: 10,
-    bottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FF7B3F',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    zIndex: 2,
-  },
-  myEventStatusBadgeText: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
   coverHeroActions: {
     position: 'absolute',
     top: 10,
@@ -1306,47 +985,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 4,
     elevation: 3,
-  },
-  myEventBody: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 6,
-  },
-  myEventTitle: {
-    fontSize: 36 / 2,
-    lineHeight: 24,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  myEventMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  myEventMetaText: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '500',
-    flex: 1,
-    minWidth: 0,
-  },
-  myEventFooter: {
-    marginTop: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  myEventAvatarStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  myEventAvatarOverlap: {
-    marginLeft: -8,
-  },
-  myEventGoingText: {
-    fontSize: 13,
-    lineHeight: 16,
-    fontWeight: '600',
   },
   recommendedSection: {
     marginTop: spacing.lg,
