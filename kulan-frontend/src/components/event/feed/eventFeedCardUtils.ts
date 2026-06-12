@@ -1,5 +1,24 @@
 import type { EventCardModel } from '@/components/event/EventCard';
 import { EVENT_FEED_BOXED_COVER_RATIO } from '@/components/event/feed/eventFeedTokens';
+import { resolveApiAssetUrl } from '@/utils/mediaUrl';
+
+function resolveFeedCoverUrl(event: Record<string, unknown>): string | null {
+  const candidates = [
+    event.coverImageUrl,
+    typeof event.image === 'object' && event.image !== null
+      ? (event.image as { uri?: string }).uri
+      : null,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      const trimmed = candidate.trim();
+      return resolveApiAssetUrl(trimmed) ?? trimmed;
+    }
+  }
+
+  return null;
+}
 
 function formatTimeLabel(iso?: string | null): string | null {
   if (!iso) return null;
@@ -39,6 +58,24 @@ export function formatCompactDateTimeLine(startsAt?: string | null): string {
   const startTime = formatTimeLabel(startsAt);
   const compactTime = startTime?.replace(':00 ', ' ') ?? '';
   return compactTime ? `${shortDate} - ${compactTime}` : shortDate;
+}
+
+/** Short date for list/mini cards — weekday, month, day, year, start time only. */
+export function formatRecommendedDateLine(startsAt?: string | null): string {
+  if (!startsAt) return '';
+  const start = new Date(startsAt);
+  if (!Number.isFinite(start.getTime())) return '';
+
+  const datePart = start.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const startTime = formatTimeLabel(startsAt);
+  const compactTime = startTime?.replace(':00 ', ' ') ?? '';
+  if (!compactTime) return datePart;
+  return `${datePart} · ${compactTime}`;
 }
 
 function titleCaseShort(value: string): string {
@@ -101,8 +138,7 @@ export function toEventFeedCardModel(event: Record<string, unknown>): EventCardM
     title: String(event.title ?? ''),
     details: String(event.details ?? event.location ?? ''),
     image: null,
-    coverImageUrl:
-      typeof event.coverImageUrl === 'string' ? event.coverImageUrl : null,
+    coverImageUrl: resolveFeedCoverUrl(event),
     coverLetter: typeof event.coverLetter === 'string' ? event.coverLetter : undefined,
     coverGradient: event.coverGradient as EventCardModel['coverGradient'],
     goingCount: typeof event.goingCount === 'number' ? event.goingCount : 0,

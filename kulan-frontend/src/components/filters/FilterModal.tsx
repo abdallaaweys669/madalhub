@@ -10,11 +10,16 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+
+import {
+  DEFAULT_EXPLORE_DATE_FILTER,
+  type ExploreDateFilter,
+} from '@/components/explore/exploreDateFilters';
+import { clearExploreModalFilters, countExploreModalFilters } from '@/components/explore/exploreFilterUtils';
 
 export type ExploreFilters = {
   quickPick: 'Trending now' | 'Starting soon' | null;
-  date: 'Any time' | 'Upcoming' | 'Today' | 'Tomorrow' | 'This weekend' | 'Next week';
+  date: ExploreDateFilter;
   type: 'Any' | 'Online' | 'In-person';
   format: 'Any' | 'meetup' | 'panel' | 'seminar' | 'workshop' | 'talk' | 'bootcamp';
   price: 'Any' | 'Free' | 'Paid';
@@ -24,13 +29,15 @@ export type ExploreFilters = {
 
 const DEFAULT_FILTERS: ExploreFilters = {
   quickPick: null,
-  date: 'Any time',
+  date: DEFAULT_EXPLORE_DATE_FILTER,
   type: 'Any',
   format: 'Any',
   price: 'Any',
   location: 'Anywhere',
   quickPickRule: null,
 };
+
+const BRAND = '#FF7B3F';
 
 type FilterModalProps = {
   visible: boolean;
@@ -41,92 +48,62 @@ type FilterModalProps = {
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-const QUICK_OPTIONS = [
-  {
-    value: 'Trending now',
-    label: 'Trending now',
-    description: 'Events people are joining most.',
-    icon: 'flame-outline',
-  },
-  {
-    value: 'Starting soon',
-    label: 'Starting soon',
-    description: 'Events happening in the next 48 hours.',
-    icon: 'flash-outline',
-  },
-] as const;
+type ChipOption<T extends string> = {
+  value: T;
+  label: string;
+  icon?: IoniconName;
+};
 
-const DATE_OPTIONS = [
-  { value: 'Any time', label: 'Any time', icon: 'calendar-outline' },
-  { value: 'Upcoming', label: 'Upcoming', icon: 'arrow-up-circle-outline' },
-  { value: 'Today', label: 'Today', icon: 'today-outline' },
-  { value: 'Tomorrow', label: 'Tomorrow', icon: 'sunny-outline' },
-  { value: 'This weekend', label: 'This weekend', icon: 'cafe-outline' },
-  { value: 'Next week', label: 'Next week', icon: 'calendar-number-outline' },
-] as const;
+const LOCATION_OPTIONS: ChipOption<ExploreFilters['location']>[] = [
+  { value: 'Anywhere', label: 'Anywhere', icon: 'earth-outline' },
+  { value: 'Near me', label: 'Near me', icon: 'locate-outline' },
+  { value: 'In my city', label: 'In my city', icon: 'business-outline' },
+];
 
-const TYPE_OPTIONS = [
-  { value: 'Any', label: 'Any', icon: 'apps-outline' },
-  { value: 'Online', label: 'Online', icon: 'videocam-outline' },
+const PRICE_OPTIONS: ChipOption<ExploreFilters['price']>[] = [
+  { value: 'Any', label: 'Any price' },
+  { value: 'Free', label: 'Free' },
+  { value: 'Paid', label: 'Paid' },
+];
+
+const TYPE_OPTIONS: ChipOption<ExploreFilters['type']>[] = [
+  { value: 'Any', label: 'Any' },
   { value: 'In-person', label: 'In-person', icon: 'location-outline' },
-] as const;
+  { value: 'Online', label: 'Online', icon: 'videocam-outline' },
+];
 
-const FORMAT_OPTIONS = [
-  { value: 'Any', label: 'Any format', icon: 'albums-outline' },
-  { value: 'seminar', label: 'Seminar', icon: 'school-outline' },
-  { value: 'workshop', label: 'Workshop', icon: 'construct-outline' },
-  { value: 'panel', label: 'Panel', icon: 'people-outline' },
-  { value: 'talk', label: 'Talk', icon: 'mic-outline' },
-  { value: 'bootcamp', label: 'Bootcamp', icon: 'barbell-outline' },
-  { value: 'meetup', label: 'Meetup', icon: 'cafe-outline' },
-] as const;
+const FORMAT_OPTIONS: ChipOption<ExploreFilters['format']>[] = [
+  { value: 'Any', label: 'Any format' },
+  { value: 'meetup', label: 'Meetup' },
+  { value: 'talk', label: 'Talk' },
+  { value: 'workshop', label: 'Workshop' },
+  { value: 'seminar', label: 'Seminar' },
+  { value: 'panel', label: 'Panel' },
+  { value: 'bootcamp', label: 'Bootcamp' },
+];
 
-const PRICE_OPTIONS = [
-  { value: 'Any', label: 'Any', icon: 'options-outline' },
-  { value: 'Free', label: 'Free', icon: 'checkmark-circle-outline' },
-  { value: 'Paid', label: 'Paid', icon: 'cash-outline' },
-] as const;
+const QUICK_OPTIONS: ChipOption<NonNullable<ExploreFilters['quickPick']>>[] = [
+  { value: 'Trending now', label: 'Trending', icon: 'flame-outline' },
+  { value: 'Starting soon', label: 'Starting soon', icon: 'flash-outline' },
+];
 
-const LOCATION_OPTIONS = [
-  {
-    value: 'Near me',
-    label: 'Near me',
-    description: 'Use your current location and event map pins.',
-    icon: 'locate-outline',
-  },
-  {
-    value: 'In my city',
-    label: 'In my city',
-    description: 'Show events around your saved city.',
-    icon: 'business-outline',
-  },
-  {
-    value: 'Anywhere',
-    label: 'Anywhere',
-    description: 'Browse all available events.',
-    icon: 'earth-outline',
-  },
-] as const;
-
-function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+function FilterSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <View style={styles.sectionHeader}>
+    <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+      {children}
     </View>
   );
 }
 
-function OptionCard({
+function FilterChip<T extends string>({
   label,
-  description,
   icon,
   selected,
   onPress,
 }: {
   label: string;
-  description: string;
-  icon: IoniconName;
+  icon?: IoniconName;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -134,31 +111,75 @@ function OptionCard({
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.optionCard,
-        selected ? styles.optionCardActive : styles.optionCardInactive,
-        pressed ? styles.optionCardPressed : null,
+        styles.chip,
+        selected ? styles.chipActive : styles.chipIdle,
+        pressed ? styles.chipPressed : null,
       ]}
     >
-      <View style={[styles.optionIcon, selected ? styles.optionIconActive : null]}>
-        <Ionicons name={icon} size={18} color={selected ? '#FF7A00' : '#64748B'} />
-      </View>
-      <View style={styles.optionTextWrap}>
-        <Text style={[styles.optionTitle, selected ? styles.optionTitleActive : null]}>{label}</Text>
-        <Text style={styles.optionDescription}>{description}</Text>
-      </View>
-      {selected ? <Ionicons name="checkmark-circle" size={20} color="#FF7A00" /> : null}
+      {icon ? (
+        <Ionicons name={icon} size={15} color={selected ? '#C2410C' : '#6B7280'} />
+      ) : null}
+      <Text style={[styles.chipText, selected && styles.chipTextActive]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
-function PillOption({
+function FilterChipRow<T extends string>({
+  options,
+  value,
+  onChange,
+  scrollable = false,
+}: {
+  options: ChipOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  scrollable?: boolean;
+}) {
+  const row = (
+    <View style={[styles.chipRow, scrollable && styles.chipRowScroll]}>
+      {options.map((option) => (
+        <FilterChip
+          key={option.value}
+          label={option.label}
+          icon={option.icon}
+          selected={value === option.value}
+          onPress={() => onChange(option.value)}
+        />
+      ))}
+    </View>
+  );
+
+  if (!scrollable) return row;
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.chipRowScrollContent}
+    >
+      {options.map((option) => (
+        <FilterChip
+          key={option.value}
+          label={option.label}
+          icon={option.icon}
+          selected={value === option.value}
+          onPress={() => onChange(option.value)}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
+function ToggleChip({
   label,
   icon,
   selected,
   onPress,
 }: {
   label: string;
-  icon: IoniconName;
+  icon?: IoniconName;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -166,13 +187,15 @@ function PillOption({
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.pillOption,
-        selected ? styles.pillOptionActive : styles.pillOptionInactive,
-        pressed ? { opacity: 0.86 } : null,
+        styles.toggleChip,
+        selected ? styles.toggleChipActive : styles.toggleChipIdle,
+        pressed ? styles.chipPressed : null,
       ]}
     >
-      <Ionicons name={icon} size={15} color={selected ? '#FF7A00' : '#64748B'} />
-      <Text style={[styles.pillText, selected ? styles.pillTextActive : null]}>{label}</Text>
+      {icon ? (
+        <Ionicons name={icon} size={16} color={selected ? '#C2410C' : '#6B7280'} />
+      ) : null}
+      <Text style={[styles.toggleText, selected && styles.chipTextActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -185,9 +208,8 @@ export function FilterModal({
 }: FilterModalProps) {
   const initial = useMemo(() => initialFilters ?? DEFAULT_FILTERS, [initialFilters]);
   const [filters, setFilters] = useState<ExploreFilters>(initial);
-  const sheetAnim = useRef(new Animated.Value(360)).current;
+  const sheetAnim = useRef(new Animated.Value(420)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
-  const applyScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (visible) {
@@ -205,23 +227,22 @@ export function FilterModal({
         }),
       ]).start();
     } else {
-      sheetAnim.setValue(360);
+      sheetAnim.setValue(420);
       overlayAnim.setValue(0);
     }
   }, [initial, overlayAnim, sheetAnim, visible]);
 
-  const handleClearAll = () => setFilters(DEFAULT_FILTERS);
+  const activeFilterCount = useMemo(() => countExploreModalFilters(filters), [filters]);
 
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.quickPick) count += 1;
-    if (filters.date !== DEFAULT_FILTERS.date) count += 1;
-    if (filters.type !== DEFAULT_FILTERS.type) count += 1;
-    if (filters.format !== DEFAULT_FILTERS.format) count += 1;
-    if (filters.price !== DEFAULT_FILTERS.price) count += 1;
-    if (filters.location !== DEFAULT_FILTERS.location) count += 1;
-    return count;
-  }, [filters]);
+  const patchFilters = (patch: Partial<ExploreFilters>) => {
+    setFilters((prev) => ({
+      ...prev,
+      ...patch,
+      quickPickRule: null,
+    }));
+  };
+
+  const handleClearAll = () => setFilters((prev) => clearExploreModalFilters(prev));
 
   const handleApply = async () => {
     const quickPickRule =
@@ -231,29 +252,8 @@ export function FilterModal({
           ? 'withinTwoHours'
           : null;
 
-    await onApply({
-      ...filters,
-      quickPickRule,
-    });
+    await onApply({ ...filters, quickPickRule });
     onClose();
-  };
-
-  const onApplyPressIn = () => {
-    Animated.spring(applyScale, {
-      toValue: 0.97,
-      useNativeDriver: true,
-      speed: 20,
-      bounciness: 4,
-    }).start();
-  };
-
-  const onApplyPressOut = () => {
-    Animated.spring(applyScale, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 20,
-      bounciness: 6,
-    }).start();
   };
 
   return (
@@ -272,26 +272,17 @@ export function FilterModal({
         <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetAnim }] }]}>
           <View style={styles.header}>
             <View style={styles.dragHandle} />
-          </View>
-
-          <View style={styles.titleRow}>
-            <View style={styles.titleTextWrap}>
-              <Text style={styles.title}>Find the right event</Text>
-              <Text style={styles.subtitle}>Choose date, location, type, and price.</Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>Filters</Text>
+              <TouchableOpacity
+                onPress={onClose}
+                style={styles.closeButton}
+                accessibilityRole="button"
+                accessibilityLabel="Close filters"
+              >
+                <Ionicons name="close" size={22} color="#4B5563" />
+              </TouchableOpacity>
             </View>
-            {activeFilterCount > 0 ? (
-              <View style={styles.countPill}>
-                <Text style={styles.countPillText}>{activeFilterCount}</Text>
-              </View>
-            ) : null}
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeButton}
-              accessibilityRole="button"
-              accessibilityLabel="Close filter modal"
-            >
-              <Ionicons name="close" size={21} color="#4B5563" />
-            </TouchableOpacity>
           </View>
 
           <ScrollView
@@ -299,200 +290,80 @@ export function FilterModal({
             contentContainerStyle={styles.contentContainer}
             showsVerticalScrollIndicator={false}
           >
-            <LinearGradient
-              colors={['#FFF7ED', '#FFFFFF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.helperCard}
-            >
-              <View style={styles.helperIcon}>
-                <Ionicons name="options-outline" size={18} color="#FF7A00" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.helperTitle}>Filter only what matters</Text>
-                <Text style={styles.helperText}>Start broad, then narrow by time, place, type, or price.</Text>
-              </View>
-            </LinearGradient>
+            <FilterSection title="Where">
+              <FilterChipRow
+                options={LOCATION_OPTIONS}
+                value={filters.location}
+                onChange={(location) => patchFilters({ location, quickPick: null })}
+              />
+            </FilterSection>
 
-            <View style={styles.section}>
-              <SectionHeader title="Quick picks" subtitle="Fast shortcuts for common searches." />
-              <View style={styles.quickGrid}>
+            <FilterSection title="Price">
+              <FilterChipRow
+                options={PRICE_OPTIONS}
+                value={filters.price}
+                onChange={(price) => patchFilters({ price, quickPick: null })}
+              />
+            </FilterSection>
+
+            <FilterSection title="Online or in-person">
+              <FilterChipRow
+                options={TYPE_OPTIONS}
+                value={filters.type}
+                onChange={(type) => patchFilters({ type, quickPick: null })}
+              />
+            </FilterSection>
+
+            <FilterSection title="Format">
+              <FilterChipRow
+                options={FORMAT_OPTIONS}
+                value={filters.format}
+                onChange={(format) => patchFilters({ format, quickPick: null })}
+                scrollable
+              />
+            </FilterSection>
+
+            <FilterSection title="Popular">
+              <View style={styles.toggleRow}>
                 {QUICK_OPTIONS.map((option) => (
-                  <OptionCard
+                  <ToggleChip
                     key={option.value}
                     label={option.label}
-                    description={option.description}
                     icon={option.icon}
                     selected={filters.quickPick === option.value}
                     onPress={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        quickPick: prev.quickPick === option.value ? null : option.value,
-                        quickPickRule: null,
-                        date: DEFAULT_FILTERS.date,
-                      }))
+                      patchFilters({
+                        quickPick:
+                          filters.quickPick === option.value ? null : option.value,
+                      })
                     }
                   />
                 ))}
               </View>
-            </View>
-
-            <View style={styles.section}>
-              <SectionHeader title="When" subtitle="Pick the time window that feels right." />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateRail}>
-                {DATE_OPTIONS.map((option) => (
-                  <Pressable
-                    key={option.value}
-                    onPress={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        quickPick: null,
-                        quickPickRule: null,
-                        date: option.value,
-                      }))
-                    }
-                    style={({ pressed }) => [
-                      styles.dateCard,
-                      filters.date === option.value ? styles.dateCardActive : styles.dateCardInactive,
-                      pressed ? { opacity: 0.86 } : null,
-                    ]}
-                  >
-                    <Ionicons
-                      name={option.icon}
-                      size={18}
-                      color={filters.date === option.value ? '#FF7A00' : '#64748B'}
-                    />
-                    <Text style={[styles.dateText, filters.date === option.value ? styles.dateTextActive : null]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.section}>
-              <SectionHeader title="Where" subtitle="Choose how close the events should be." />
-              <View style={styles.optionStack}>
-                {LOCATION_OPTIONS.map((option) => (
-                  <OptionCard
-                    key={option.value}
-                    label={option.label}
-                    description={option.description}
-                    icon={option.icon}
-                    selected={filters.location === option.value}
-                    onPress={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        quickPick: null,
-                        quickPickRule: null,
-                        location: option.value,
-                      }))
-                    }
-                  />
-                ))}
-              </View>
-              {filters.location === 'Near me' ? (
-                <Text style={styles.locationHint}>Nearby works best for events that saved an exact map pin.</Text>
-              ) : null}
-            </View>
-
-            <View style={styles.section}>
-              <SectionHeader title="Event details" subtitle="Choose format, delivery, and ticket price." />
-              <View style={styles.segmentCard}>
-                <Text style={styles.segmentLabel}>Event format</Text>
-                <View style={styles.pillRow}>
-                  {FORMAT_OPTIONS.map((option) => (
-                    <PillOption
-                      key={option.value}
-                      label={option.label}
-                      icon={option.icon}
-                      selected={filters.format === option.value}
-                      onPress={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          quickPick: null,
-                          quickPickRule: null,
-                          format: option.value,
-                        }))
-                      }
-                    />
-                  ))}
-                </View>
-                <View style={styles.segmentDivider} />
-                <Text style={styles.segmentLabel}>Event type</Text>
-                <View style={styles.pillRow}>
-                  {TYPE_OPTIONS.map((option) => (
-                    <PillOption
-                      key={option.value}
-                      label={option.label}
-                      icon={option.icon}
-                      selected={filters.type === option.value}
-                      onPress={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          quickPick: null,
-                          quickPickRule: null,
-                          type: option.value,
-                        }))
-                      }
-                    />
-                  ))}
-                </View>
-                <View style={styles.segmentDivider} />
-                <Text style={styles.segmentLabel}>Price</Text>
-                <View style={styles.pillRow}>
-                  {PRICE_OPTIONS.map((option) => (
-                    <PillOption
-                      key={option.value}
-                      label={option.label}
-                      icon={option.icon}
-                      selected={filters.price === option.value}
-                      onPress={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          quickPick: null,
-                          quickPickRule: null,
-                          price: option.value,
-                        }))
-                      }
-                    />
-                  ))}
-                </View>
-              </View>
-            </View>
+            </FilterSection>
           </ScrollView>
 
           <View style={styles.footer}>
             <TouchableOpacity
               onPress={handleClearAll}
-              style={styles.clearButton}
+              style={styles.resetButton}
               accessibilityRole="button"
-              accessibilityLabel="Clear all filters"
+              accessibilityLabel="Reset filters"
             >
-              <Text style={styles.clearText}>Clear all</Text>
+              <Text style={styles.resetText}>Reset</Text>
             </TouchableOpacity>
 
-            <Animated.View style={[styles.applyButtonWrap, { transform: [{ scale: applyScale }] }]}>
-              <TouchableOpacity
-                onPress={handleApply}
-                onPressIn={onApplyPressIn}
-                onPressOut={onApplyPressOut}
-                style={styles.applyButton}
-                accessibilityRole="button"
-                accessibilityLabel="Apply filters"
-              >
-                <LinearGradient
-                  colors={['#FF7A00', '#FF9A3D']}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={styles.applyGradient}
-                >
-                  <Text style={styles.applyText}>
-                    Apply {activeFilterCount > 0 ? `${activeFilterCount} ` : ''}filters
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity
+              onPress={handleApply}
+              style={styles.applyButton}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="Show filtered events"
+            >
+              <Text style={styles.applyText}>
+                {activeFilterCount > 0 ? `Show results (${activeFilterCount})` : 'Show results'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </Animated.View>
       </View>
@@ -507,398 +378,182 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
   },
   backdropTouch: {
     flex: 1,
   },
   sheet: {
-    height: '82%',
+    maxHeight: '78%',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 8,
   },
   header: {
-    alignItems: 'center',
     paddingTop: 10,
+    paddingBottom: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F0F0F2',
   },
   dragHandle: {
+    alignSelf: 'center',
     width: 44,
     height: 5,
     borderRadius: 999,
     backgroundColor: '#D1D5DB',
+    marginBottom: 12,
   },
   titleRow: {
     paddingHorizontal: 20,
-    paddingTop: 10,
     paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
-  },
-  titleTextWrap: {
-    flex: 1,
-    minWidth: 0,
   },
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#1F2937',
-  },
-  subtitle: {
-    color: '#64748B',
-    fontSize: 12,
-    marginTop: 3,
-    fontWeight: '600',
-  },
-  countPill: {
-    minWidth: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countPillText: {
-    color: '#EA580C',
-    fontSize: 13,
-    fontWeight: '900',
+    color: '#1C1C1E',
+    letterSpacing: -0.3,
   },
   closeButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F3F4F6',
   },
   content: {
-    flex: 1,
+    flexGrow: 0,
   },
   contentContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 22,
-  },
-  helperCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 20,
-  },
-  helperIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  helperTitle: {
-    color: '#111827',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  helperText: {
-    color: '#64748B',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 2,
-    fontWeight: '600',
+    paddingTop: 16,
+    paddingBottom: 12,
   },
   section: {
-    marginBottom: 22,
-  },
-  sectionHeader: {
-    marginBottom: 10,
+    marginBottom: 20,
   },
   sectionTitle: {
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  sectionSubtitle: {
-    color: '#64748B',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 3,
-    fontWeight: '600',
-  },
-  quickGrid: {
-    gap: 10,
-  },
-  optionStack: {
-    gap: 10,
-  },
-  optionCard: {
-    minHeight: 74,
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  optionCardActive: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#FF7A00',
-    shadowColor: '#FF7A00',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  optionCardInactive: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E5E7EB',
-  },
-  optionCardPressed: {
-    opacity: 0.9,
-  },
-  optionIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  optionIconActive: {
-    borderColor: '#FED7AA',
-  },
-  optionTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  optionTitle: {
-    color: '#0F172A',
     fontSize: 14,
-    fontWeight: '900',
-  },
-  optionTitleActive: {
-    color: '#C2410C',
-  },
-  optionDescription: {
-    color: '#64748B',
-    fontSize: 12,
-    lineHeight: 16,
-    marginTop: 3,
-    fontWeight: '600',
-  },
-  dateRail: {
-    gap: 10,
-    paddingRight: 8,
-  },
-  dateCard: {
-    width: 112,
-    minHeight: 72,
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 12,
-    justifyContent: 'space-between',
-  },
-  dateCardActive: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#FF7A00',
-  },
-  dateCardInactive: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E5E7EB',
-  },
-  dateText: {
-    color: '#334155',
-    fontSize: 13,
     fontWeight: '800',
+    color: '#374151',
+    marginBottom: 10,
+    letterSpacing: -0.1,
   },
-  dateTextActive: {
-    color: '#C2410C',
-  },
-  segmentCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 12,
-  },
-  segmentLabel: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '900',
-    marginBottom: 9,
-  },
-  pillRow: {
+  chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  pillOption: {
-    flexGrow: 1,
-    minWidth: 92,
-    borderRadius: 16,
+  chipRowScroll: {
+    flexWrap: 'nowrap',
+  },
+  chipRowScrollContent: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 4,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    minHeight: 38,
+  },
+  chipIdle: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+  },
+  chipActive: {
+    backgroundColor: '#FFFBF7',
+    borderColor: BRAND,
+  },
+  chipPressed: {
+    opacity: 0.88,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  chipTextActive: {
+    color: '#C2410C',
+    fontWeight: '800',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  toggleChip: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-  },
-  pillOptionActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FF7A00',
-    shadowColor: '#FF7A00',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  pillOptionInactive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-  },
-  pillText: {
-    color: '#334155',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  pillTextActive: {
-    color: '#C2410C',
-  },
-  segmentDivider: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 14,
-  },
-  horizontalRow: {
-    paddingRight: 6,
-  },
-  wrapRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  locationCards: {
-    gap: 10,
-  },
-  locationCard: {
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
-    padding: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    minHeight: 52,
+  },
+  toggleChipIdle: {
+    backgroundColor: '#FAFAFA',
+    borderColor: '#E5E7EB',
+  },
+  toggleChipActive: {
+    backgroundColor: '#FFF7ED',
+    borderColor: BRAND,
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F0F0F2',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  locationCardActive: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#FF7A00',
-    shadowColor: '#FF7A00',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  locationCardInactive: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-  },
-  locationCardPressed: {
-    opacity: 0.88,
-  },
-  locationIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationIconActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FED7AA',
-  },
-  locationTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  locationTitle: {
-    color: '#0F172A',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  locationTitleActive: {
-    color: '#C2410C',
-  },
-  locationDescription: {
-    color: '#64748B',
-    fontSize: 12,
-    lineHeight: 16,
-    marginTop: 2,
-  },
-  locationHint: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  footer: {
-    paddingHorizontal: 20,
+  resetButton: {
     paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#EEF1F4',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 14,
+    paddingHorizontal: 4,
   },
-  clearButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-  },
-  clearText: {
+  resetText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#8B93A1',
-  },
-  applyButtonWrap: {
-    flex: 1,
+    color: '#9CA3AF',
   },
   applyButton: {
-    borderRadius: 20,
-    shadowColor: '#FF7A00',
+    flex: 1,
+    backgroundColor: BRAND,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: BRAND,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 3,
-    overflow: 'hidden',
-  },
-  applyGradient: {
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   applyText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFFFFF',
   },
 });
-

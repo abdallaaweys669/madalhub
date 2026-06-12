@@ -38,6 +38,12 @@ import { Feather } from '@expo/vector-icons';
 import { HomeHeader } from './HomeHeader';
 import { YourEventsSection, type HomeEventTab } from './YourEventsSection';
 import { HomeMyEventCard } from '@/components/event/home/HomeMyEventCard';
+import {
+  formatCompactLocationLine,
+  formatEventFeedPriceAmount,
+  formatRecommendedDateLine,
+} from '@/components/event/feed/eventFeedCardUtils';
+import { EventFeedCoverActions } from '@/components/event/feed/EventFeedCoverActions';
 import { EventDateLocationRows } from '@/components/event/EventDateLocationRows';
 import { buildEventScheduleLocationFields } from '@/utils/eventDisplay';
 
@@ -379,11 +385,17 @@ function RecommendedMiniCard({ event }: { event: EventCardModel }) {
   const colors = useThemeColors();
   const router = useGuardedRouter();
   const { isLoggedIn } = useAuth();
-  const { savedEventIds, saveEvent, unsaveEvent } = useSavedEvents();
-  const isSaved = savedEventIds.includes(String(event.id));
 
   const scheduleLocation = getEventScheduleLocation(event as EventCardModel & { city?: string });
-  const categoryLabel = (event.categoryName || 'Featured').trim().toUpperCase();
+  const dateLine = formatRecommendedDateLine(event.startsAt);
+  const locationLine = formatCompactLocationLine(
+    event as EventCardModel & { city?: string; locationAddress?: string | null },
+    scheduleLocation.locationPrimary,
+  );
+  const priceLabel = formatEventFeedPriceAmount(event);
+  const goingCount = getEventGoingCount(event);
+  const attendeePreviews = event.attendeePreviews?.filter(Boolean).slice(0, 3) ?? [];
+  const showGoing = goingCount > 0;
 
   useEffect(() => {
     if (isLoggedIn) trackEventInteraction(event.id, 'viewed');
@@ -394,90 +406,97 @@ function RecommendedMiniCard({ event }: { event: EventCardModel }) {
     router.push(`/events/${event.id}`);
   };
 
-  const shareEvent = async () => {
-    if (isLoggedIn) trackEventInteraction(event.id, 'shared');
-    try {
-      await Share.share({
-        message: `${event.title}\n${scheduleLocation.datePrimary} · ${scheduleLocation.dateSecondary}`,
-      });
-    } catch {
-      /* user dismissed share sheet */
-    }
-  };
-
-  const toggleSave = () => {
-    if (!isLoggedIn) {
-      router.push('/(auth)/welcome');
-      return;
-    }
-    if (isSaved) unsaveEvent(event.id);
-    else saveEvent(event.id);
-  };
+  const shareMessage = `${event.title}\n${dateLine}${locationLine ? `\n${locationLine}` : ''}`;
 
   return (
     <View style={[styles.recommendedCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.recommendedLeftCol}>
-        <Pressable onPress={openDetail} style={styles.recommendedImageWrap}>
-          {event.coverImageUrl ? (
-            <Image
-              source={{ uri: event.coverImageUrl }}
-              style={coverBannerImageStyle}
-              resizeMode="cover"
-            />
-          ) : (
-            <CoverPlaceholder
-              letter={event.coverLetter ?? event.title}
-              gradient={(event.coverGradient ?? DEFAULT_COVER_GRADIENT) as readonly [string, string]}
-              borderRadius={12}
-              style={styles.coverBannerFill}
-              letterSize={36}
-            />
-          )}
-        </Pressable>
-        <View style={styles.recommendedActionsRow}>
-          <TouchableOpacity
-            style={styles.recommendedActionBtn}
-            onPress={() => void shareEvent()}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel="Share event"
-          >
-            <Feather name="share-2" size={15} color="#9CA3AF" />
-            <Text style={styles.recommendedActionText}>Share</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.recommendedActionBtn}
-            onPress={toggleSave}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel={isSaved ? 'Remove bookmark' : 'Save event'}
-          >
-            <Ionicons
-              name={isSaved ? 'bookmark' : 'bookmark-outline'}
-              size={16}
-              color={isSaved ? colors.primary : '#9CA3AF'}
-            />
-            <Text style={[styles.recommendedActionText, isSaved && { color: colors.primary }]}>
-              {isSaved ? 'Saved' : 'Save'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <Pressable onPress={openDetail} style={styles.recommendedRightCol}>
-        <View style={styles.recommendedCategoryPill}>
-          <Text style={styles.recommendedCategoryText}>{categoryLabel}</Text>
-        </View>
-        <Text numberOfLines={1} style={[styles.recommendedCardTitle, { color: colors.text }]}>
-          {event.title}
-        </Text>
-        <EventDateLocationRows
-          datePrimary={scheduleLocation.datePrimary}
-          dateSecondary={scheduleLocation.dateSecondary}
-          locationPrimary={scheduleLocation.locationPrimary}
-          locationSecondary={scheduleLocation.locationSecondary}
-        />
+      <Pressable onPress={openDetail} style={styles.recommendedThumb}>
+        {event.coverImageUrl ? (
+          <Image
+            source={{ uri: event.coverImageUrl }}
+            style={coverBannerImageStyle}
+            resizeMode="cover"
+          />
+        ) : (
+          <CoverPlaceholder
+            letter={event.coverLetter ?? event.title}
+            gradient={(event.coverGradient ?? DEFAULT_COVER_GRADIENT) as readonly [string, string]}
+            borderRadius={10}
+            style={styles.coverBannerFill}
+            letterSize={28}
+          />
+        )}
       </Pressable>
+
+      <View style={styles.recommendedBody}>
+        <View style={styles.recommendedTitleRow}>
+          <Pressable onPress={openDetail} style={styles.recommendedTitlePress}>
+            <Text numberOfLines={1} style={[styles.recommendedCardTitle, { color: colors.text }]}>
+              {event.title}
+            </Text>
+          </Pressable>
+          <EventFeedCoverActions
+            eventId={event.id}
+            shareMessage={shareMessage}
+            actionStyle="glass"
+            size="compact"
+            layout="inline"
+          />
+        </View>
+
+        <Pressable onPress={openDetail} style={styles.recommendedMetaBlock}>
+          {dateLine ? (
+            <View style={styles.recommendedMetaRow}>
+              <Feather name="clock" size={14} color={colors.primary} />
+              <Text style={styles.recommendedMetaLine} numberOfLines={1} ellipsizeMode="tail">
+                {dateLine}
+              </Text>
+            </View>
+          ) : null}
+          {locationLine ? (
+            <View style={styles.recommendedMetaRow}>
+              <Feather name="map-pin" size={14} color={colors.primary} />
+              <Text style={styles.recommendedMetaLine} numberOfLines={1} ellipsizeMode="tail">
+                {locationLine}
+              </Text>
+            </View>
+          ) : null}
+          <View style={styles.recommendedFooterRow}>
+            <Text style={[styles.recommendedPrice, { color: colors.primary }]}>{priceLabel}</Text>
+            {showGoing ? (
+              <View style={styles.recommendedGoingWrap}>
+                {attendeePreviews.length > 0 ? (
+                  <View style={styles.recommendedAvatarStack}>
+                    {attendeePreviews.map((preview, index) => (
+                      <MemberInitialAvatar
+                        key={
+                          preview.userId != null
+                            ? String(preview.userId)
+                            : `${preview.name}-${index}`
+                        }
+                        name={preview.name}
+                        size={22}
+                        borderWidth={2}
+                        borderColor="#FFFFFF"
+                        style={index > 0 ? styles.recommendedAvatarOverlap : undefined}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+                <View
+                  style={[
+                    styles.recommendedGoingBubble,
+                    { backgroundColor: colors.primary },
+                    attendeePreviews.length > 0 && styles.recommendedGoingBubbleOverlap,
+                  ]}
+                >
+                  <Text style={styles.recommendedGoingBubbleText}>{goingCount}</Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -1031,60 +1050,31 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
-  recommendedLeftCol: {
-    width: 145,
-    flexShrink: 0,
-  },
-  recommendedImageWrap: {
-    width: 145,
-    height: 95,
-    borderRadius: 12,
+  recommendedThumb: {
+    width: 92,
+    height: 92,
+    borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: '#E5E7EB',
-    position: 'relative',
+    flexShrink: 0,
   },
   coverBannerFill: {
     width: '100%',
     height: '100%',
   },
-  recommendedActionsRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 4,
-  },
-  recommendedActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 2,
-  },
-  recommendedActionText: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '500',
-    color: '#9CA3AF',
-  },
-  recommendedRightCol: {
+  recommendedBody: {
     flex: 1,
     minWidth: 0,
-    paddingTop: 2,
-    gap: 6,
+    gap: 4,
   },
-  recommendedCategoryPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFEFE5',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  recommendedTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  recommendedCategoryText: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    color: '#FF7B3F',
+  recommendedTitlePress: {
+    flex: 1,
+    minWidth: 0,
   },
   recommendedCardTitle: {
     fontSize: 16,
@@ -1092,18 +1082,68 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.2,
   },
+  recommendedMetaBlock: {
+    gap: 4,
+    paddingTop: 2,
+  },
   recommendedMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  recommendedMetaText: {
+  recommendedMetaLine: {
     flex: 1,
     minWidth: 0,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '500',
     color: '#6B7280',
+  },
+  recommendedFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 2,
+  },
+  recommendedPrice: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '700',
+    flexShrink: 0,
+  },
+  recommendedGoingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    minWidth: 0,
+    justifyContent: 'flex-end',
+  },
+  recommendedAvatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recommendedAvatarOverlap: {
+    marginLeft: -7,
+  },
+  recommendedGoingBubble: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  recommendedGoingBubbleOverlap: {
+    marginLeft: -7,
+  },
+  recommendedGoingBubbleText: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   spotlightWrap: {
     marginHorizontal: spacing.md,

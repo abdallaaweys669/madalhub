@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { styles } from '../../constants/eventDetails_styles/eventDetails.styles';
 
 import { EventDateLocationRows } from '@/components/event/EventDateLocationRows';
+import AddToCalendarButton from '@/components/eventDetail/AddToCalendarButton';
 
 const EventInfo = ({
   description,
@@ -10,6 +11,8 @@ const EventInfo = ({
   dateSecondary,
   locationPrimary,
   locationSecondary,
+  joined = false,
+  event,
 }) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -32,6 +35,7 @@ const EventInfo = ({
         locationPrimary={locationPrimary}
         locationSecondary={locationSecondary}
       />
+      {joined ? <AddToCalendarButton event={event} /> : null}
     </View>
   );
 };

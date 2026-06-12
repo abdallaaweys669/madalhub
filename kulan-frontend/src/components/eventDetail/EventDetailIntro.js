@@ -1,10 +1,8 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 
-import {
-  buildEventMetaBadgeLabels,
-  EventMetaBadgeRow,
-} from '@/components/event/EventMetaBadgeRow';
+import { buildEventFeedBodyTagLabels } from '@/components/event/EventMetaBadgeRow';
+import { EventFeedTagRow } from '@/components/event/feed/EventFeedTagRow';
 import { styles } from '@/constants/eventDetails_styles/eventDetails.styles';
 import { toDisplayTitle } from '@/utils/eventDisplay';
 
@@ -16,7 +14,7 @@ export default function EventDetailIntro({ event }) {
           .trim()
           .toLowerCase() === 'online';
 
-  const badgeLabels = buildEventMetaBadgeLabels({
+  const tagLabels = buildEventFeedBodyTagLabels({
     categoryName: event.categoryName,
     eventFormat: event.eventFormat,
     isOnline,
@@ -24,7 +22,7 @@ export default function EventDetailIntro({ event }) {
 
   return (
     <View style={styles.detailIntro}>
-      <EventMetaBadgeRow labels={badgeLabels} style={styles.detailIntroChips} />
+      <EventFeedTagRow labels={tagLabels} variant="flat" />
       <Text style={styles.detailFeedTitle}>{toDisplayTitle(event.title)}</Text>
     </View>
   );

@@ -48,19 +48,21 @@ export default function HomeSkeleton() {
         </View>
         {[0, 1].map((i) => (
           <View key={i} style={styles.recommendedRow}>
-            <View style={styles.recommendedLeftSkeleton}>
-              <SkeletonPiece width={145} height={95} style={styles.recommendedImage} />
-              <View style={styles.recommendedActionsSkeleton}>
-                <SkeletonPiece width={52} height={12} style={styles.bone} />
-                <SkeletonPiece width={48} height={12} style={styles.bone} />
-              </View>
-            </View>
+            <SkeletonPiece width={92} height={92} style={styles.recommendedImage} />
             <View style={styles.recommendedCopy}>
-              <SkeletonPiece width={72} height={18} style={styles.mb8} />
-              <SkeletonPiece width="92%" height={16} style={styles.mb8} />
-              <SkeletonPiece width="78%" height={12} style={styles.mb8} />
-              <SkeletonPiece width="62%" height={12} style={styles.mb8} />
-              <SkeletonPiece width="70%" height={12} style={styles.bone} />
+              <View style={styles.recommendedTitleSkeleton}>
+                <SkeletonPiece width="72%" height={16} style={styles.bone} />
+                <View style={styles.recommendedIconsSkeleton}>
+                  <SkeletonPiece width={34} height={34} style={styles.recommendedActionBone} />
+                  <SkeletonPiece width={34} height={34} style={styles.recommendedActionBone} />
+                </View>
+              </View>
+              <SkeletonPiece width="88%" height={12} style={styles.mb8} />
+              <SkeletonPiece width="76%" height={12} style={styles.mb8} />
+              <View style={styles.recommendedFooterSkeleton}>
+                <SkeletonPiece width={40} height={14} style={styles.bone} />
+                <SkeletonPiece width={72} height={22} style={styles.bone} />
+              </View>
             </View>
           </View>
         ))}
@@ -139,22 +141,34 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
-  recommendedLeftSkeleton: {
-    width: 145,
-    flexShrink: 0,
-    gap: 10,
-  },
-  recommendedActionsSkeleton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
   recommendedImage: {
-    borderRadius: 12,
+    borderRadius: 10,
+    flexShrink: 0,
   },
   recommendedCopy: {
     flex: 1,
     minWidth: 0,
+    gap: 8,
+  },
+  recommendedTitleSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  recommendedIconsSkeleton: {
+    flexDirection: 'row',
+    gap: 8,
+    flexShrink: 0,
+  },
+  recommendedActionBone: {
+    borderRadius: 17,
+  },
+  recommendedFooterSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
   },
   popularHero: {
     borderRadius: 18,

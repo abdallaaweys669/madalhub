@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Image, TouchableOpacity, Share } from 'react-native';
+import { View, TouchableOpacity, Share } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { styles } from '../../constants/eventDetails_styles/eventDetails.styles';
-import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
+import { EventCoverBanner } from '@/components/event/EventCoverBanner';
 import { DEFAULT_COVER_GRADIENT } from '@/api/events';
 import { trackEventInteraction } from '@/api/trackEventInteraction';
 
@@ -60,19 +60,14 @@ const EventHeader = ({ event, onBack, onSave, isSaved, trackShare = true }) => {
         </View>
       </View>
 
-      <View style={styles.headerBannerFrame}>
-        {event.coverImageUrl ? (
-          <Image source={{ uri: event.coverImageUrl }} style={styles.headerBannerImage} resizeMode="cover" />
-        ) : (
-          <CoverPlaceholder
-            letter={event.coverLetter ?? event.title}
-            gradient={event.coverGradient ?? DEFAULT_COVER_GRADIENT}
-            borderRadius={0}
-            style={styles.headerBannerImage}
-            letterSize={56}
-          />
-        )}
-      </View>
+      <EventCoverBanner
+        preset="detail"
+        coverImageUrl={event.coverImageUrl}
+        coverLetter={event.coverLetter}
+        title={event.title}
+        coverGradient={event.coverGradient ?? DEFAULT_COVER_GRADIENT}
+        placeholderLetterSize={56}
+      />
     </View>
   );
 };

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Image,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -17,15 +16,15 @@ import useAuth from '@/auth/useAuth';
 import { useSavedEvents } from '@/context/SavedEventsContext';
 import { getEventById, joinEvent, leaveEvent } from '@/api/events';
 import { trackEventInteraction } from '@/api/trackEventInteraction';
-import organizerApi from '@/api/organizer';
 import { styles } from '@/constants/eventDetails_styles/eventDetails.styles';
 import EventHeader from '@/components/eventDetail/EventHeader';
 import EventDetailIntro from '@/components/eventDetail/EventDetailIntro';
 import EventInfo from '@/components/eventDetail/EventInfo';
+import EventOrganizerRow from '@/components/eventDetail/EventOrganizerRow';
 import EventActions from '@/components/eventDetail/EventActions';
 import EventBottomBar from '@/components/eventDetail/EventBottomBar';
 import EditAttendanceSheet from '@/components/eventDetail/EditAttendanceSheet';
-import EventRoster from '@/components/eventDetail/EventRoster';
+import FeaturedSpeakersCarousel from '@/components/eventDetail/FeaturedSpeakersCarousel';
 import EventDirectionsMapModal from '@/components/eventDetail/EventDirectionsMapModal';
 import SponsorCarousel from '@/components/eventDetail/SponsorCarousel';
 import { openDirectionsToVenue } from '@/utils/openDirections';
@@ -34,7 +33,6 @@ import ImageGalleryModal from '@/components/common/ImageGalleryModal';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 import { formatAreaLineFromGeocode } from '@/utils/eventLocation';
 import { buildEventScheduleLocationFields, formatEventDetailDateTime } from '@/utils/eventDisplay';
-import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 
 const EventDetailScreen = () => {
   const { id } = useLocalSearchParams();
@@ -44,14 +42,11 @@ const EventDetailScreen = () => {
   const [event, setEvent] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [joined, setJoined] = useState(false);
-  const [organizerVerifiedBadge, setOrganizerVerifiedBadge] = useState(false);
-  const [organizerFollowing, setOrganizerFollowing] = useState(false);
-  const [followBusy, setFollowBusy] = useState(false);
   const [mapAreaLine, setMapAreaLine] = useState('');
   const [gallery, setGallery] = useState({ visible: false, items: [], index: 0 });
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [editAttendanceVisible, setEditAttendanceVisible] = useState(false);
-  const { isLoggedIn, isMember, userRole, user } = useAuth();
+  const { isLoggedIn, user } = useAuth();
 
   const { savedEventIds, saveEvent, unsaveEvent } = useSavedEvents();
   const isSaved = event ? savedEventIds.includes(String(event.id)) : false;
@@ -85,36 +80,6 @@ const EventDetailScreen = () => {
       mounted = false;
     };
   }, [eventId, isLoggedIn]);
-
-  useEffect(() => {
-    if (!event?.organizerId) {
-      setOrganizerVerifiedBadge(false);
-      setOrganizerFollowing(false);
-      return;
-    }
-    const organizerIdNum = Number(event.organizerId);
-    if (!Number.isFinite(organizerIdNum) || organizerIdNum <= 0) {
-      setOrganizerVerifiedBadge(false);
-      return;
-    }
-    let alive = true;
-    organizerApi
-      .getPublicOrganizerProfile(organizerIdNum)
-      .then((profile) => {
-        if (!alive) return;
-        setOrganizerVerifiedBadge(profile?.verificationStatus === 'approved');
-        setOrganizerFollowing(Boolean(profile?.isFollowing));
-      })
-      .catch(() => {
-        if (!alive) {
-          setOrganizerVerifiedBadge(false);
-          setOrganizerFollowing(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, [event?.id, event?.organizerId]);
 
   const locationLatitude = Number(event?.locationLatitude);
   const locationLongitude = Number(event?.locationLongitude);
@@ -235,9 +200,6 @@ const EventDetailScreen = () => {
     );
   }
   const attendees = Array.isArray(event.attendeePreviews) ? event.attendeePreviews : [];
-  const organizerName = event.organizerName || 'Organizer';
-  const organizerDescription = event.organizerDescription || 'Organization profile';
-  const organizerInitials = String(event.organizerInitials || organizerName).slice(0, 2).toUpperCase();
   const sponsors = Array.isArray(event.sponsors)
     ? event.sponsors
         .map((row, index) => ({
@@ -315,31 +277,6 @@ const EventDetailScreen = () => {
     if (stillGoing) return;
     await handleJoinToggle();
   };
-  const handleFollowOrganizer = async () => {
-    if (!event?.organizerId) return;
-    if (!isLoggedIn) {
-      router.push('/(auth)/welcome');
-      return;
-    }
-    if (userRole !== 1 || !isMember) {
-      Alert.alert('Members only', 'Switch to a member account to follow organizers.');
-      return;
-    }
-    setFollowBusy(true);
-    try {
-      if (organizerFollowing) {
-        await organizerApi.unfollowOrganizer(Number(event.organizerId));
-        setOrganizerFollowing(false);
-      } else {
-        await organizerApi.followOrganizer(Number(event.organizerId));
-        setOrganizerFollowing(true);
-      }
-    } catch (e) {
-      Alert.alert('Could not update', e?.message || 'Try again.');
-    } finally {
-      setFollowBusy(false);
-    }
-  };
 
   const openRosterGallery = (index) => {
     const roster = Array.isArray(event?.roster) ? event.roster : [];
@@ -403,65 +340,22 @@ const EventDetailScreen = () => {
             dateSecondary={dateSecondary}
             locationPrimary={displayLocationPrimary}
             locationSecondary={displayLocationSecondary}
+            joined={joined}
+            event={event}
           />
 
-          <Text style={styles.sectionTitle}>Organized by</Text>
-          <View style={[styles.organizationCard, !event.organizerId ? { opacity: 0.7 } : null]}>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              disabled={!event.organizerId}
-              onPress={() => {
-                if (event.organizerId) {
-                  router.push(`/organizer/${event.organizerId}`);
-                }
-              }}
-              style={styles.organizationCardMain}
-            >
-              {event.organizerLogoUrl ? (
-                <Image source={{ uri: event.organizerLogoUrl }} style={styles.organizationLogo} />
-              ) : (
-                <View style={[styles.organizationLogo, styles.organizationLogoFallback]}>
-                  <Text style={styles.organizationLogoFallbackText}>{organizerInitials}</Text>
-                </View>
-              )}
-              <View style={styles.organizationTextWrap}>
-                <View style={styles.organizationNameRow}>
-                  <Text style={styles.organizationName}>{organizerName}</Text>
-                  {organizerVerifiedBadge ? (
-                    <VerificationBadgeWhite width={18} height={18} style={{ marginLeft: 4 }} />
-                  ) : null}
-                </View>
-                <Text style={styles.organizationCategory}>{organizerDescription}</Text>
-              </View>
-            </TouchableOpacity>
-            {event.organizerId ? (
-              <TouchableOpacity
-                style={[
-                  styles.organizerFollowBtn,
-                  organizerFollowing ? styles.organizerFollowBtnActive : null,
-                ]}
-                onPress={handleFollowOrganizer}
-                disabled={followBusy}
-                activeOpacity={0.88}
-              >
-                <Text
-                  style={[
-                    styles.organizerFollowBtnText,
-                    organizerFollowing ? styles.organizerFollowBtnTextActive : null,
-                  ]}
-                >
-                  {organizerFollowing ? 'Following' : 'Follow'}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          <EventOrganizerRow
+            organizerId={event.organizerId}
+            name={event.organizerName}
+            logoUrl={event.organizerLogoUrl}
+            initials={event.organizerInitials}
+            verified={event.organizerVerificationStatus === 'approved'}
+          />
 
-          {event?.roster?.length > 0 ? (
-            <>
-              <Text style={styles.sectionTitle}>Speakers & Guests</Text>
-              <EventRoster roster={event.roster} onPersonPress={(_, index) => openRosterGallery(index)} />
-            </>
-          ) : null}
+          <FeaturedSpeakersCarousel
+            roster={event.roster}
+            onSpeakerPress={(_, index) => openRosterGallery(index)}
+          />
 
           {sponsors.length > 0 ? (
             <>

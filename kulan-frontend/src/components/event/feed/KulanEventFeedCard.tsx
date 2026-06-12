@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import {
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -13,14 +12,15 @@ import { Ionicons } from '@expo/vector-icons';
 
 import useAuth from '@/auth/useAuth';
 import { type EventCardModel } from '@/components/event/EventCard';
-import { buildEventFeedTagLabels } from '@/components/event/EventMetaBadgeRow';
+import { EventCoverBanner } from '@/components/event/EventCoverBanner';
+import { buildEventFeedBodyTagLabels } from '@/components/event/EventMetaBadgeRow';
 import { EventFeedCompactMeta } from '@/components/event/feed/EventFeedCompactMeta';
 import { EventFeedCoverActions } from '@/components/event/feed/EventFeedCoverActions';
 import { EventFeedTagRow } from '@/components/event/feed/EventFeedTagRow';
 import {
-  formatCompactDateTimeLine,
   formatCompactLocationLine,
   formatEventFeedPriceAmount,
+  formatRecommendedDateLine,
   isEventFeedPaid,
   resolveFeedImageHeight,
   toEventFeedCardModel,
@@ -28,10 +28,8 @@ import {
 import {
   EVENT_FEED_AVATAR_PREVIEW_COUNT,
   EVENT_FEED_AVATAR_SIZE,
+  EVENT_FEED_AVATAR_SIZE_FLAT,
   EVENT_FEED_BRAND_ORANGE,
-  EVENT_FEED_COVER_ASPECT,
-  EVENT_FEED_IMAGE_RADIUS,
-  EVENT_FEED_IMAGE_RADIUS_FLAT,
   EVENT_FEED_LIST_HORIZONTAL_PAD,
   type EventFeedCardVariant,
 } from '@/components/event/feed/eventFeedTokens';
@@ -50,12 +48,6 @@ export type KulanEventFeedCardProps = {
   showJoinedBadge?: boolean;
   style?: StyleProp<ViewStyle>;
 };
-
-const coverBannerImageStyle = {
-  ...StyleSheet.absoluteFillObject,
-  width: '100%',
-  height: '100%',
-} as const;
 
 export function KulanEventFeedCard({
   event: rawEvent,
@@ -93,20 +85,21 @@ export function KulanEventFeedCard({
     EVENT_FEED_AVATAR_PREVIEW_COUNT,
     Math.max(1, goingCountN),
   );
-  const urgencyLabel = event.urgencyLabel || event.statusChip?.label || null;
+  const urgencyLabel = String(
+    event.urgencyLabel || event.statusChip?.label || '',
+  ).trim() || null;
   const priceAmount = formatEventFeedPriceAmount(event);
   const showPaidSuffix = isEventFeedPaid(event);
-  const tagLabels = buildEventFeedTagLabels({
+  const bodyTagLabels = buildEventFeedBodyTagLabels({
     categoryName: event.categoryName || 'Featured',
     eventFormat: event.eventFormat,
     isOnline: event.isOnline,
-    urgencyLabel,
   });
   const locationLine = formatCompactLocationLine(
     event as EventCardModel & { city?: string; locationAddress?: string | null },
     scheduleLocation.locationPrimary,
   );
-  const dateTimeLine = formatCompactDateTimeLine(event.startsAt);
+  const dateTimeLine = formatRecommendedDateLine(event.startsAt);
 
   useEffect(() => {
     if (isLoggedIn) trackEventInteraction(event.id, 'viewed');
@@ -130,29 +123,15 @@ export function KulanEventFeedCard({
         style,
       ]}
     >
-      <View
-        style={[
-          styles.imageFrame,
-          isFlat ? styles.imageFrameMeetup : styles.imageFrameBoxed,
-          !isFlat && imageHeight != null ? { height: imageHeight } : null,
-        ]}
+      <EventCoverBanner
+        preset={isFlat ? 'feed-flat' : 'feed-boxed'}
+        height={!isFlat ? imageHeight : undefined}
+        coverImageUrl={event.coverImageUrl}
+        coverLetter={event.coverLetter}
+        title={event.title}
+        coverGradient={event.coverGradient as readonly [string, string] | undefined}
+        onPress={openDetail}
       >
-        <Pressable onPress={openDetail} style={StyleSheet.absoluteFill}>
-          {event.coverImageUrl ? (
-            <Image
-              source={{ uri: event.coverImageUrl }}
-              style={coverBannerImageStyle}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.imageFallback, { backgroundColor: colors.backgroundMuted }]}>
-              <Text style={[styles.fallbackLetter, { color: colors.textSecondary }]}>
-                {(event.coverLetter || event.title || '?').trim().charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-        </Pressable>
-
         {showJoinedBadge ? (
           <View style={styles.heroTopLeft}>
             <View style={styles.joinedBadge}>
@@ -162,28 +141,46 @@ export function KulanEventFeedCard({
           </View>
         ) : null}
 
+        {urgencyLabel ? (
+          <View style={styles.urgencyOverlay}>
+            <Text style={styles.urgencyOverlayText} numberOfLines={1}>
+              {urgencyLabel}
+            </Text>
+          </View>
+        ) : null}
+
         <EventFeedCoverActions
           eventId={event.id}
           shareMessage={`${event.title}\n${dateTimeLine || scheduleLocation.datePrimary}`}
           actionStyle="glass"
           size="comfortable"
         />
-      </View>
+      </EventCoverBanner>
 
-      <Pressable onPress={openDetail} style={styles.body}>
-        <EventFeedTagRow labels={tagLabels} variant={variant} />
-        <Text
-          numberOfLines={2}
-          style={[styles.title, isFlat && styles.titleFlat, { color: colors.text }]}
-        >
-          {event.title}
-        </Text>
+      <Pressable onPress={openDetail} style={[styles.body, isFlat && styles.bodyFlat]}>
+        <EventFeedTagRow labels={bodyTagLabels} variant={variant} />
+        {isFlat ? (
+          <Text
+            numberOfLines={1}
+            style={[styles.title, styles.titleFlat, { color: colors.text }]}
+          >
+            {event.title}
+          </Text>
+        ) : null}
+        {!isFlat ? (
+          <Text
+            numberOfLines={2}
+            style={[styles.title, { color: colors.text }]}
+          >
+            {event.title}
+          </Text>
+        ) : null}
         <EventFeedCompactMeta
           locationLine={locationLine}
           dateTimeLine={dateTimeLine}
           variant={variant}
         />
-        <View style={styles.footer}>
+        <View style={[styles.footer, isFlat && styles.footerFlat]}>
           <View style={styles.priceWrap}>
             <Text style={[styles.priceAmount, isFlat && styles.priceAmountFlat]}>
               {priceAmount}
@@ -201,7 +198,7 @@ export function KulanEventFeedCard({
                         : `${preview.name}-${index}`
                     }
                     name={preview.name}
-                    size={EVENT_FEED_AVATAR_SIZE}
+                    size={isFlat ? EVENT_FEED_AVATAR_SIZE_FLAT : EVENT_FEED_AVATAR_SIZE}
                     borderWidth={2}
                     borderColor="#FFFFFF"
                     style={index > 0 ? styles.avatarOverlap : undefined}
@@ -212,7 +209,7 @@ export function KulanEventFeedCard({
                   <MemberInitialAvatar
                     key={`anon-${index}`}
                     name={`Attendee ${index + 1}`}
-                    size={EVENT_FEED_AVATAR_SIZE}
+                    size={isFlat ? EVENT_FEED_AVATAR_SIZE_FLAT : EVENT_FEED_AVATAR_SIZE}
                     borderWidth={2}
                     borderColor="#FFFFFF"
                     style={index > 0 ? styles.avatarOverlap : undefined}
@@ -221,13 +218,17 @@ export function KulanEventFeedCard({
               ) : null}
             </View>
             {goingCountN > 0 ? (
-              <View
-                style={[
-                  styles.countBubble,
-                  (showPreviews || showAnonymousGoing) && styles.countBubbleOverlap,
-                ]}
-              >
-                <Text style={styles.countBubbleText}>{goingCountN}</Text>
+              <View style={styles.attendeeMeta}>
+                <View
+                  style={[
+                    styles.countBubble,
+                    isFlat && styles.countBubbleFlat,
+                    (showPreviews || showAnonymousGoing) && styles.countBubbleOverlap,
+                  ]}
+                >
+                  <Text style={styles.countBubbleText}>{goingCountN}</Text>
+                </View>
+                {isFlat ? <Text style={[styles.goingHint, styles.goingHintFlat]}>going</Text> : null}
               </View>
             ) : null}
           </View>
@@ -249,33 +250,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardFlat: {
-    marginBottom: 20,
-    overflow: 'hidden',
-  },
-  imageFrame: {
-    width: '100%',
-    backgroundColor: '#E5E7EB',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  imageFrameMeetup: {
-    borderRadius: EVENT_FEED_IMAGE_RADIUS_FLAT,
-    aspectRatio: EVENT_FEED_COVER_ASPECT,
-    marginBottom: 10,
-  },
-  imageFrameBoxed: {
-    borderRadius: EVENT_FEED_IMAGE_RADIUS,
-    marginBottom: 12,
-  },
-  imageFallback: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackLetter: {
-    fontSize: 34,
-    fontWeight: '700',
+    marginBottom: 14,
   },
   heroTopLeft: {
     position: 'absolute',
@@ -301,8 +276,32 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: '700',
   },
+  urgencyOverlay: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    zIndex: 2,
+    maxWidth: '52%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  urgencyOverlayText: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   body: {
     paddingHorizontal: 2,
+  },
+  bodyFlat: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   title: {
     fontSize: 16,
@@ -311,17 +310,23 @@ const styles = StyleSheet.create({
     letterSpacing: -0.15,
   },
   titleFlat: {
-    fontSize: 21,
-    lineHeight: 27,
+    fontSize: 18,
+    lineHeight: 23,
     fontWeight: '800',
-    letterSpacing: -0.2,
-    marginBottom: 4,
+    letterSpacing: -0.3,
+    marginBottom: 5,
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  footerFlat: {
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F0F0F2',
   },
   priceWrap: {
     flexDirection: 'row',
@@ -337,8 +342,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   priceAmountFlat: {
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 24,
   },
   priceSuffix: {
     fontSize: 12,
@@ -350,6 +355,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 0,
+  },
+  attendeeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  goingHint: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  goingHintFlat: {
+    fontSize: 12,
+    lineHeight: 15,
   },
   avatarStack: {
     flexDirection: 'row',
@@ -368,6 +388,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
+  },
+  countBubbleFlat: {
+    minWidth: EVENT_FEED_AVATAR_SIZE_FLAT,
+    height: EVENT_FEED_AVATAR_SIZE_FLAT,
+    borderRadius: EVENT_FEED_AVATAR_SIZE_FLAT / 2,
   },
   countBubbleOverlap: {
     marginLeft: -9,

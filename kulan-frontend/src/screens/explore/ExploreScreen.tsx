@@ -20,7 +20,21 @@ import {
   CategoryTabs,
   type ExploreCategory,
 } from '@/components/explore/CategoryTabs';
+import { ExploreTimeFilterTabs } from '@/components/explore/ExploreTimeFilterTabs';
+import {
+  DEFAULT_EXPLORE_DATE_FILTER,
+  mapExploreDateToApiBucket,
+  type ExploreDateFilter,
+} from '@/components/explore/exploreDateFilters';
 import { resolveExploreCategoryIcon } from '@/components/explore/exploreCategoryIcons';
+import { ExploreActiveFilterChips } from '@/components/explore/ExploreActiveFilterChips';
+import {
+  clearExploreModalFilters,
+  countExploreModalFilters,
+  getExploreActiveFilterChips,
+  removeExploreModalFilterChip,
+  type ExploreActiveFilterChip,
+} from '@/components/explore/exploreFilterUtils';
 import { KulanEventFeedCard } from '@/components/event/feed/KulanEventFeedCard';
 import type { ExploreEventCardModel } from '@/components/explore/ExploreEventCard';
 import {
@@ -122,18 +136,7 @@ function buildExploreParams(args: {
     params.city = userCity;
   }
 
-  const dateBucket =
-    selectedFilters.date === 'Upcoming'
-      ? 'upcoming'
-      : selectedFilters.date === 'Today'
-        ? 'today'
-        : selectedFilters.date === 'Tomorrow'
-          ? 'tomorrow'
-          : selectedFilters.date === 'This weekend'
-            ? 'this-weekend'
-            : selectedFilters.date === 'Next week'
-              ? 'next-week'
-              : undefined;
+  const dateBucket = mapExploreDateToApiBucket(selectedFilters.date);
   if (dateBucket) params.dateBucket = dateBucket;
 
   return params;
@@ -293,7 +296,7 @@ export default function ExploreScreen() {
   const [nearMeCoords, setNearMeCoords] = useState<Coordinates | null>(null);
   const [selectedFilters, setSelectedFilters] = useState<ExploreFilters>({
     quickPick: null,
-    date: 'Any time',
+    date: DEFAULT_EXPLORE_DATE_FILTER,
     type: 'Any',
     format: 'Any',
     price: 'Any',
@@ -315,12 +318,47 @@ export default function ExploreScreen() {
     return id != null ? `${activeCategory}:${id}` : `${activeCategory}:pending`;
   }, [activeCategory, interestIdByName]);
 
+  const modalFilterCount = useMemo(
+    () => countExploreModalFilters(selectedFilters),
+    [selectedFilters],
+  );
+
+  const activeFilterChips = useMemo(
+    () => getExploreActiveFilterChips(selectedFilters),
+    [selectedFilters],
+  );
+
   const handleFilterPress = useCallback(() => {
     setIsFilterModalVisible(true);
   }, []);
 
+  const handleTimeFilterChange = useCallback((date: ExploreDateFilter) => {
+    setSelectedFilters((prev) => ({
+      ...prev,
+      date,
+      quickPick: null,
+      quickPickRule: null,
+    }));
+  }, []);
+
   const handleCloseFilters = useCallback(() => {
     setIsFilterModalVisible(false);
+  }, []);
+
+  const handleRemoveFilterChip = useCallback(
+    (key: ExploreActiveFilterChip['key']) => {
+      const next = removeExploreModalFilterChip(selectedFilters, key);
+      if (key === 'location') {
+        setNearMeCoords(null);
+      }
+      setSelectedFilters(next);
+    },
+    [selectedFilters],
+  );
+
+  const handleClearModalFilters = useCallback(() => {
+    setNearMeCoords(null);
+    setSelectedFilters((prev) => clearExploreModalFilters(prev));
   }, []);
 
   const handleApplyFilters = useCallback(async (filters: ExploreFilters) => {
@@ -514,9 +552,25 @@ export default function ExploreScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             onFilterPress={handleFilterPress}
+            activeFilterCount={modalFilterCount}
             placeholder="Find events near you"
           />
-          <View style={styles.sectionSpacer} />
+          {activeFilterChips.length ? (
+            <>
+              <View style={styles.chipsSpacer} />
+              <ExploreActiveFilterChips
+                chips={activeFilterChips}
+                onRemove={handleRemoveFilterChip}
+                onClearAll={handleClearModalFilters}
+              />
+            </>
+          ) : null}
+          <View style={styles.sectionSpacerSm} />
+          <ExploreTimeFilterTabs
+            activeId={selectedFilters.date}
+            onChange={handleTimeFilterChange}
+          />
+          <View style={styles.sectionSpacerSm} />
           <CategoryTabs
             categories={categories}
             activeId={activeCategory}
@@ -578,11 +632,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1C1C1E',
     letterSpacing: -0.2,
-    marginBottom: 8,
+    marginBottom: 4,
     marginHorizontal: 16,
   },
   sectionSpacer: {
     height: SECTION_GAP,
+  },
+  sectionSpacerSm: {
+    height: 10,
+  },
+  chipsSpacer: {
+    height: 8,
   },
   listContent: {
     paddingTop: 0,

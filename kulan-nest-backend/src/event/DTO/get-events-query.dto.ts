@@ -57,8 +57,14 @@ export class GetEventsQueryDto {
 
   @IsOptional()
   @Transform(({ value }) => String(value).toLowerCase())
-  @IsIn(['upcoming', 'today', 'tomorrow', 'this-weekend', 'next-week'])
-  dateBucket?: 'upcoming' | 'today' | 'tomorrow' | 'this-weekend' | 'next-week';
+  @IsIn(['upcoming', 'today', 'tomorrow', 'this-weekend', 'next-week', 'this-month'])
+  dateBucket?:
+    | 'upcoming'
+    | 'today'
+    | 'tomorrow'
+    | 'this-weekend'
+    | 'next-week'
+    | 'this-month';
 
   @IsOptional()
   @Transform(({ value }) => String(value).toLowerCase())

@@ -48,6 +48,16 @@ export function buildEventFeedTagLabels(input: {
   return badges;
 }
 
+/** Body row only — category, format, mode (urgency goes on the cover image). */
+export function buildEventFeedBodyTagLabels(input: {
+  categoryName?: string | null;
+  eventFormat?: string | null;
+  isOnline?: boolean;
+  mode?: 'online' | 'in-person';
+}): string[] {
+  return buildEventFeedTagLabels({ ...input, urgencyLabel: null });
+}
+
 /** @deprecated Use buildEventFeedTagLabels */
 export const buildHomeEventTagLabels = buildEventFeedTagLabels;
 

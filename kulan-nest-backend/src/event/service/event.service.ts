@@ -277,16 +277,28 @@ export class EventService {
     }
 
     if (dateBucket === 'this-weekend') {
-      const start = new Date(startOfToday);
-      const day = start.getDay();
-      const daysUntilSaturday = (6 - day + 7) % 7;
-      start.setDate(start.getDate() + daysUntilSaturday);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
-      end.setHours(23, 59, 59, 999);
+      const day = startOfToday.getDay();
+      let thursday = new Date(startOfToday);
+      let friday = new Date(startOfToday);
+
+      if (day === 4) {
+        friday.setDate(friday.getDate() + 1);
+      } else if (day === 5) {
+        thursday.setDate(thursday.getDate() - 1);
+      } else if (day < 4) {
+        thursday.setDate(thursday.getDate() + (4 - day));
+        friday = new Date(thursday);
+        friday.setDate(friday.getDate() + 1);
+      } else {
+        thursday.setDate(thursday.getDate() + (4 - day + 7) % 7);
+        friday = new Date(thursday);
+        friday.setDate(friday.getDate() + 1);
+      }
+
+      friday.setHours(23, 59, 59, 999);
       qb.andWhere('event.startDatetime BETWEEN :weekendStart AND :weekendEnd', {
-        weekendStart: start,
-        weekendEnd: end,
+        weekendStart: thursday,
+        weekendEnd: friday,
       });
       return;
     }
@@ -305,6 +317,23 @@ export class EventService {
           nextWeekEnd: end,
         },
       );
+      return;
+    }
+
+    if (dateBucket === 'this-month') {
+      const monthEnd = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+      qb.andWhere('event.startDatetime BETWEEN :monthStart AND :monthEnd', {
+        monthStart: now,
+        monthEnd,
+      });
     }
   }
 

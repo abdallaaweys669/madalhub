@@ -18,7 +18,11 @@ export function EventFeedTagRow({ labels, variant = 'boxed' }: EventFeedTagRowPr
       {labels.map((label, index) => (
         <View
           key={`${label}-${index}`}
-          style={[styles.tagPill, isFlat ? styles.tagPillFlat : styles.tagPillBoxed]}
+          style={[
+            styles.tagPill,
+            isFlat ? styles.tagPillFlat : styles.tagPillBoxed,
+            index === 0 && styles.tagPillLead,
+          ]}
         >
           <Text
             style={[styles.tagPillText, isFlat ? styles.tagPillTextFlat : styles.tagPillTextBoxed]}
@@ -36,46 +40,50 @@ export function EventFeedTagRow({ labels, variant = 'boxed' }: EventFeedTagRowPr
 const styles = StyleSheet.create({
   tagRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  tagRowBoxed: {
     flexWrap: 'nowrap',
-    gap: 5,
-    marginBottom: 6,
+    alignItems: 'center',
     width: '100%',
   },
-  tagRowFlat: {
-    gap: 8,
+  tagRowBoxed: {
+    gap: 6,
     marginBottom: 6,
+  },
+  tagRowFlat: {
+    gap: 5,
+    marginBottom: 5,
   },
   tagPill: {
     borderRadius: 999,
     backgroundColor: '#FFF7ED',
+    flexShrink: 0,
+  },
+  tagPillLead: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   tagPillBoxed: {
-    flex: 1,
-    minWidth: 0,
-    paddingHorizontal: 7,
+    paddingHorizontal: 10,
     paddingVertical: 5,
-    alignItems: 'center',
   },
   tagPillFlat: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+    backgroundColor: '#FFFBF7',
   },
   tagPillText: {
     color: '#EA580C',
+    textAlign: 'center',
   },
   tagPillTextBoxed: {
     fontSize: 11,
     lineHeight: 13,
     fontWeight: '700',
-    textAlign: 'center',
   },
   tagPillTextFlat: {
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: '700',
   },
 });

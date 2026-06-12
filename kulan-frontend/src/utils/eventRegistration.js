@@ -7,48 +7,122 @@ function toGoogleCalendarDate(iso) {
   return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 }
 
+function buildCalendarEventFields(event) {
+  const start = toGoogleCalendarDate(event?.startsAt);
+  if (!start) return null;
+
+  let end = toGoogleCalendarDate(event?.endsAt);
+  if (!end || end <= start) {
+    const startDate = new Date(event.startsAt);
+    const fallbackEnd = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
+    end = toGoogleCalendarDate(fallbackEnd.toISOString());
+  }
+
+  const details = [
+    event?.description?.trim(),
+    event?.id ? `Open in Kulan: kulanapp://events/${event.id}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  return {
+    text: event?.title || 'Kulan Event',
+    dates: `${start}/${end}`,
+    details,
+    location: [event?.locationName, event?.locationAddress, event?.city].filter(Boolean).join(', '),
+  };
+}
+
 export function buildTicketQrValue(eventId, userId) {
   const eid = String(eventId || '').trim();
   const uid = String(userId || '').trim();
   return `kulanapp://events/${eid}?ticket=${uid}`;
 }
 
-export function buildGoogleCalendarUrl(event) {
-  const start = toGoogleCalendarDate(event?.startsAt);
-  if (!start) return null;
-
-  const endRaw = event?.endsAt ? toGoogleCalendarDate(event.endsAt) : null;
-  const end = endRaw || start;
+/** Opens in the Google Calendar app when installed (Android/iOS). */
+export function buildGoogleCalendarAppUrl(event) {
+  const fields = buildCalendarEventFields(event);
+  if (!fields) return null;
 
   const params = new URLSearchParams({
     action: 'TEMPLATE',
-    text: event?.title || 'Kulan Event',
-    dates: `${start}/${end}`,
-    details: event?.description || '',
-    location: [event?.locationName, event?.locationAddress, event?.city].filter(Boolean).join(', '),
+    text: fields.text,
+    dates: fields.dates,
+    details: fields.details,
+    location: fields.location,
   });
 
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  return `https://www.google.com/calendar/event?${params.toString()}`;
+}
+
+/** Mobile-friendly web editor when the native app is unavailable. */
+export function buildGoogleCalendarMobileWebUrl(event) {
+  const fields = buildCalendarEventFields(event);
+  if (!fields) return null;
+
+  const params = new URLSearchParams({
+    text: fields.text,
+    dates: fields.dates,
+    details: fields.details,
+    location: fields.location,
+  });
+
+  return `https://calendar.google.com/calendar/r/eventedit?${params.toString()}`;
+}
+
+/** @deprecated Use buildGoogleCalendarAppUrl or buildGoogleCalendarMobileWebUrl. */
+export function buildGoogleCalendarUrl(event) {
+  return buildGoogleCalendarAppUrl(event);
+}
+
+function buildAndroidCalendarIntentUrl(appUrl, fallbackUrl) {
+  const pathAndQuery = appUrl.replace(/^https:\/\//, '');
+  return `intent://${pathAndQuery}#Intent;scheme=https;package=com.google.android.calendar;S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end`;
+}
+
+async function openCalendarUrl(url) {
+  await Linking.openURL(url);
 }
 
 export async function addEventToCalendar(event) {
-  const url = buildGoogleCalendarUrl(event);
-  if (!url) {
+  const appUrl = buildGoogleCalendarAppUrl(event);
+  const mobileWebUrl = buildGoogleCalendarMobileWebUrl(event);
+
+  if (!appUrl || !mobileWebUrl) {
     Alert.alert('Calendar unavailable', 'This event does not have a valid start time yet.');
     return false;
   }
 
   try {
-    const supported = await Linking.canOpenURL(url);
-    if (!supported) {
-      Alert.alert('Calendar unavailable', 'Could not open your calendar app.');
-      return false;
+    if (Platform.OS === 'android') {
+      const intentUrl = buildAndroidCalendarIntentUrl(appUrl, mobileWebUrl);
+      try {
+        await openCalendarUrl(intentUrl);
+        return true;
+      } catch {
+        // Google Calendar app missing — fall through to mobile web UI.
+      }
     }
-    await Linking.openURL(url);
+
+    if (Platform.OS === 'ios') {
+      try {
+        await openCalendarUrl(appUrl);
+        return true;
+      } catch {
+        // Fall through to mobile web UI.
+      }
+    }
+
+    await openCalendarUrl(mobileWebUrl);
     return true;
   } catch {
-    Alert.alert('Calendar unavailable', 'Please try again in a moment.');
-    return false;
+    try {
+      await openCalendarUrl(mobileWebUrl);
+      return true;
+    } catch {
+      Alert.alert('Calendar unavailable', 'Please try again in a moment.');
+      return false;
+    }
   }
 }
 

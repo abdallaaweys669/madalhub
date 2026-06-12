@@ -2,18 +2,17 @@ import React from 'react';
 import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
 
 import Skeleton, { SkeletonPiece } from '@/components/Skeleton';
+import { EVENT_FEED_COVER_ASPECT, EVENT_FEED_IMAGE_RADIUS_FLAT, EVENT_FEED_LIST_HORIZONTAL_INSET } from '@/components/event/feed/eventFeedTokens';
 import { spacing } from '@/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const CONTENT_PAD_H = 20;
-const BANNER_W = SCREEN_W - 32;
-const BANNER_H = Math.round(BANNER_W / 2);
+const BANNER_W = SCREEN_W - EVENT_FEED_LIST_HORIZONTAL_INSET * 2;
+const BANNER_H = Math.round(BANNER_W / EVENT_FEED_COVER_ASPECT);
 const INNER_W = SCREEN_W - CONTENT_PAD_H * 2;
 
 export default function EventDetailSkeleton() {
-  const chipW = Math.min(92, Math.round((INNER_W - 16) / 3));
-
   return (
     <ScrollView
       style={styles.scroll}
@@ -37,9 +36,9 @@ export default function EventDetailSkeleton() {
       <View style={styles.body}>
         <Skeleton containerStyle={styles.chipsRow}>
           <View style={styles.chipsInner}>
-            <SkeletonPiece width={chipW} height={28} style={styles.chip} />
-            <SkeletonPiece width={chipW} height={28} style={styles.chip} />
-            <SkeletonPiece width={chipW} height={28} style={styles.chip} />
+            <SkeletonPiece width={72} height={20} style={styles.chip} />
+            <SkeletonPiece width={56} height={20} style={styles.chip} />
+            <SkeletonPiece width={68} height={20} style={styles.chip} />
           </View>
         </Skeleton>
 
@@ -114,12 +113,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   headerBannerSkeleton: {
-    marginHorizontal: 16,
+    marginHorizontal: EVENT_FEED_LIST_HORIZONTAL_INSET,
     alignSelf: 'center',
     backgroundColor: 'transparent',
   },
   headerBannerPiece: {
-    borderRadius: 14,
+    borderRadius: EVENT_FEED_IMAGE_RADIUS_FLAT,
   },
   body: {
     paddingHorizontal: CONTENT_PAD_H,

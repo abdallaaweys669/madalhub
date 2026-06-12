@@ -25,9 +25,6 @@ export const styles = StyleSheet.create({
     paddingBottom: 4,
     backgroundColor: '#FFFFFF',
   },
-  detailIntroChips: {
-    marginBottom: 10,
-  },
   headerWrapper: {
     backgroundColor: '#FFFFFF',
     paddingBottom: 4,
@@ -38,17 +35,6 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 12,
-  },
-  headerBannerFrame: {
-    marginHorizontal: 16,
-    aspectRatio: 2,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
-  },
-  headerBannerImage: {
-    width: '100%',
-    height: '100%',
   },
   iconButton: {
     width: 40,
@@ -158,6 +144,25 @@ export const styles = StyleSheet.create({
   infoSpacing: {
     height: 16,
   },
+  addToCalendarBtn: {
+    marginTop: 10,
+    marginBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  addToCalendarText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#EA580C',
+  },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -231,6 +236,68 @@ export const styles = StyleSheet.create({
     color: '#111111',
     marginTop: 24,
     marginBottom: 12,
+  },
+  eventOrganizerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    backgroundColor: '#FAFAFA',
+    gap: 12,
+  },
+  eventOrganizerRowDisabled: {
+    opacity: 0.72,
+  },
+  eventOrganizerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  eventOrganizerAvatarFallback: {
+    backgroundColor: '#FF8C42',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventOrganizerAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  eventOrganizerContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  eventOrganizerLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  eventOrganizerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  eventOrganizerName: {
+    flexShrink: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111111',
+    lineHeight: 22,
+  },
+  eventOrganizerBadge: {
+    marginLeft: 6,
+    flexShrink: 0,
+  },
+  eventOrganizerChevron: {
+    flexShrink: 0,
   },
   organizationCard: {
     flexDirection: 'row',

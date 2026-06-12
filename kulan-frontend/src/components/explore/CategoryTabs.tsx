@@ -7,16 +7,15 @@ import { toFilledCategoryIcon } from '@/components/explore/exploreCategoryIcons'
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 const BRAND = '#FF7B3F';
-const CHIP_BG = '#FFF0E6';
-const CHIP_BG_ACTIVE = '#FFDFCC';
+const ICON_INACTIVE = '#9CA3AF';
 const LABEL_COLOR = '#374151';
 
-const TAB_WIDTH = 78;
-const TAB_GAP = 18;
-const CHIP_SIZE = 58;
-const ICON_SIZE = 26;
-const LABEL_SIZE = 13;
-const ICON_LABEL_GAP = 8;
+const TAB_WIDTH = 64;
+const TAB_GAP = 14;
+const ICON_SIZE = 24;
+const ICON_SIZE_ACTIVE = 26;
+const LABEL_SIZE = 12;
+const ICON_LABEL_GAP = 4;
 
 export type ExploreCategory = {
   id: string;
@@ -49,8 +48,12 @@ function CategoryTabItem({
       accessibilityState={{ selected: active }}
       accessibilityLabel={`${cat.id} category`}
     >
-      <View style={[styles.chip, active && styles.chipActive]}>
-        <Ionicons name={iconName} size={ICON_SIZE} color={BRAND} />
+      <View style={styles.iconSlot}>
+        <Ionicons
+          name={iconName}
+          size={active ? ICON_SIZE_ACTIVE : ICON_SIZE}
+          color={active ? BRAND : ICON_INACTIVE}
+        />
       </View>
       <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>
         {cat.id}
@@ -85,31 +88,22 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: TAB_GAP,
     paddingRight: 8,
-    paddingTop: 6,
-    paddingBottom: 8,
+    paddingTop: 2,
+    paddingBottom: 4,
   },
   tabItem: {
     width: TAB_WIDTH,
     alignItems: 'center',
   },
-  chip: {
-    width: CHIP_SIZE,
-    height: CHIP_SIZE,
-    borderRadius: CHIP_SIZE / 2,
+  iconSlot: {
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: CHIP_BG,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  chipActive: {
-    backgroundColor: CHIP_BG_ACTIVE,
-    borderColor: BRAND,
   },
   tabLabel: {
     marginTop: ICON_LABEL_GAP,
     fontSize: LABEL_SIZE,
-    lineHeight: 16,
+    lineHeight: 14,
     fontWeight: '500',
     color: LABEL_COLOR,
     textAlign: 'center',

@@ -16,6 +16,8 @@ type EventFeedCoverActionsProps = {
   shareMessage: string;
   actionStyle?: EventFeedCoverActionStyle;
   size?: EventFeedCoverActionSize;
+  /** overlay = on cover image (default). inline = row slot e.g. Recommended title row. */
+  layout?: 'overlay' | 'inline';
 };
 
 export function EventFeedCoverActions({
@@ -23,6 +25,7 @@ export function EventFeedCoverActions({
   shareMessage,
   actionStyle = 'light',
   size = 'compact',
+  layout = 'overlay',
 }: EventFeedCoverActionsProps) {
   const router = useGuardedRouter();
   const { isLoggedIn } = useAuth();
@@ -53,7 +56,12 @@ export function EventFeedCoverActions({
   };
 
   return (
-    <View style={[styles.coverHeroActions, isComfortable && styles.coverHeroActionsComfortable]}>
+    <View
+      style={[
+        layout === 'overlay' ? styles.coverHeroActions : styles.inlineActions,
+        layout === 'overlay' && isComfortable && styles.coverHeroActionsComfortable,
+      ]}
+    >
       <TouchableOpacity
         style={[
           styles.coverHeroActionBtn,
@@ -114,6 +122,12 @@ const styles = StyleSheet.create({
     top: 12,
     right: 12,
     gap: 10,
+  },
+  inlineActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
   },
   coverHeroActionBtn: {
     alignItems: 'center',
