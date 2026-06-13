@@ -8,7 +8,6 @@ import {
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
-import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,14 +24,17 @@ import EventActions from '@/components/eventDetail/EventActions';
 import EventBottomBar from '@/components/eventDetail/EventBottomBar';
 import EditAttendanceSheet from '@/components/eventDetail/EditAttendanceSheet';
 import FeaturedSpeakersCarousel from '@/components/eventDetail/FeaturedSpeakersCarousel';
+import SpeakerProfileSheet from '@/components/eventDetail/SpeakerProfileSheet';
 import EventDirectionsMapModal from '@/components/eventDetail/EventDirectionsMapModal';
+import FloatingDirectionsButton from '@/components/eventDetail/FloatingDirectionsButton';
 import SponsorCarousel from '@/components/eventDetail/SponsorCarousel';
+import SponsorDetailModal from '@/components/eventDetail/SponsorDetailModal';
+import RegistrationCelebration from '@/components/eventDetail/RegistrationCelebration';
 import { openDirectionsToVenue } from '@/utils/openDirections';
 import EventDetailSkeleton from '@/components/skeletons/EventDetailSkeleton';
-import ImageGalleryModal from '@/components/common/ImageGalleryModal';
-import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 import { formatAreaLineFromGeocode } from '@/utils/eventLocation';
 import { buildEventScheduleLocationFields, formatEventDetailDateTime } from '@/utils/eventDisplay';
+import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 
 const EventDetailScreen = () => {
   const { id } = useLocalSearchParams();
@@ -41,11 +43,14 @@ const EventDetailScreen = () => {
   const eventId = Array.isArray(id) ? id[0] : id;
   const [event, setEvent] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [joined, setJoined] = useState(false);
   const [mapAreaLine, setMapAreaLine] = useState('');
-  const [gallery, setGallery] = useState({ visible: false, items: [], index: 0 });
+  const [speakerSheet, setSpeakerSheet] = useState({ visible: false, index: 0 });
+  const [sponsorSheet, setSponsorSheet] = useState({ visible: false, index: 0 });
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [editAttendanceVisible, setEditAttendanceVisible] = useState(false);
+  const [joinCelebrationVisible, setJoinCelebrationVisible] = useState(false);
   const { isLoggedIn, user } = useAuth();
 
   const { savedEventIds, saveEvent, unsaveEvent } = useSavedEvents();
@@ -61,15 +66,24 @@ const EventDetailScreen = () => {
       }
 
       setIsLoading(true);
+      setLoadError(null);
       try {
         const payload = await getEventById(eventId);
         if (!mounted) return;
         setEvent(payload);
         setJoined(Boolean(payload?.isJoined));
         if (isLoggedIn) trackEventInteraction(eventId, 'opened');
-      } catch {
+      } catch (error) {
         if (!mounted) return;
         setEvent(null);
+        const status = error?.response?.status;
+        if (status === 404) {
+          setLoadError('not_found');
+        } else if (!error?.response) {
+          setLoadError('network');
+        } else {
+          setLoadError('unknown');
+        }
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -177,10 +191,17 @@ const EventDetailScreen = () => {
             attendeePreviews: currentPreviews.slice(0, 3),
           };
         });
-        router.push(`/events/${event.id}/going`);
+        setJoinCelebrationVisible(true);
       }
     } catch {
       // Keep current state on request error.
+    }
+  };
+
+  const handleJoinCelebrationFinish = () => {
+    setJoinCelebrationVisible(false);
+    if (event?.id) {
+      router.push(`/events/${event.id}/going`);
     }
   };
 
@@ -193,9 +214,41 @@ const EventDetailScreen = () => {
   }
 
   if (!event) {
+    const errorTitle =
+      loadError === 'network'
+        ? "Can't reach the server"
+        : loadError === 'not_found'
+          ? 'Event not found'
+          : 'Something went wrong';
+    const errorBody =
+      loadError === 'network'
+        ? 'Make sure the backend is running and your phone is on the same Wi‑Fi as your PC. Check EXPO_PUBLIC_API_BASE_URL in frontend/.env (use your PC LAN IP, not 127.0.0.1), then restart Expo.'
+        : loadError === 'not_found'
+          ? 'This event may have been removed or the link is invalid.'
+          : 'Try again in a moment.';
+
     return (
       <SafeAreaView style={styles.container}>
-        <Text>Event not found!</Text>
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 28 }}>
+          <Text style={{ fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 8 }}>
+            {errorTitle}
+          </Text>
+          <Text style={{ fontSize: 15, lineHeight: 22, color: '#64748B', marginBottom: 20 }}>
+            {errorBody}
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{
+              alignSelf: 'flex-start',
+              backgroundColor: '#FF7B3F',
+              paddingHorizontal: 18,
+              paddingVertical: 12,
+              borderRadius: 12,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Go back</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -242,7 +295,9 @@ const EventDetailScreen = () => {
     .trim();
   const mapFallbackQuery = typeof event?.city === 'string' ? event.city.trim() : '';
   const mapQuery = preferredLocationQuery || mapFallbackQuery;
-  const showStickyMapButton = !isOnlineEvent && (hasExactMapPin || Boolean(mapQuery));
+  const showStickyMapButton =
+    !isOnlineEvent &&
+    (hasExactMapPin || Boolean(mapQuery) || Boolean(displayLocationPrimary));
 
   const openAttendeesList = () => router.push(`/events/${String(event.id)}/attendees`);
 
@@ -278,37 +333,12 @@ const EventDetailScreen = () => {
     await handleJoinToggle();
   };
 
-  const openRosterGallery = (index) => {
-    const roster = Array.isArray(event?.roster) ? event.roster : [];
-    setGallery({
-      visible: true,
-      index,
-      items: roster.map((person, idx) => {
-        const photoUri = resolveApiAssetUrl(person.photoUrl);
-        return {
-          id: String(person.id ?? `${person.displayName}-${idx}`),
-          kind: 'person',
-          seedName: person.displayName,
-          image: photoUri ? { uri: photoUri } : null,
-          title: person.displayName,
-          subtitle: person.title?.trim() || '',
-        };
-      }),
-    });
+  const openSpeakerSheet = (index) => {
+    setSpeakerSheet({ visible: true, index });
   };
 
-  const openSponsorGallery = (index) => {
-    setGallery({
-      visible: true,
-      index,
-      items: sponsors.map((row) => ({
-        id: row.id,
-        kind: 'sponsor',
-        image: row.image,
-        title: row.name,
-        subtitle: '',
-      })),
-    });
+  const openSponsorSheet = (index) => {
+    setSponsorSheet({ visible: true, index });
   };
 
   const handleSaveToggle = () => {
@@ -333,7 +363,7 @@ const EventDetailScreen = () => {
           onSave={handleSaveToggle}
         />
         <EventDetailIntro event={event} />
-        <View style={styles.contentContainer}>
+        <View style={[styles.contentContainer, joined && styles.contentContainerJoined]}>
           <EventInfo
             description={event.description}
             datePrimary={datePrimary}
@@ -354,13 +384,13 @@ const EventDetailScreen = () => {
 
           <FeaturedSpeakersCarousel
             roster={event.roster}
-            onSpeakerPress={(_, index) => openRosterGallery(index)}
+            onSpeakerPress={(_, index) => openSpeakerSheet(index)}
           />
 
           {sponsors.length > 0 ? (
             <>
               <Text style={styles.sectionTitle}>Sponsors</Text>
-              <SponsorCarousel logos={sponsors} onLogoPress={openSponsorGallery} />
+              <SponsorCarousel logos={sponsors} onLogoPress={openSponsorSheet} />
             </>
           ) : null}
 
@@ -374,29 +404,18 @@ const EventDetailScreen = () => {
         </View>
       </ScrollView>
 
-      <View
-        pointerEvents={showStickyMapButton ? 'auto' : 'none'}
-        style={[
-          styles.stickyMapButtonWrap,
-          {
-            bottom: insets.bottom + 84,
-          },
-        ]}
-      >
-        {showStickyMapButton ? (
-          <TouchableOpacity style={styles.mapButton} onPress={handleMapPress}>
-            <Feather name="map" size={16} color="#FF7A00" />
-            <Text style={styles.mapText}>Get Directions</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
       <EventBottomBar
         joined={joined}
         onRegister={handleJoinToggle}
         onEditAttendance={() => setEditAttendanceVisible(true)}
         price={displayPrice}
         event={event}
+      />
+
+      <FloatingDirectionsButton
+        visible={showStickyMapButton}
+        onPress={handleMapPress}
+        bottomOffset={insets.bottom + 84}
       />
 
       <EditAttendanceSheet
@@ -406,11 +425,23 @@ const EventDetailScreen = () => {
         onUpdate={handleEditAttendanceUpdate}
       />
 
-      <ImageGalleryModal
-        visible={gallery.visible}
-        items={gallery.items}
-        initialIndex={gallery.index}
-        onClose={() => setGallery({ visible: false, items: [], index: 0 })}
+      <RegistrationCelebration
+        visible={joinCelebrationVisible}
+        onFinish={handleJoinCelebrationFinish}
+      />
+
+      <SpeakerProfileSheet
+        visible={speakerSheet.visible}
+        roster={Array.isArray(event?.roster) ? event.roster : []}
+        initialIndex={speakerSheet.index}
+        onClose={() => setSpeakerSheet({ visible: false, index: 0 })}
+      />
+
+      <SponsorDetailModal
+        visible={sponsorSheet.visible}
+        sponsors={sponsors}
+        initialIndex={sponsorSheet.index}
+        onClose={() => setSponsorSheet({ visible: false, index: 0 })}
       />
 
       {hasExactMapPin ? (

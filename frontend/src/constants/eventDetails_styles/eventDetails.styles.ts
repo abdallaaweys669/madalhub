@@ -19,6 +19,9 @@ export const styles = StyleSheet.create({
     paddingBottom: 120,
     backgroundColor: '#FFFFFF',
   },
+  contentContainerJoined: {
+    paddingBottom: 158,
+  },
   detailIntro: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -558,11 +561,8 @@ export const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,

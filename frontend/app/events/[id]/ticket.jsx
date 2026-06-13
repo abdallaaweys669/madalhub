@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,16 +9,60 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
 
 import useAuth from '@/auth/useAuth';
 import { pickDisplayName } from '@/auth/normalizeUser';
-import { getEventById } from '@/api/events';
-import { toDisplayTitle } from '@/utils/eventDisplay';
+import { DEFAULT_COVER_GRADIENT, getEventById } from '@/api/events';
+import { EventCoverBanner } from '@/components/event/EventCoverBanner';
+import TicketPerforation from '@/components/eventDetail/TicketPerforation';
+import TicketQrModal from '@/components/eventDetail/TicketQrModal';
+import { formatEventDetailDateTime, toDisplayTitle } from '@/utils/eventDisplay';
+import { formatEventLocationDisplay } from '@/utils/eventLocation';
 import { buildTicketQrValue, shareEventRegistration } from '@/utils/eventRegistration';
+import { downloadQrFromRef, imageSaveAlertMessage, imageSaveAlertTitle } from '@/utils/saveQrCodeImage';
+
+const PAGE_BG = '#FFF7ED';
+const FRAME_BG = '#F1F5F9';
+const ORANGE = '#FF7B3F';
+
+function DetailColumn({ label, value, iconName }) {
+  return (
+    <View style={styles.detailCol}>
+      <View style={styles.detailLabelRow}>
+        <View style={styles.detailIconWrap}>
+          <Feather name={iconName} size={13} color={ORANGE} />
+        </View>
+        <Text style={styles.detailLabel}>{label}</Text>
+      </View>
+      <Text style={styles.detailValue} numberOfLines={2}>
+        {value || '—'}
+      </Text>
+    </View>
+  );
+}
+
+function DashedRule() {
+  return (
+    <View style={styles.dashedWrap}>
+      <View style={[styles.dash, styles.dashFlex]} />
+    </View>
+  );
+}
+
+function OrangeConnector() {
+  return (
+    <View style={styles.connectorRow}>
+      <View style={styles.connectorCap} />
+      <View style={styles.connectorLine} />
+      <View style={styles.connectorCap} />
+    </View>
+  );
+}
 
 export default function EventTicketScreen() {
   const { id } = useLocalSearchParams();
@@ -28,6 +73,9 @@ export default function EventTicketScreen() {
 
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [qrModalVisible, setQrModalVisible] = useState(false);
+  const [downloadingQr, setDownloadingQr] = useState(false);
+  const qrSvgRef = useRef(null);
 
   const memberName = pickDisplayName(user) || 'Member';
   const userId = user?.id ?? user?.sub ?? '';
@@ -56,19 +104,72 @@ export default function EventTicketScreen() {
     load();
   }, [load]);
 
+  const ticketMeta = useMemo(() => {
+    if (!event) return null;
+    const { datePrimary, dateSecondary } = formatEventDetailDateTime(event.startsAt, event.endsAt);
+    const location = formatEventLocationDisplay(event);
+    const isOnline =
+      event.isOnline === true ||
+      String(event.locationName || '').trim().toLowerCase() === 'online';
+
+    const timeLabel = dateSecondary?.includes('–')
+      ? dateSecondary.split('–')[0].trim()
+      : dateSecondary || '—';
+
+    const shortDate = event.startsAt
+      ? new Date(event.startsAt).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : datePrimary;
+
+    return {
+      dateLabel: shortDate || '—',
+      timeLabel,
+      venueLabel: isOnline ? 'Online event' : location.venueLine || 'Venue TBA',
+      guestLabel: memberName,
+      isOnline,
+    };
+  }, [event, memberName]);
+
+  const handleShare = () => {
+    if (event) shareEventRegistration(event, memberName);
+  };
+
+  const handleDownloadQr = useCallback(async () => {
+    if (!qrValue || downloadingQr) return;
+
+    setDownloadingQr(true);
+    try {
+      const result = await downloadQrFromRef(qrSvgRef);
+      const title = imageSaveAlertTitle(result);
+      const message = imageSaveAlertMessage(result);
+      if (title && message) {
+        Alert.alert(title, message);
+      }
+    } catch {
+      Alert.alert('Could not save', 'Try again in a moment.');
+    } finally {
+      setDownloadingQr(false);
+    }
+  }, [downloadingQr, qrValue]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
+        <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.center}>
-          <ActivityIndicator color="#FF7B3F" />
+          <ActivityIndicator color={ORANGE} />
         </View>
       </SafeAreaView>
     );
   }
 
-  if (!event) {
+  if (!event || !ticketMeta) {
     return (
       <SafeAreaView style={styles.safe}>
+        <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.center}>
           <Text style={styles.errorText}>Ticket unavailable.</Text>
         </View>
@@ -76,61 +177,128 @@ export default function EventTicketScreen() {
     );
   }
 
+  const displayTitle = toDisplayTitle(event.title);
+  const instituteName = event.organizerName?.trim() || 'Event organizer';
+  const headlineDate = event.startsAt
+    ? new Date(event.startsAt).toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : ticketMeta.dateLabel;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <Stack.Screen options={{ headerShown: false }} />
+
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn} hitSlop={10}>
-          <Feather name="x" size={22} color="#64748B" />
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn} hitSlop={10}>
+          <Feather name="arrow-left" size={20} color={ORANGE} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Your ticket</Text>
-        <View style={styles.headerSpacer} />
+        <Text style={styles.headerTitle}>Tickets</Text>
+        <TouchableOpacity onPress={handleShare} style={styles.headerBtn} hitSlop={10}>
+          <Feather name="share-2" size={18} color={ORANGE} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 28 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.ticketCard}>
-          <View style={styles.qrWrap}>
-            <QRCode value={qrValue} size={210} color="#0F172A" backgroundColor="#FFFFFF" />
-          </View>
+        <View collapsable={false} style={styles.ticketFrame}>
+          <View style={styles.ticketBody}>
+            <View style={styles.coverSection}>
+              <EventCoverBanner
+                preset="feed-flat"
+                coverImageUrl={event.coverImageUrl}
+                coverLetter={event.coverLetter}
+                title={event.title}
+                coverGradient={event.coverGradient ?? DEFAULT_COVER_GRADIENT}
+                placeholderLetterSize={48}
+                style={styles.coverBanner}
+              />
+            </View>
 
-          <View style={styles.perforation}>
-            {Array.from({ length: 18 }).map((_, i) => (
-              <View key={`dot-${i}`} style={styles.perfDot} />
-            ))}
-          </View>
+            <View style={styles.connectorZone}>
+              <TicketPerforation cutoutColor={FRAME_BG} style={styles.connectorCutouts} />
+              <OrangeConnector />
+            </View>
 
-          <Text style={styles.eventTitle}>{toDisplayTitle(event.title)}</Text>
+            <View style={styles.stub}>
+              <View style={styles.stubContent}>
+                <Text style={styles.stubTitle}>{displayTitle}</Text>
+                <Text style={styles.stubDate}>{headlineDate}</Text>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Name</Text>
-            <Text style={styles.detailValue} numberOfLines={2}>
-              {memberName}
-            </Text>
-          </View>
+                <DashedRule />
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Organizer</Text>
-            <Text style={styles.detailValue} numberOfLines={2}>
-              {event.organizerName || 'Organizer'}
-            </Text>
-          </View>
+                <View style={styles.detailRow}>
+                  <DetailColumn label="Date" value={ticketMeta.dateLabel} iconName="calendar" />
+                  <DetailColumn label="Time" value={ticketMeta.timeLabel} iconName="clock" />
+                </View>
+                <View style={styles.detailRow}>
+                  <DetailColumn
+                    label="Venue"
+                    value={ticketMeta.venueLabel}
+                    iconName={ticketMeta.isOnline ? 'video' : 'map-pin'}
+                  />
+                  <DetailColumn label="Guest" value={ticketMeta.guestLabel} iconName="user" />
+                </View>
+              </View>
 
-          <View style={styles.brandRow}>
-            <View style={styles.brandDot} />
-            <Text style={styles.brandText}>Kulan · Show this at check-in</Text>
+              <View style={styles.stubPerforationSlot}>
+                <TicketPerforation cutoutColor={FRAME_BG} style={styles.stubCutouts} />
+              </View>
+
+              <View style={styles.stubFooter}>
+                <View style={styles.organizerBlock}>
+                  <View style={styles.organizerIconWrap}>
+                    <Feather name="briefcase" size={16} color={ORANGE} />
+                  </View>
+                  <View style={styles.organizerTextBlock}>
+                    <Text style={styles.instituteLabel}>Organized by</Text>
+                    <Text style={styles.instituteName} numberOfLines={2}>
+                      {instituteName}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.shareBtn}
-          onPress={() => shareEventRegistration(event, memberName)}
-          activeOpacity={0.9}
-        >
-          <Feather name="share-2" size={18} color="#FFFFFF" />
-          <Text style={styles.shareBtnText}>Share ticket</Text>
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.downloadPill}
+            onPress={handleDownloadQr}
+            activeOpacity={0.92}
+            disabled={downloadingQr || !qrValue}
+          >
+            <LinearGradient
+              colors={['#FF7A00', '#FF9A3D']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.pillInner}
+            >
+              {downloadingQr ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Feather name="download" size={17} color="#FFFFFF" />
+              )}
+              <Text style={styles.sharePillText}>
+                {downloadingQr ? 'Saving…' : 'Get ticket'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.qrPill}
+            onPress={() => setQrModalVisible(true)}
+            activeOpacity={0.88}
+          >
+            <Ionicons name="qr-code-outline" size={20} color={ORANGE} />
+            <Text style={styles.qrPillText}>QR code</Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={styles.backLink}
@@ -139,6 +307,29 @@ export default function EventTicketScreen() {
           <Text style={styles.backLinkText}>Back to confirmation</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <TicketQrModal
+        visible={qrModalVisible}
+        qrValue={qrValue}
+        eventTitle={displayTitle}
+        instituteName={instituteName}
+        onClose={() => setQrModalVisible(false)}
+        onShare={handleShare}
+      />
+
+      {qrValue ? (
+        <View style={styles.hiddenQr} pointerEvents="none" accessible={false}>
+          <QRCode
+            value={qrValue}
+            size={512}
+            color="#0F172A"
+            backgroundColor="#FFFFFF"
+            getRef={(ref) => {
+              qrSvgRef.current = ref;
+            }}
+          />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -146,7 +337,7 @@ export default function EventTicketScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#FFF7ED',
+    backgroundColor: PAGE_BG,
   },
   center: {
     flex: 1,
@@ -155,17 +346,20 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#64748B',
+    fontSize: 15,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  closeBtn: {
+  headerBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: ORANGE,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -173,118 +367,248 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  headerSpacer: {
-    width: 44,
-  },
-  scroll: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  ticketCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingTop: 28,
-    paddingHorizontal: 22,
-    paddingBottom: 22,
-    borderWidth: 1,
-    borderColor: '#FFEDD5',
-    shadowColor: '#FF7B3F',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 6,
-  },
-  qrWrap: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  perforation: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-    marginVertical: 18,
-    flexWrap: 'wrap',
-  },
-  perfDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#E2E8F0',
-  },
-  eventTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-    lineHeight: 24,
-    marginBottom: 16,
-    textAlign: 'center',
+  },
+  scroll: {
+    paddingHorizontal: 18,
+    paddingTop: 4,
+    overflow: 'visible',
+  },
+  ticketFrame: {
+    backgroundColor: FRAME_BG,
+    borderRadius: 24,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#FF7B3F',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    elevation: 5,
+    overflow: 'visible',
+  },
+  ticketBody: {
+    overflow: 'visible',
+  },
+  coverSection: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+  },
+  coverBanner: {
+    borderRadius: 0,
+    marginBottom: 0,
+    aspectRatio: 16 / 9,
+  },
+  connectorZone: {
+    position: 'relative',
+    height: 28,
+    justifyContent: 'center',
+    zIndex: 4,
+  },
+  connectorCutouts: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  connectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    gap: 6,
+    zIndex: 2,
+  },
+  connectorCap: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: ORANGE,
+  },
+  connectorLine: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: ORANGE,
+  },
+  stub: {
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    overflow: 'visible',
+  },
+  stubContent: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 8,
+  },
+  stubPerforationSlot: {
+    position: 'relative',
+    height: 28,
+    zIndex: 5,
+  },
+  stubCutouts: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  stubFooter: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
+  stubTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 25,
+    letterSpacing: -0.3,
+  },
+  stubDate: {
+    marginTop: 4,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 14,
+  },
+  dashedWrap: {
+    marginBottom: 14,
+    overflow: 'hidden',
+  },
+  dash: {
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+  },
+  dashFlex: {
+    width: '100%',
   },
   detailRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 12,
+    gap: 20,
+    marginBottom: 14,
+  },
+  detailCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  detailLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 5,
+  },
+  detailIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFF1E8',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   detailLabel: {
-    fontSize: 14,
-    color: '#94A3B8',
+    fontSize: 12,
     fontWeight: '600',
-    minWidth: 72,
+    color: '#94A3B8',
   },
   detailValue: {
-    flex: 1,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#0F172A',
-    textAlign: 'right',
+    lineHeight: 20,
   },
-  brandRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  brandDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF7B3F',
-  },
-  brandText: {
+  instituteLabel: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#FF7B3F',
-    letterSpacing: 0.3,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginBottom: 2,
   },
-  shareBtn: {
-    marginTop: 20,
+  instituteName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'left',
+  },
+  organizerBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    maxWidth: '100%',
+  },
+  organizerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFF1E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  organizerTextBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 22,
+  },
+  downloadPill: {
+    flex: 1,
+    borderRadius: 999,
+    overflow: 'hidden',
+    shadowColor: '#FF7B3F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  pillInner: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    paddingVertical: 15,
+    paddingHorizontal: 14,
   },
-  shareBtnText: {
+  sharePillText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
+  qrPill: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: ORANGE,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  qrPillText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: ORANGE,
+  },
   backLink: {
-    marginTop: 14,
+    marginTop: 16,
     alignItems: 'center',
     paddingVertical: 8,
   },
   backLinkText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FF7B3F',
+    color: ORANGE,
+  },
+  hiddenQr: {
+    position: 'absolute',
+    left: -9999,
+    top: 0,
+    width: 512,
+    height: 512,
+    opacity: 0,
   },
 });

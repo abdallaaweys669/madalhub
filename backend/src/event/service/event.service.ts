@@ -1538,6 +1538,7 @@ export class EventService {
       .addSelect('user.id', 'userId')
       .addSelect('user.full_name', 'fullName')
       .addSelect('user.profile_img', 'profileImg')
+      .addSelect('user.location', 'location')
       .addSelect('user.profile_hidden', 'profileHidden')
       .orderBy('reg.created_at', 'DESC');
 
@@ -1548,6 +1549,7 @@ export class EventService {
       userId: number | string;
       fullName: string;
       profileImg: string | null;
+      location: string | null;
       profileHidden?: number | boolean | string;
     }>();
 
@@ -1564,6 +1566,7 @@ export class EventService {
           id: shouldMask ? null : uid,
           name: shouldMask ? 'Anonymous' : row.fullName,
           avatar: shouldMask ? null : row.profileImg,
+          location: shouldMask ? null : row.location?.trim() || null,
           joinedAt: row.joinedAt,
           isAnonymous: shouldMask ? true : undefined,
         };

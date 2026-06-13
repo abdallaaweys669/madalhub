@@ -44,7 +44,16 @@
         {
           "locationWhenInUsePermission": "Allow Kulan to access your location to show nearby events."
         }
-      ]
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Kulan to save your ticket QR code to your photo library.",
+          "savePhotosPermission": "Allow Kulan to save your ticket QR code to your photo library.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "expo-sharing"
     ],
     "scheme": "kulanapp"
   }

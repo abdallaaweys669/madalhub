@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,20 +8,20 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import useAuth from '@/auth/useAuth';
 import { pickDisplayName } from '@/auth/normalizeUser';
-import { getEventById, leaveEvent } from '@/api/events';
-import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
+import { DEFAULT_COVER_GRADIENT, getEventById, leaveEvent } from '@/api/events';
+import { EventCoverBanner } from '@/components/event/EventCoverBanner';
 import EditAttendanceSheet from '@/components/eventDetail/EditAttendanceSheet';
-import { DEFAULT_COVER_GRADIENT } from '@/api/events';
 import { formatEventDetailDateTime, toDisplayTitle } from '@/utils/eventDisplay';
 import { addEventToCalendar, shareEventRegistration } from '@/utils/eventRegistration';
 import { formatEventLocationDisplay } from '@/utils/eventLocation';
 
-export default function EventGoingScreen() {
+function EventGoingScreen() {
   const { id } = useLocalSearchParams();
   const router = useGuardedRouter();
   const insets = useSafeAreaInsets();
@@ -78,6 +77,7 @@ export default function EventGoingScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
+        <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.center}>
           <ActivityIndicator color="#FF7B3F" />
         </View>
@@ -88,6 +88,7 @@ export default function EventGoingScreen() {
   if (!event) {
     return (
       <SafeAreaView style={styles.safe}>
+        <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.center}>
           <Text style={styles.errorText}>Event not found.</Text>
         </View>
@@ -96,93 +97,111 @@ export default function EventGoingScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={() => router.replace(`/events/${eventId}`)}
-        hitSlop={10}
-        accessibilityLabel="Back to event"
-      >
-        <Feather name="arrow-left" size={22} color="#0F172A" />
-      </TouchableOpacity>
+    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
+      <Stack.Screen options={{ headerShown: false }} />
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 158 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.coverWrap}>
-          {event.coverImageUrl ? (
-            <Image source={{ uri: event.coverImageUrl }} style={styles.cover} resizeMode="cover" />
-          ) : (
-            <CoverPlaceholder
-              letter={event.coverLetter ?? event.title}
-              gradient={event.coverGradient ?? DEFAULT_COVER_GRADIENT}
-              borderRadius={20}
-              style={styles.cover}
-              letterSize={48}
-            />
-          )}
-          <View style={styles.goingBadge}>
-            <Ionicons name="checkmark-circle" size={16} color="#FF7B3F" />
-            <Text style={styles.goingBadgeText}>You&apos;re going!</Text>
-          </View>
+        <View style={{ paddingTop: insets.top + 8 }}>
+          <EventCoverBanner
+            preset="detail"
+            coverImageUrl={event.coverImageUrl}
+            coverLetter={event.coverLetter}
+            title={event.title}
+            coverGradient={event.coverGradient ?? DEFAULT_COVER_GRADIENT}
+            placeholderLetterSize={56}
+          />
         </View>
 
-        <Text style={styles.title}>{toDisplayTitle(event.title)}</Text>
+        <View style={styles.body}>
+          <View style={styles.registeredPill}>
+            <Feather name="check-circle" size={15} color="#16A34A" />
+            <Text style={styles.registeredPillText}>You&apos;re registered</Text>
+          </View>
 
-        <View style={styles.metaRow}>
-          <Feather name="clock" size={16} color="#64748B" />
-          <View style={styles.metaTextCol}>
-            <Text style={styles.metaPrimary}>{datePrimary}</Text>
-            {dateSecondary ? <Text style={styles.metaSecondary}>{dateSecondary}</Text> : null}
+          <Text style={styles.title}>{toDisplayTitle(event.title)}</Text>
+
+          <View style={styles.metaCard}>
+            <View style={styles.metaRow}>
+              <View style={styles.metaIconWrap}>
+                <Feather name="clock" size={16} color="#FF7B3F" />
+              </View>
+              <View style={styles.metaTextCol}>
+                <Text style={styles.metaPrimary}>{datePrimary}</Text>
+                {dateSecondary ? <Text style={styles.metaSecondary}>{dateSecondary}</Text> : null}
+              </View>
+            </View>
+
+            <View style={styles.metaDivider} />
+
+            <View style={styles.metaRow}>
+              <View style={styles.metaIconWrap}>
+                <Feather name={isOnline ? 'video' : 'map-pin'} size={16} color="#FF7B3F" />
+              </View>
+              <View style={styles.metaTextCol}>
+                <Text style={styles.metaPrimary}>
+                  {isOnline ? 'Online event' : location.venueLine || 'Venue TBA'}
+                </Text>
+                {!isOnline && location.areaLine ? (
+                  <Text style={styles.metaSecondary}>{location.areaLine}</Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.quickActions}>
+            <TouchableOpacity
+              style={styles.quickAction}
+              onPress={() => addEventToCalendar(event)}
+              activeOpacity={0.88}
+            >
+              <View style={[styles.quickIconWrap, styles.quickIconOrange]}>
+                <Feather name="calendar" size={18} color="#FF7B3F" />
+              </View>
+              <Text style={styles.quickActionLabel}>Add to calendar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickAction}
+              onPress={() => shareEventRegistration(event, memberName)}
+              activeOpacity={0.88}
+            >
+              <View style={[styles.quickIconWrap, styles.quickIconNeutral]}>
+                <Feather name="share-2" size={18} color="#0F172A" />
+              </View>
+              <Text style={styles.quickActionLabel}>Share event</Text>
+            </TouchableOpacity>
           </View>
         </View>
-
-        <View style={styles.metaRow}>
-          <Feather name={isOnline ? 'video' : 'map-pin'} size={16} color="#64748B" />
-          <View style={styles.metaTextCol}>
-            <Text style={styles.metaPrimary}>
-              {isOnline ? 'Online event' : location.venueLine || 'Venue TBA'}
-            </Text>
-            {!isOnline && location.areaLine ? (
-              <Text style={styles.metaSecondary}>{location.areaLine}</Text>
-            ) : null}
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.primaryAction}
-          onPress={() => addEventToCalendar(event)}
-          activeOpacity={0.9}
-        >
-          <Feather name="calendar" size={18} color="#FFFFFF" />
-          <Text style={styles.primaryActionText}>Add to calendar</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.secondaryAction}
-          onPress={() => shareEventRegistration(event, memberName)}
-          activeOpacity={0.9}
-        >
-          <Feather name="share-2" size={18} color="#0F172A" />
-          <Text style={styles.secondaryActionText}>Share with friends</Text>
-        </TouchableOpacity>
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-        <View style={styles.bottomLeft}>
-          <Text style={styles.bottomTitle}>You&apos;re going!</Text>
-          <TouchableOpacity onPress={() => setEditVisible(true)} hitSlop={8}>
-            <Text style={styles.bottomEdit}>Edit attendance</Text>
+        <View style={styles.joinedRow}>
+          <View style={styles.goingRow}>
+            <Feather name="check-circle" size={17} color="#16A34A" />
+            <Text style={styles.goingText}>You&apos;re going!</Text>
+          </View>
+          <TouchableOpacity onPress={() => setEditVisible(true)} hitSlop={8} activeOpacity={0.8}>
+            <Text style={styles.editLink}>Edit attendance</Text>
           </TouchableOpacity>
         </View>
+
         <TouchableOpacity
-          style={styles.ticketBtn}
+          style={styles.ctaButton}
           onPress={() => router.push(`/events/${eventId}/ticket`)}
-          activeOpacity={0.9}
+          activeOpacity={0.92}
         >
-          <Feather name="maximize" size={16} color="#FFFFFF" />
-          <Text style={styles.ticketBtnText}>Ticket</Text>
+          <LinearGradient
+            colors={['#FF7A00', '#FF9A3D']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.ctaGradient}
+          >
+            <Ionicons name="qr-code-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.ctaText}>View ticket</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
@@ -195,6 +214,8 @@ export default function EventGoingScreen() {
     </SafeAreaView>
   );
 }
+
+export default EventGoingScreen;
 
 const styles = StyleSheet.create({
   safe: {
@@ -210,68 +231,68 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 15,
   },
-  backBtn: {
-    marginLeft: 12,
-    marginTop: 4,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   scroll: {
+    flexGrow: 1,
+  },
+  body: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 14,
   },
-  coverWrap: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 18,
-    position: 'relative',
-  },
-  cover: {
-    width: '100%',
-    height: 200,
-  },
-  goingBadge: {
-    position: 'absolute',
-    left: 14,
-    bottom: 14,
+  registeredPill: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: '#ECFDF5',
     borderRadius: 999,
-    shadowColor: '#FF7B3F',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 10,
   },
-  goingBadgeText: {
+  registeredPillText: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#FF7B3F',
+    fontWeight: '700',
+    color: '#15803D',
   },
   title: {
     fontSize: 24,
     fontWeight: '800',
     color: '#0F172A',
     lineHeight: 30,
-    marginBottom: 16,
+    marginBottom: 14,
     letterSpacing: -0.3,
+  },
+  metaCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    marginBottom: 18,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 14,
+    paddingVertical: 12,
+  },
+  metaIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   metaTextCol: {
     flex: 1,
+    paddingTop: 1,
   },
   metaPrimary: {
     fontSize: 15,
@@ -285,79 +306,104 @@ const styles = StyleSheet.create({
     color: '#64748B',
     lineHeight: 18,
   },
-  primaryAction: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    paddingVertical: 15,
+  metaDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E2E8F0',
+    marginLeft: 48,
   },
-  primaryActionText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  secondaryAction: {
-    marginTop: 10,
+  quickActions: {
     flexDirection: 'row',
+    gap: 10,
+  },
+  quickAction: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FFF7ED',
-    borderRadius: 14,
-    paddingVertical: 15,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#FFEDD5',
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
-  secondaryActionText: {
-    color: '#0F172A',
-    fontSize: 16,
+  quickIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  quickIconOrange: {
+    backgroundColor: '#FFF7ED',
+  },
+  quickIconNeutral: {
+    backgroundColor: '#F8FAFC',
+  },
+  quickActionLabel: {
+    fontSize: 13,
     fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
   },
   bottomBar: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 12,
     backgroundColor: '#FFFFFF',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E2E8F0',
+    gap: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  joinedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
   },
-  bottomLeft: {
-    flex: 1,
+  goingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    flexShrink: 1,
   },
-  bottomTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+  goingText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#0F172A',
   },
-  bottomEdit: {
-    marginTop: 2,
+  editLink: {
     fontSize: 14,
     fontWeight: '700',
     color: '#FF7B3F',
   },
-  ticketBtn: {
+  ctaButton: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#FF7B3F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  ctaGradient: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FF7B3F',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 999,
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
   },
-  ticketBtnText: {
+  ctaText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
   },
 });

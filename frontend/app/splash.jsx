@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { View, Animated, StyleSheet, Easing, Platform } from "react-native";
+import { useRootNavigationState } from "expo-router";
 import useGuardedRouter from "@/hooks/useGuardedRouter";
 import * as NavigationBar from "expo-navigation-bar";
 import useAuth from "@/auth/useAuth";
@@ -16,6 +17,8 @@ const EXPAND_CIRCLE = "#FFFFFF";
 
 export default function Splash() {
   const router = useGuardedRouter();
+  const rootNavigationState = useRootNavigationState();
+  const isNavigationReady = Boolean(rootNavigationState?.key);
   const { user, profileCompleted, isHydrated, userRole, organizerStatus } = useAuth();
 
   const circleScale = useRef(new Animated.Value(0)).current;
@@ -44,7 +47,52 @@ export default function Splash() {
   }, []);
 
   useEffect(() => {
-    if (!isHydrated) return;
+    if (!isHydrated || !isNavigationReady) return;
+
+    let cancelled = false;
+
+    const go = (href) => {
+      if (cancelled) return;
+      router.replace(href);
+    };
+
+    const finishRouting = () => {
+      if (!user) {
+        go("/(tabs)/explore");
+        return;
+      }
+
+      if (userRole === ROLE_ORGANIZER) {
+        if (organizerStatus === 'approved') {
+          go("/(organizer)/dashboard");
+        } else if (organizerStatus === 'rejected') {
+          go("/(organizer-status)/verification-failed");
+        } else {
+          (async () => {
+            try {
+              const detail = await organizerApi.getOrganizerStatus();
+              if (cancelled) return;
+              const ready = isOrganizerSubmissionReadyForReview(detail);
+              go(
+                ready
+                  ? "/(organizer-status)/pending-verification"
+                  : "/(organizer-status)/resubmit-verification"
+              );
+            } catch {
+              go("/(organizer-status)/resubmit-verification");
+            }
+          })();
+        }
+        return;
+      }
+
+      if (profileCompleted === false) {
+        go("/onboarding/WelcomeIntro");
+        return;
+      }
+
+      go("/(tabs)/explore");
+    };
 
     Animated.parallel([
       Animated.timing(circleScale, {
@@ -60,49 +108,35 @@ export default function Splash() {
         useNativeDriver: true,
       }),
     ]).start(() => {
+      if (cancelled) return;
+
       Animated.timing(circleScale, {
         toValue: 12,
         duration: 900,
         easing: Easing.in(Easing.exp),
         useNativeDriver: true,
       }).start(() => {
-        if (!user) {
-          router.replace("/(tabs)/explore");
-          return;
-        }
-
-        if (userRole === ROLE_ORGANIZER) {
-          if (organizerStatus === 'approved') {
-            router.replace("/(organizer)/dashboard");
-          } else if (organizerStatus === 'rejected') {
-            router.replace("/(organizer-status)/verification-failed");
-          } else {
-            (async () => {
-              try {
-                const detail = await organizerApi.getOrganizerStatus();
-                const ready = isOrganizerSubmissionReadyForReview(detail);
-                router.replace(
-                  ready
-                    ? "/(organizer-status)/pending-verification"
-                    : "/(organizer-status)/resubmit-verification"
-                );
-              } catch {
-                router.replace("/(organizer-status)/resubmit-verification");
-              }
-            })();
-          }
-          return;
-        }
-
-        if (profileCompleted === false) {
-          router.replace("/onboarding/WelcomeIntro");
-          return;
-        }
-
-        router.replace("/(tabs)/explore");
+        if (cancelled) return;
+        finishRouting();
       });
     });
-  }, [isHydrated, profileCompleted, router, user, userRole, organizerStatus]);
+
+    return () => {
+      cancelled = true;
+      circleScale.stopAnimation();
+      logoOpacity.stopAnimation();
+    };
+  }, [
+    isHydrated,
+    isNavigationReady,
+    profileCompleted,
+    router,
+    user,
+    userRole,
+    organizerStatus,
+    circleScale,
+    logoOpacity,
+  ]);
 
   return (
     <View style={styles.container}>

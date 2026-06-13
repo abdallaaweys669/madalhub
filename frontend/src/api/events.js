@@ -765,6 +765,7 @@ export async function getEventAttendees(id, params = {}) {
       const rawAvatar = isAnonymous ? null : row?.avatar ?? row?.profileImg ?? row?.profile_img ?? null;
       return {
         id: isAnonymous ? null : Number(row?.id ?? 0) || null,
+        userId: isAnonymous ? null : Number(row?.id ?? row?.userId ?? 0) || null,
         name: isAnonymous
           ? 'Anonymous'
           : typeof row?.name === 'string' && row.name.trim()
@@ -773,6 +774,14 @@ export async function getEventAttendees(id, params = {}) {
         avatarUrl:
           typeof rawAvatar === 'string' && rawAvatar.trim()
             ? resolveApiAssetUrl(rawAvatar.trim())
+            : null,
+        location:
+          !isAnonymous && typeof row?.location === 'string' && row.location.trim()
+            ? row.location.trim()
+            : null,
+        subtitle:
+          !isAnonymous && typeof row?.subtitle === 'string' && row.subtitle.trim()
+            ? row.subtitle.trim()
             : null,
         joinedAt: row?.joinedAt ?? null,
         isAnonymous: isAnonymous ? true : undefined,
