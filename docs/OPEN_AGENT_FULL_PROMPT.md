@@ -13,7 +13,7 @@ The following was completed **before** this prompt runs. **Do not repeat** unles
    - Commit message included: *WYSIWYG create-event, organizer dashboard polish, event detail & API*, plus backend migrations for program roster / format / photo URL.
 
 2. **Database migrations (existing codebase — already applied on dev DB)**
-   - In **`kulan-nest-backend`**, these migrations **already ran** successfully (`npm run migration:show` showed all `[X]`):
+   - In **`backend`**, these migrations **already ran** successfully (`npm run migration:show` showed all `[X]`):
      - `CreateEventProgramRosterTable1746200000000`
      - `AddEventFormatColumnToEvents1746300000000`
      - `AddPhotoUrlToEventProgramRoster1746400000000`
@@ -23,15 +23,15 @@ The following was completed **before** this prompt runs. **Do not repeat** unles
    - `organizerApi.publishEvent` is wired in `src/api/organizer.js` (aliases `publishOrganizerEvent`).
 
 4. **Do not commit junk**
-   - Ignore / do not add `kulan-frontend/com.facebook.react.devsupport.BundleDownloader` if present (artifact).
+   - Ignore / do not add `frontend/com.facebook.react.devsupport.BundleDownloader` if present (artifact).
 
 ---
 
 ## Before you write any code
 
 1. **Read and understand the Kulan project** in this workspace:
-   - **Backend:** `kulan-nest-backend` — NestJS modules, TypeORM entities/migrations, existing `organizer` and `onboarding` controllers, JWT + role guards (organizer role **2**), how events and registrations are modeled and counted today.
-   - **Frontend:** `kulan-frontend` — Expo Router (`app/(organizer)/profile.jsx`, modals), `src/api/client` and existing organizer/onboarding API calls, auth (`useAuth`, logout), **`COLORS` in `src/theme/colors.ts`** (use these tokens; do not introduce a parallel color system).
+   - **Backend:** `backend` — NestJS modules, TypeORM entities/migrations, existing `organizer` and `onboarding` controllers, JWT + role guards (organizer role **2**), how events and registrations are modeled and counted today.
+   - **Frontend:** `frontend` — Expo Router (`app/(organizer)/profile.jsx`, modals), `src/api/client` and existing organizer/onboarding API calls, auth (`useAuth`, logout), **`COLORS` in `src/theme/colors.ts`** (use these tokens; do not introduce a parallel color system).
 2. **Align with existing patterns** (naming, DTOs, error handling, asset URL resolution for avatars) instead of inventing new conventions.
 3. **Scope:** Implement only what’s required for the **organizer profile dashboard + followers + reviews aggregates + edit modals + change password + options sheet**, plus the **minimal new backend** to support **real** stats (no hardcoded ratings, follower counts, event counts, or attendee totals in the UI).
 
@@ -72,7 +72,7 @@ Deliver an **end-to-end, production-oriented** organizer profile experience:
 1. **What you changed** — list files created/modified (paths).
 2. **New API endpoints** and example response shape for profile dashboard.
 3. **Database** — new table names and purpose.
-4. **What the human must run manually** — exact commands (e.g. `cd kulan-nest-backend && npm run migration:run` **only if** new migrations were added), env vars.
+4. **What the human must run manually** — exact commands (e.g. `cd backend && npm run migration:run` **only if** new migrations were added), env vars.
 5. **How to verify** — profile loads, stats real, edits persist, change password works.
 6. **Known limitations / TODOs.**
 
@@ -80,7 +80,7 @@ Deliver an **end-to-end, production-oriented** organizer profile experience:
 
 ## Global rules (append to every task)
 
-- Repository: **Kulan** (`kulan-nest-backend` + `kulan-frontend`).
+- Repository: **Kulan** (`backend` + `frontend`).
 - Reuse existing Nest patterns (guards, `CurrentUser`, organizer role **2**).
 - Reuse `apiClient` and auth token handling.
 - No hardcoded demo numbers for stats/ratings/followers in production UI paths.

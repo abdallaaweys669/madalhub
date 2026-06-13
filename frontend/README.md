@@ -7,7 +7,7 @@ Use a public tunnel URL for the API during development.
 
 ### 1) Start backend
 
-From `kulan-nest-backend`:
+From `backend`:
 
 ```bash
 npm run start:dev
@@ -15,7 +15,7 @@ npm run start:dev
 
 ### 2) Start tunnel to backend
 
-From `kulan-frontend`:
+From `frontend`:
 
 ```bash
 npm run tunnel:api
@@ -25,7 +25,7 @@ Copy the `https://...` forwarding URL from ngrok.
 
 ### 3) Set frontend API env
 
-Create/update `.env` in `kulan-frontend`:
+Create/update `.env` in `frontend`:
 
 ```env
 EXPO_PUBLIC_API_BASE_URL=https://your-ngrok-url.ngrok-free.app

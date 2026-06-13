@@ -14,8 +14,8 @@ It has two parts:
 
 | Folder | Stack | Purpose |
 | --- | --- | --- |
-| `kulan-frontend/` | React Native + Expo (expo-router), JS/TS | Mobile app |
-| `kulan-nest-backend/` | NestJS + TypeORM | REST API + auth |
+| `frontend/` | React Native + Expo (expo-router), JS/TS | Mobile app |
+| `backend/` | NestJS + TypeORM | REST API + auth |
 
 ## Environment / shell
 
@@ -32,20 +32,20 @@ It has two parts:
   stale (after dep/config changes or weird bundling errors).
 
 ```bash
-# Frontend (from kulan-frontend/)
+# Frontend (from frontend/)
 npm run start        # expo start (cached — fast)
 npm run start:clear  # expo start --clear (only when cache is stale)
 npm run android      # native android build
 npm run ios          # native ios build
 
-# Backend (from kulan-nest-backend/)
+# Backend (from backend/)
 npm run start:dev
 ```
 
 ## Frontend conventions
 
 ### Path alias
-- `@/` maps to `kulan-frontend/src/` (see `jsconfig.json` + `babel-plugin-module-resolver`).
+- `@/` maps to `frontend/src/` (see `jsconfig.json` + `babel-plugin-module-resolver`).
 - Works in both `src/` and the expo-router `app/` directory. Prefer `@/...` imports.
 
 ### Navigation — ALWAYS use `useGuardedRouter` (important)

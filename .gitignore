@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env*.local
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.cursor/
+
+# Expo / native (frontend)
+frontend/.expo/
+frontend/dist/
+frontend/web-build/
+frontend/android/
+frontend/ios/
+
+# Backend build & uploads
+backend/dist/
+backend/uploads/
