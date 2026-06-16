@@ -21,6 +21,33 @@ export class MemberController {
   }
 
   @UseGuards(OptionalJwtAuthGuard)
+  @Get(':id/interests')
+  getMemberInterests(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() viewer?: { userId?: number; role?: number } | null,
+  ) {
+    return this.memberService.getMemberInterests(id, viewer);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get(':id/joined-events')
+  getMemberJoinedEvents(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() viewer?: { userId?: number; role?: number } | null,
+  ) {
+    return this.memberService.getMemberJoinedEvents(id, viewer);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get(':id/saved-events')
+  getMemberSavedEvents(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() viewer?: { userId?: number; role?: number } | null,
+  ) {
+    return this.memberService.getMemberSavedEvents(id, viewer);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,

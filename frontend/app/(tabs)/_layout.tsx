@@ -8,15 +8,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import useAuth from "@/auth/useAuth";
 import { getEvents } from "@/api/events";
 import { useThemeColors } from "@/theme";
+import useMemberNotificationBadge from "@/hooks/useMemberNotificationBadge";
 
 const ROLE_ORGANIZER = 2;
 
 export default function TabLayout() {
   const colors = useThemeColors();
-  const { isHydrated, isLoggedIn, profileCompleted, userRole, organizerStatus, user } = useAuth();
-  const phone = String(user?.phone ?? user?.phoneNumber ?? '').trim();
-  const profileIncomplete = isLoggedIn && userRole !== 2 && !phone;
-  const notifBadge = profileIncomplete ? 1 : undefined;
+  const { isHydrated, isLoggedIn, profileCompleted, userRole, organizerStatus } = useAuth();
+  const { unreadCount } = useMemberNotificationBadge();
+  const notifBadge = unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined;
 
 
   const insets = useSafeAreaInsets();

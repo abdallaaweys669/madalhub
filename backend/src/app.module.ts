@@ -11,6 +11,7 @@ import { AdminModule } from './admin/admin.module';
 import { EventModule } from './event/event.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { InterestsModule } from './interests/interests.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -45,6 +46,8 @@ import { InterestsModule } from './interests/interests.module';
     OnboardingModule,
 
     InterestsModule,
+
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

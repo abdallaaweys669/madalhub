@@ -1,6 +1,8 @@
 import React from 'react';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 
 import { KulanEventFeedCard } from '@/components/event/feed/KulanEventFeedCard';
+import { EVENT_FEED_LIST_HORIZONTAL_PAD } from '@/components/event/feed/eventFeedTokens';
 
 export type ExploreEventChip = {
   label: string;
@@ -46,5 +48,22 @@ type ExploreEventCardProps = {
 
 /** Explore / profile list wrapper around the shared feed card. */
 export function ExploreEventCard({ event }: ExploreEventCardProps) {
-  return <KulanEventFeedCard event={event} variant="flat" />;
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - EVENT_FEED_LIST_HORIZONTAL_PAD;
+
+  return (
+    <KulanEventFeedCard
+      event={event}
+      variant="boxed"
+      width={cardWidth}
+      style={styles.cardSpacing}
+    />
+  );
 }
+
+const styles = StyleSheet.create({
+  cardSpacing: {
+    marginBottom: 14,
+    alignSelf: 'center',
+  },
+});

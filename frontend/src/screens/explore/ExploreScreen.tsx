@@ -35,7 +35,7 @@ import {
   removeExploreModalFilterChip,
   type ExploreActiveFilterChip,
 } from '@/components/explore/exploreFilterUtils';
-import { KulanEventFeedCard } from '@/components/event/feed/KulanEventFeedCard';
+import { ExploreEventCard } from '@/components/explore/ExploreEventCard';
 import type { ExploreEventCardModel } from '@/components/explore/ExploreEventCard';
 import {
   FilterModal,
@@ -526,7 +526,7 @@ export default function ExploreScreen() {
   const sectionTitle = activeCategory === 'All' ? 'All Events' : `${activeCategory} Events`;
 
   const renderItem: ListRenderItem<ExploreRow> = useCallback(
-    ({ item }) => <KulanEventFeedCard event={item} variant="flat" />,
+    ({ item }) => <ExploreEventCard event={item} />,
     [],
   );
 

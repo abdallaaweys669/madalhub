@@ -29,7 +29,6 @@ import EventDirectionsMapModal from '@/components/eventDetail/EventDirectionsMap
 import FloatingDirectionsButton from '@/components/eventDetail/FloatingDirectionsButton';
 import SponsorCarousel from '@/components/eventDetail/SponsorCarousel';
 import SponsorDetailModal from '@/components/eventDetail/SponsorDetailModal';
-import RegistrationCelebration from '@/components/eventDetail/RegistrationCelebration';
 import { openDirectionsToVenue } from '@/utils/openDirections';
 import EventDetailSkeleton from '@/components/skeletons/EventDetailSkeleton';
 import { formatAreaLineFromGeocode } from '@/utils/eventLocation';
@@ -50,7 +49,6 @@ const EventDetailScreen = () => {
   const [sponsorSheet, setSponsorSheet] = useState({ visible: false, index: 0 });
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [editAttendanceVisible, setEditAttendanceVisible] = useState(false);
-  const [joinCelebrationVisible, setJoinCelebrationVisible] = useState(false);
   const { isLoggedIn, user } = useAuth();
 
   const { savedEventIds, saveEvent, unsaveEvent } = useSavedEvents();
@@ -191,17 +189,10 @@ const EventDetailScreen = () => {
             attendeePreviews: currentPreviews.slice(0, 3),
           };
         });
-        setJoinCelebrationVisible(true);
+        router.push(`/events/${event.id}/ticket`);
       }
     } catch {
-      // Keep current state on request error.
-    }
-  };
-
-  const handleJoinCelebrationFinish = () => {
-    setJoinCelebrationVisible(false);
-    if (event?.id) {
-      router.push(`/events/${event.id}/going`);
+      Alert.alert('Could not register', 'Please try again in a moment.');
     }
   };
 
@@ -408,6 +399,7 @@ const EventDetailScreen = () => {
         joined={joined}
         onRegister={handleJoinToggle}
         onEditAttendance={() => setEditAttendanceVisible(true)}
+        onViewTicket={() => router.push(`/events/${eventId}/ticket`)}
         price={displayPrice}
         event={event}
       />
@@ -423,11 +415,6 @@ const EventDetailScreen = () => {
         isGoing={joined}
         onClose={() => setEditAttendanceVisible(false)}
         onUpdate={handleEditAttendanceUpdate}
-      />
-
-      <RegistrationCelebration
-        visible={joinCelebrationVisible}
-        onFinish={handleJoinCelebrationFinish}
       />
 
       <SpeakerProfileSheet

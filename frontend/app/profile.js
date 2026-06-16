@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
   Platform,
   Alert,
@@ -13,8 +12,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import GmailBrandIcon from '@/assets/gmail-brand.svg';
+import GoogleMapsBrandIcon from '@/assets/google-maps-brand.svg';
 import { Link, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
 import useAuth from '@/auth/useAuth';
@@ -23,13 +23,16 @@ import { getEvents } from '@/api/events';
 import Chip from '@/features/onboarding/components/Chip';
 import { INTEREST_ICON_MAP } from '@/features/onboarding/data/interestIconMap';
 import { MemberProfileEventsSection } from '@/components/member/MemberProfileEventsSection';
-import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
+import { MemberProfileAvatar } from '@/components/member/MemberProfileAvatar';
+import { MemberProfileSocialLinks } from '@/components/member/MemberProfileSocialLinks';
 import onboardingApi from '@/api/onboarding';
-import authApi from '@/api/auth';
-import { getMemberById } from '@/api/member';
+import { getMemberById, getMemberInterestsById, getMemberJoinedEventsById, getMemberSavedEventsById } from '@/api/member';
+import { mapApiEventToCard } from '@/api/events';
 import { useThemeColors } from '@/theme';
-import { normalizeUser, coerceProfileVisibilityBool, pickDisplayName, pickLocationLabel } from '@/auth/normalizeUser';
+import { coerceProfileVisibilityBool, pickDisplayName, pickLocationLabel } from '@/auth/normalizeUser';
+import { mergeAuthenticatedUserFromMe } from '@/auth/mergeAuthenticatedUserFromMe';
 import { canViewerSeeHiddenProfile } from '@/utils/anonymize';
+import { openKulanMemberWhatsApp } from '@/utils/whatsapp';
 
 function formatJoinedDate(iso) {
   if (!iso) return null;
@@ -65,13 +68,22 @@ const ProfileScreen = () => {
   const [loadingGoing, setLoadingGoing] = useState(true);
   const [viewedMember, setViewedMember] = useState(null);
   const [loadingMember, setLoadingMember] = useState(false);
+  const [visitorInterests, setVisitorInterests] = useState([]);
+  const [visitorGoingEvents, setVisitorGoingEvents] = useState([]);
+  const [visitorSavedEvents, setVisitorSavedEvents] = useState([]);
+  const [loadingVisitorExtras, setLoadingVisitorExtras] = useState(false);
 
   const uid = user?.id != null ? Number(user.id) : user?.sub != null ? Number(user.sub) : null;
   const isLoggedInViewer = uid != null;
+  const forceVisitorView = params.from === 'attendees';
   const hasExplicitMemberId = memberIdNum != null && Number.isFinite(memberIdNum);
-  const isOwnProfile = !hasExplicitMemberId || (isLoggedInViewer && Number(memberIdNum) === uid);
+  const isOwnProfile =
+    !hasExplicitMemberId || (isLoggedInViewer && Number(memberIdNum) === uid && !forceVisitorView);
+  const isVisitorProfile = hasExplicitMemberId && (!isOwnProfile || forceVisitorView);
+  const canEditProfile = isOwnProfile && !forceVisitorView;
 
   const displayUser = isOwnProfile ? user : viewedMember;
+  const visitorName = pickDisplayName(user) || 'A Kulan member';
 
   const profileHidden = coerceProfileVisibilityBool(
     displayUser?.profileHidden ?? displayUser?.profile_hidden,
@@ -102,26 +114,53 @@ const ProfileScreen = () => {
 
   useEffect(() => {
     let cancelled = false;
-    if (!isOwnProfile && memberIdNum != null && Number.isFinite(memberIdNum)) {
-      setLoadingMember(true);
-      getMemberById(memberIdNum)
-        .then((data) => {
-          if (!cancelled) setViewedMember(data);
-        })
-        .catch(() => {
-          if (!cancelled) setViewedMember(null);
-        })
-        .finally(() => {
-          if (!cancelled) setLoadingMember(false);
-        });
-    } else {
+    if (!isVisitorProfile || memberIdNum == null || !Number.isFinite(memberIdNum)) {
       setViewedMember(null);
+      setVisitorInterests([]);
+      setVisitorGoingEvents([]);
+      setVisitorSavedEvents([]);
       setLoadingMember(false);
+      setLoadingVisitorExtras(false);
+      return undefined;
     }
+
+    setLoadingMember(true);
+    setLoadingVisitorExtras(true);
+
+    Promise.all([
+      getMemberById(memberIdNum),
+      getMemberInterestsById(memberIdNum).catch(() => ({ interests: [] })),
+      getMemberJoinedEventsById(memberIdNum).catch(() => ({ items: [] })),
+      getMemberSavedEventsById(memberIdNum).catch(() => ({ items: [] })),
+    ])
+      .then(([member, interestsPayload, goingPayload, savedPayload]) => {
+        if (cancelled) return;
+        setViewedMember(member);
+        setVisitorInterests(Array.isArray(interestsPayload?.interests) ? interestsPayload.interests : []);
+        const goingItems = Array.isArray(goingPayload?.items) ? goingPayload.items : [];
+        const savedItems = Array.isArray(savedPayload?.items) ? savedPayload.items : [];
+        setVisitorGoingEvents(goingItems.map((event) => mapApiEventToCard(event)));
+        setVisitorSavedEvents(savedItems.map((event) => mapApiEventToCard(event)));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setViewedMember(null);
+          setVisitorInterests([]);
+          setVisitorGoingEvents([]);
+          setVisitorSavedEvents([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingMember(false);
+          setLoadingVisitorExtras(false);
+        }
+      });
+
     return () => {
       cancelled = true;
     };
-  }, [isOwnProfile, memberIdNum]);
+  }, [isVisitorProfile, memberIdNum]);
 
   const loadJoinedFromFeed = useCallback(async () => {
     if (!isOwnProfile) {
@@ -143,12 +182,7 @@ const ProfileScreen = () => {
 
   const refreshMemberData = useCallback(async () => {
     if (!isOwnProfile) return;
-    try {
-      const me = await authApi.getMe();
-      setUser((prev) => (prev ? normalizeUser(prev, me) : prev));
-    } catch {
-      // keep cached user
-    }
+    await mergeAuthenticatedUserFromMe(setUser);
     try {
       const mine = await onboardingApi.getMyInterests();
       setMemberInterests(Array.isArray(mine) ? mine : []);
@@ -161,38 +195,43 @@ const ProfileScreen = () => {
     useCallback(() => {
       setBannerDismissed(false);
       loadJoinedFromFeed();
-      if (isOwnProfile) {
+      if (canEditProfile) {
         refreshSavedEvents?.();
         refreshMemberData();
       }
-    }, [loadJoinedFromFeed, refreshSavedEvents, refreshMemberData, isOwnProfile]),
+    }, [loadJoinedFromFeed, refreshSavedEvents, refreshMemberData, canEditProfile]),
   );
 
   const now = useMemo(() => new Date(), []);
 
+  const displayInterests = isVisitorProfile ? visitorInterests : memberInterests;
+  const displayGoingEvents = isVisitorProfile ? visitorGoingEvents : goingEvents;
+  const displaySavedEvents = isVisitorProfile ? visitorSavedEvents : savedEvents;
+
   const stats = useMemo(() => {
-    const goingUpcoming = goingEvents.filter((e) => {
+    const sourceGoing = displayGoingEvents;
+    const goingUpcoming = sourceGoing.filter((e) => {
       if (e.eventState === 'ended') return false;
       const startsAt = e.startsAt ? new Date(e.startsAt) : null;
       if (!startsAt || !Number.isFinite(startsAt.getTime())) return true;
       if (e.eventState === 'live') return true;
       return startsAt.getTime() >= now.getTime();
     }).length;
-    const savedCount = savedEvents.length;
-    const interestsCount = memberInterests.length;
+    const savedCount = displaySavedEvents.length;
+    const interestsCount = displayInterests.length;
     return { goingUpcoming, savedCount, interestsCount };
-  }, [goingEvents, savedEvents, memberInterests, now]);
+  }, [displayGoingEvents, displayInterests, displaySavedEvents, now]);
 
   const attendedCount = useMemo(
     () =>
-      goingEvents.filter((e) => {
+      displayGoingEvents.filter((e) => {
         if (e.eventState === 'ended') return true;
         const startsAt = e.startsAt ? new Date(e.startsAt) : null;
         if (!startsAt || !Number.isFinite(startsAt.getTime())) return false;
         if (e.eventState === 'live') return false;
         return startsAt.getTime() < now.getTime();
       }).length,
-    [goingEvents, now],
+    [displayGoingEvents, now],
   );
 
   const handleRemoveInterest = async (interestId) => {
@@ -211,7 +250,14 @@ const ProfileScreen = () => {
     router.replace('/(tabs)');
   };
 
-  if (!isOwnProfile && loadingMember) {
+  const handleVisitorWhatsApp = useCallback(() => {
+    void openKulanMemberWhatsApp(phoneRaw, {
+      memberName: displayName,
+      visitorName,
+    });
+  }, [phoneRaw, displayName, visitorName]);
+
+  if (isVisitorProfile && loadingMember) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
         <View style={styles.loadingWrap}>
@@ -221,7 +267,7 @@ const ProfileScreen = () => {
     );
   }
 
-  if (!isOwnProfile && !viewedMember) {
+  if (isVisitorProfile && !viewedMember && !loadingMember) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
         <View style={styles.loadingWrap}>
@@ -241,7 +287,7 @@ const ProfileScreen = () => {
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
             <Feather name="arrow-left" size={22} color={colors.icon} />
           </TouchableOpacity>
-          {isOwnProfile ? (
+          {canEditProfile ? (
             <Link href="/settings" asChild>
               <TouchableOpacity style={styles.settingsButton} hitSlop={12}>
                 <Feather name="settings" size={22} color={colors.icon} />
@@ -254,18 +300,20 @@ const ProfileScreen = () => {
 
         <View style={styles.identityRow}>
           <View style={styles.avatarWrap}>
-            <MemberInitialAvatar
+            <MemberProfileAvatar
+              user={displayUser}
               name={displayName}
               size={88}
               borderColor={colors.card}
               borderWidth={3}
+              hidePhoto={isProfileBlocked}
             />
             {isProfileBlocked ? (
               <View style={styles.privateBadge}>
                 <Feather name="eye-off" size={12} color="#FFFFFF" />
               </View>
             ) : null}
-            {isOwnProfile ? (
+            {canEditProfile ? (
               <TouchableOpacity
                 style={styles.editAvatarFab}
                 onPress={() => router.push('/(modal)/editProfile')}
@@ -280,12 +328,12 @@ const ProfileScreen = () => {
             <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
               {displayName}
             </Text>
-            {isOwnProfile ? (
+            {(canEditProfile || isVisitorProfile) && !isProfileBlocked ? (
               <Text style={[styles.attendedLine, { color: colors.textSecondary }]}>
                 {attendedCount} event{attendedCount === 1 ? '' : 's'} attended
               </Text>
             ) : null}
-            {isOwnProfile ? (
+            {(canEditProfile || isVisitorProfile) && !isProfileBlocked ? (
               <View style={styles.statsRow}>
                 <View style={styles.statPlain}>
                   <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Going</Text>
@@ -306,7 +354,7 @@ const ProfileScreen = () => {
           </View>
         </View>
 
-        {isOwnProfile && !phoneRaw && !bannerDismissed ? (
+        {canEditProfile && !phoneRaw && !bannerDismissed ? (
           <TouchableOpacity
             activeOpacity={0.85}
             style={styles.completeBanner}
@@ -337,89 +385,94 @@ const ProfileScreen = () => {
           </View>
         ) : null}
 
-        {isOwnProfile ? (
+        {(canEditProfile || (isVisitorProfile && !isProfileBlocked)) ? (
           <View style={[styles.section, { borderTopColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Interests</Text>
             <View style={styles.interestsContainer}>
-              {memberInterests.map((row) => {
+              {displayInterests.map((row) => {
                 const id = Number(row.id);
                 const label = row.name ?? String(id);
-                return (
+                return canEditProfile ? (
                   <View key={id} style={styles.chipWrapper}>
                     <Chip label={label} iconSpec={INTEREST_ICON_MAP[label]} selected />
                     <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveInterest(id)} hitSlop={6}>
                       <Feather name="x" size={14} color="#fff" />
                     </TouchableOpacity>
                   </View>
+                ) : (
+                  <View key={id} style={styles.readOnlyChipWrap}>
+                    <Chip label={label} iconSpec={INTEREST_ICON_MAP[label]} selected />
+                  </View>
                 );
               })}
-              <Link href="/(modal)/manageInterests" asChild>
-                <TouchableOpacity style={StyleSheet.flatten([styles.addInterestPill, { backgroundColor: colors.backgroundMuted }])}>
-                  <Text style={[styles.addInterestText, { color: colors.text }]}>Add</Text>
-                  <Feather name="plus" size={16} color={colors.icon} />
-                </TouchableOpacity>
-              </Link>
+              {canEditProfile ? (
+                <Link href="/(modal)/manageInterests" asChild>
+                  <TouchableOpacity style={StyleSheet.flatten([styles.addInterestPill, { backgroundColor: colors.backgroundMuted }])}>
+                    <Text style={[styles.addInterestText, { color: colors.text }]}>Add</Text>
+                    <Feather name="plus" size={16} color={colors.icon} />
+                  </TouchableOpacity>
+                </Link>
+              ) : null}
+              {isVisitorProfile && displayInterests.length === 0 && !loadingVisitorExtras ? (
+                <Text style={[styles.emptyInline, { color: colors.textSecondary }]}>No interests listed.</Text>
+              ) : null}
             </View>
           </View>
         ) : null}
 
-        {isOwnProfile ? (
+        {(canEditProfile || isVisitorProfile) && !isProfileBlocked ? (
           <View style={[styles.section, { borderTopColor: colors.border }]}>
             <MemberProfileEventsSection
               mainTab={eventsMainTab}
               onMainTabChange={setEventsMainTab}
-              goingEvents={goingEvents}
-              savedEvents={savedEvents}
-              loadingGoing={loadingGoing}
-              isSyncingSaved={Boolean(isSyncingSaved)}
+              goingEvents={displayGoingEvents}
+              savedEvents={displaySavedEvents}
+              loadingGoing={isVisitorProfile ? loadingVisitorExtras : loadingGoing}
+              isSyncingSaved={isVisitorProfile ? loadingVisitorExtras : Boolean(isSyncingSaved)}
+              readOnly={isVisitorProfile}
             />
           </View>
         ) : null}
 
-        <View style={[styles.contactCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <LinearGradient
-            colors={['#FF7A00', '#FF9A3D']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.contactCardAccent}
-          />
-          <View style={styles.contactCardInner}>
-            <Text style={[styles.contactCardTitle, { color: colors.text }]}>Member details</Text>
-            {isOwnProfile ? (
-              <Text style={[styles.contactCardSubtitle, { color: colors.textSecondary }]}>
-                Control email and phone visibility for visitors in Settings → Privacy.
-              </Text>
-            ) : (
-              <Text style={[styles.contactCardSubtitle, { color: colors.textSecondary }]}>
-                Contact options when this member chooses to share them.
-              </Text>
-            )}
+        <View style={[styles.section, { borderTopColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Member details</Text>
+          {canEditProfile ? (
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+              Control email and phone visibility for visitors in Settings → Privacy.
+            </Text>
+          ) : (
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+              {isVisitorProfile
+                ? 'Shared details from this member. Tap WhatsApp to message with a Kulan intro.'
+                : 'Contact options when this member chooses to share them.'}
+            </Text>
+          )}
 
-            {isProfileLimited ? (
-              <Text style={[styles.contactCardSubtitle, { color: colors.textSecondary }]}>
-                This member has hidden their profile. Organizers see limited details.
-              </Text>
-            ) : null}
+          {isProfileLimited ? (
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary, marginBottom: 0 }]}>
+              This member has hidden their profile. Organizers see limited details.
+            </Text>
+          ) : null}
 
-            {isProfileBlocked ? (
-              <View style={[styles.contactRow, { borderTopColor: colors.border }]}>
-                <View style={[styles.contactIconWrap, { backgroundColor: colors.backgroundMuted }]}>
-                  <Feather name="lock" size={18} color={colors.textSecondary} />
-                </View>
-                <View style={styles.contactTextCol}>
-                  <Text style={[styles.contactLabel, { color: colors.textSecondary }]}>Profile hidden</Text>
-                  <Text style={[styles.contactValueMuted, { color: colors.textSecondary }]}>
-                    This member is anonymous to other members.
-                  </Text>
-                </View>
+          {isProfileBlocked ? (
+            <View style={[styles.contactRow, { borderTopColor: colors.border }]}>
+              <View style={styles.contactIconSlot}>
+                <Feather name="lock" size={22} color={colors.textSecondary} />
               </View>
-            ) : (
-              <>
+              <View style={styles.contactTextCol}>
+                <Text style={[styles.contactLabel, { color: colors.textSecondary }]}>Profile hidden</Text>
+                <Text style={[styles.contactValueMuted, { color: colors.textSecondary }]}>
+                  This member is anonymous to other members.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <>
 
             {joinedLabel ? (
               <View style={[styles.contactRow, { borderTopColor: colors.border }]}>
-                <View style={[styles.contactIconWrap, { backgroundColor: colors.primarySoft }]}>
-                  <Feather name="award" size={18} color="#FF7A00" />
+                <View style={styles.contactIconSlot}>
+                  <MaterialCommunityIcons name="calendar-check" size={24} color="#FF7A00" />
                 </View>
                 <View style={styles.contactTextCol}>
                   <Text style={[styles.contactLabel, { color: colors.textSecondary }]}>Member since</Text>
@@ -430,18 +483,18 @@ const ProfileScreen = () => {
 
             {locationLabel ? (
               <View style={[styles.contactRow, { borderTopColor: colors.border }]}>
-                <View style={[styles.contactIconWrap, { backgroundColor: colors.primarySoft }]}>
-                  <Feather name="map-pin" size={18} color="#FF7A00" />
+                <View style={styles.contactIconSlot}>
+                  <GoogleMapsBrandIcon width={24} height={24} />
                 </View>
                 <View style={styles.contactTextCol}>
                   <Text style={[styles.contactLabel, { color: colors.textSecondary }]}>Location</Text>
                   <Text style={[styles.contactValue, { color: colors.text }]}>{locationLabel}</Text>
                 </View>
               </View>
-            ) : isOwnProfile ? (
+            ) : canEditProfile ? (
               <View style={[styles.contactRow, { borderTopColor: colors.border }]}>
-                <View style={[styles.contactIconWrap, { backgroundColor: colors.backgroundMuted }]}>
-                  <Feather name="map-pin" size={18} color={colors.textSecondary} />
+                <View style={styles.contactIconSlot}>
+                  <MaterialCommunityIcons name="map-marker-outline" size={24} color={colors.textSecondary} />
                 </View>
                 <View style={styles.contactTextCol}>
                   <Text style={[styles.contactLabel, { color: colors.textSecondary }]}>Location</Text>
@@ -457,40 +510,74 @@ const ProfileScreen = () => {
                 style={[styles.contactRow, { borderTopColor: colors.border }]}
                 onPress={() => Linking.openURL(`mailto:${emailRaw}`)}
                 activeOpacity={0.75}
+                disabled={isProfileBlocked}
               >
-                <View style={[styles.contactIconWrap, { backgroundColor: colors.primarySoft }]}>
-                  <Feather name="mail" size={18} color="#FF7A00" />
+                <View style={styles.contactIconSlot}>
+                  <GmailBrandIcon width={24} height={24} />
                 </View>
                 <View style={styles.contactTextCol}>
                   <Text style={[styles.contactLabel, { color: colors.textSecondary }]}>Email</Text>
-                  <Text style={styles.contactValueLink}>{emailRaw}</Text>
+                  <Text style={isVisitorProfile ? [styles.contactValue, { color: colors.text }] : styles.contactValueLink}>
+                    {emailRaw}
+                  </Text>
                 </View>
-                <Feather name="chevron-right" size={18} color={colors.textSecondary} />
+                {!isVisitorProfile ? (
+                  <Feather name="chevron-right" size={18} color={colors.textSecondary} />
+                ) : (
+                  <Feather name="external-link" size={16} color={colors.textSecondary} />
+                )}
               </TouchableOpacity>
             ) : null}
 
             {showPhone && phoneRaw ? (
+              isVisitorProfile ? (
+                <TouchableOpacity
+                  style={[styles.contactRow, { borderTopColor: colors.border }]}
+                  onPress={handleVisitorWhatsApp}
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.contactIconSlot}>
+                    <FontAwesome5 name="whatsapp" size={24} color="#25D366" brand />
+                  </View>
+                  <View style={styles.contactTextCol}>
+                    <Text style={[styles.contactLabel, { color: colors.textSecondary }]}>WhatsApp</Text>
+                    <Text style={[styles.contactValue, { color: colors.text }]}>{phoneRaw}</Text>
+                  </View>
+                  <Feather name="external-link" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+              ) : (
               <TouchableOpacity
                 style={[styles.contactRow, { borderTopColor: colors.border }]}
                 onPress={() => Linking.openURL(`tel:${phoneRaw.replace(/\s/g, '')}`)}
                 activeOpacity={0.75}
               >
-                <View style={[styles.contactIconWrap, { backgroundColor: colors.primarySoft }]}>
-                  <Feather name="phone" size={18} color="#FF7A00" />
+                <View style={styles.contactIconSlot}>
+                  <MaterialCommunityIcons name="phone" size={24} color="#007AFF" />
                 </View>
                 <View style={styles.contactTextCol}>
                   <Text style={[styles.contactLabel, { color: colors.textSecondary }]}>Phone</Text>
                   <Text style={styles.contactValueLink}>{phoneRaw}</Text>
+                  <Text style={[styles.contactActionHint, { color: colors.textSecondary }]}>
+                    Visible to members who view your profile
+                  </Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={colors.textSecondary} />
               </TouchableOpacity>
+              )
             ) : null}
-              </>
-            )}
-          </View>
+            </>
+          )}
         </View>
 
-        {isOwnProfile ? (
+        {!isProfileBlocked ? (
+          <MemberProfileSocialLinks
+            user={displayUser}
+            colors={colors}
+            readOnly={isVisitorProfile}
+          />
+        ) : null}
+
+        {canEditProfile ? (
           <View style={[styles.section, { borderTopColor: colors.border }]}>
             <TouchableOpacity style={[styles.logoutItem, { backgroundColor: colors.primarySoft }]} onPress={handleLogout}>
               <Text style={styles.logoutText}>Sign out</Text>
@@ -514,6 +601,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingTop: 4,
+  },
+  contactActionHint: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
   },
   backBtn: { padding: 10 },
   headerSpacer: { flex: 1 },
@@ -623,6 +716,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 15,
   },
+  sectionSubtitle: {
+    marginTop: -8,
+    marginBottom: 14,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   interestsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -632,6 +731,15 @@ const styles = StyleSheet.create({
     marginRight: 10,
     marginBottom: 10,
     position: 'relative',
+  },
+  readOnlyChipWrap: {
+    marginRight: 10,
+    marginBottom: 10,
+  },
+  emptyInline: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
   },
   removeButton: {
     position: 'absolute',
@@ -658,50 +766,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 5,
   },
-  contactCard: {
-    marginHorizontal: 20,
-    marginTop: 8,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 6,
-  },
-  contactCardAccent: {
-    height: 5,
-    width: '100%',
-  },
-  contactCardInner: {
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 14,
-  },
-  contactCardTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  contactCardSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 14,
-  },
   contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  contactIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  contactIconSlot: {
+    width: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   contactTextCol: {
     flex: 1,

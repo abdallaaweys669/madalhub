@@ -8,8 +8,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-
 import useAuth from '@/auth/useAuth';
 import { type EventCardModel } from '@/components/event/EventCard';
 import { EventCoverBanner } from '@/components/event/EventCoverBanner';
@@ -45,7 +43,6 @@ export type KulanEventFeedCardProps = {
   event: EventCardModel | Record<string, unknown>;
   variant?: EventFeedCardVariant;
   width?: number;
-  showJoinedBadge?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -53,7 +50,6 @@ export function KulanEventFeedCard({
   event: rawEvent,
   variant = 'boxed',
   width,
-  showJoinedBadge = false,
   style,
 }: KulanEventFeedCardProps) {
   const colors = useThemeColors();
@@ -132,15 +128,6 @@ export function KulanEventFeedCard({
         coverGradient={event.coverGradient as readonly [string, string] | undefined}
         onPress={openDetail}
       >
-        {showJoinedBadge ? (
-          <View style={styles.heroTopLeft}>
-            <View style={styles.joinedBadge}>
-              <Ionicons name="checkmark-circle" size={12} color="#15803D" />
-              <Text style={styles.joinedBadgeText}>Joined</Text>
-            </View>
-          </View>
-        ) : null}
-
         {urgencyLabel ? (
           <View style={styles.urgencyOverlay}>
             <Text style={styles.urgencyOverlayText} numberOfLines={1}>
@@ -251,30 +238,6 @@ const styles = StyleSheet.create({
   },
   cardFlat: {
     marginBottom: 14,
-  },
-  heroTopLeft: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    zIndex: 2,
-    alignItems: 'flex-start',
-  },
-  joinedBadge: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(240,253,244,0.95)',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  joinedBadgeText: {
-    color: '#15803D',
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '700',
   },
   urgencyOverlay: {
     position: 'absolute',

@@ -42,13 +42,164 @@ export class MemberService {
     id: number,
     viewer?: { userId?: number; role?: number } | null,
   ): Promise<Omit<User, 'password'>> {
-    const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.assertMemberExists(id);
+    return this.applyHiddenProfileRules(user, viewer);
+  }
 
+  async getMemberInterests(
+    memberId: number,
+    viewer?: { userId?: number; role?: number } | null,
+  ) {
+    await this.assertMemberViewable(memberId, viewer);
+
+    const interests = await this.userRepository.query(
+      `SELECT i.id, i.name
+       FROM member_interests mi
+       INNER JOIN interests i ON i.id = mi.interest_id
+       WHERE mi.member_id = ?
+       ORDER BY i.id ASC`,
+      [memberId],
+    );
+
+    return { interests };
+  }
+
+  async getMemberJoinedEvents(
+    memberId: number,
+    viewer?: { userId?: number; role?: number } | null,
+  ) {
+    await this.assertMemberViewable(memberId, viewer);
+
+    const rows = await this.userRepository.query(
+      `SELECT e.id,
+              e.title,
+              e.start_datetime AS startDatetime,
+              e.end_datetime AS endDatetime,
+              e.cover_image AS coverImage,
+              e.location_name AS locationName,
+              e.location_address AS locationAddress,
+              e.is_physical AS isPhysical,
+              e.total_price AS totalPrice,
+              e.capacity,
+              e.event_format AS eventFormat,
+              i.name AS categoryName
+       FROM event_registrations r
+       INNER JOIN events e ON e.id = r.event_id
+       LEFT JOIN interests i ON i.id = e.interest_id
+       WHERE r.member_id = ? AND e.status = 'published'
+       ORDER BY e.start_datetime ASC
+       LIMIT 50`,
+      [memberId],
+    );
+
+    return {
+      items: (rows as Record<string, unknown>[]).map((row) =>
+        this.mapPublicEventRow(row, { isJoined: true }),
+      ),
+    };
+  }
+
+  async getMemberSavedEvents(
+    memberId: number,
+    viewer?: { userId?: number; role?: number } | null,
+  ) {
+    await this.assertMemberViewable(memberId, viewer);
+
+    const rows = await this.userRepository.query(
+      `SELECT e.id,
+              e.title,
+              e.start_datetime AS startDatetime,
+              e.end_datetime AS endDatetime,
+              e.cover_image AS coverImage,
+              e.location_name AS locationName,
+              e.location_address AS locationAddress,
+              e.is_physical AS isPhysical,
+              e.total_price AS totalPrice,
+              e.capacity,
+              e.event_format AS eventFormat,
+              i.name AS categoryName
+       FROM saved_events s
+       INNER JOIN events e ON e.id = s.event_id
+       LEFT JOIN interests i ON i.id = e.interest_id
+       WHERE s.user_id = ? AND e.status = 'published'
+       ORDER BY s.saved_at DESC
+       LIMIT 50`,
+      [memberId],
+    );
+
+    return {
+      items: (rows as Record<string, unknown>[]).map((row) =>
+        this.mapPublicEventRow(row, { isSaved: true }),
+      ),
+    };
+  }
+
+  private mapPublicEventRow(
+    row: Record<string, unknown>,
+    flags: { isJoined?: boolean; isSaved?: boolean } = {},
+  ) {
+    const coverRaw = row.coverImage;
+    const coverImage =
+      typeof coverRaw === 'string' && coverRaw.trim()
+        ? coverRaw.trim().startsWith('/')
+          ? coverRaw.trim()
+          : `/uploads/${coverRaw.trim()}`
+        : null;
+    const startDt = row.startDatetime;
+    const endDt = row.endDatetime;
+    const totalPrice = Number(row.totalPrice) || 0;
+
+    return {
+      id: String(row.id),
+      title: row.title,
+      startsAt:
+        startDt instanceof Date
+          ? startDt.toISOString()
+          : startDt
+            ? new Date(String(startDt)).toISOString()
+            : null,
+      endsAt:
+        endDt instanceof Date
+          ? endDt.toISOString()
+          : endDt
+            ? new Date(String(endDt)).toISOString()
+            : null,
+      coverImageUrl: coverImage,
+      locationName: row.locationName ?? null,
+      locationAddress: row.locationAddress ?? null,
+      isOnline: !row.isPhysical,
+      isPhysical: Boolean(row.isPhysical),
+      priceType: totalPrice > 0 ? 'Paid' : 'Free',
+      priceAmount: totalPrice,
+      categoryName: row.categoryName ?? null,
+      eventFormat: row.eventFormat ?? null,
+      goingCount: 0,
+      isJoined: Boolean(flags.isJoined),
+      isSaved: Boolean(flags.isSaved),
+    };
+  }
+
+  private async assertMemberExists(id: number): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    return user;
+  }
 
-    return this.applyHiddenProfileRules(user, viewer);
+  private async assertMemberViewable(
+    memberId: number,
+    viewer?: { userId?: number; role?: number } | null,
+  ): Promise<User> {
+    const user = await this.assertMemberExists(memberId);
+    const viewerId = viewer?.userId != null ? Number(viewer.userId) : null;
+    const isSelf = viewerId != null && viewerId === memberId;
+
+    if (user.profileHidden && !isSelf && !canViewerSeeHiddenProfile(viewer)) {
+      throw new NotFoundException('Profile not available');
+    }
+
+    return user;
   }
 
   async register(
@@ -160,6 +311,22 @@ export class MemberService {
       user.profileHidden = Boolean(dto.profile_hidden);
     }
 
+    if (dto.social_website !== undefined) {
+      user.socialWebsite = this.normalizeOptionalUrl(dto.social_website);
+    }
+    if (dto.social_linkedin !== undefined) {
+      user.socialLinkedin = this.normalizeOptionalUrl(dto.social_linkedin);
+    }
+    if (dto.social_instagram !== undefined) {
+      user.socialInstagram = this.normalizeOptionalUrl(dto.social_instagram);
+    }
+    if (dto.social_facebook !== undefined) {
+      user.socialFacebook = this.normalizeOptionalUrl(dto.social_facebook);
+    }
+    if (dto.social_tiktok !== undefined) {
+      user.socialTiktok = this.normalizeOptionalUrl(dto.social_tiktok);
+    }
+
     const savedUser = await this.userRepository.save(user);
     const fresh = await this.userRepository.findOne({ where: { id } });
     return this.toSafeUser(fresh ?? savedUser);
@@ -210,6 +377,7 @@ export class MemberService {
         phone: '',
         profileShowEmail: false,
         profileShowPhone: false,
+        ...this.emptySocialLinks(),
       };
     }
 
@@ -222,6 +390,22 @@ export class MemberService {
       phone: '',
       profileShowEmail: false,
       profileShowPhone: false,
+      ...this.emptySocialLinks(),
+    };
+  }
+
+  private normalizeOptionalUrl(value: unknown): string {
+    const trimmed = String(value ?? '').trim();
+    return trimmed.length > 0 ? trimmed : '';
+  }
+
+  private emptySocialLinks() {
+    return {
+      socialWebsite: '',
+      socialLinkedin: '',
+      socialInstagram: '',
+      socialFacebook: '',
+      socialTiktok: '',
     };
   }
 

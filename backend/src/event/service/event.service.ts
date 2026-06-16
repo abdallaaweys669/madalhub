@@ -23,6 +23,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 const ROLE_ORGANIZER = 2;
 const ROLE_ADMIN = 3;
@@ -65,6 +66,7 @@ export class EventService {
     private memberInterestRepo: Repository<MemberInterest>,
     @InjectRepository(MemberEventInteraction)
     private memberEventInteractionRepo: Repository<MemberEventInteraction>,
+    private notificationsService: NotificationsService,
   ) {}
 
   private ensureMember(user: User) {
@@ -1292,6 +1294,9 @@ export class EventService {
         'registered',
         event.interestId,
       ).catch(() => undefined);
+      void this.notificationsService
+        .notifyEventJoined(memberId, event.id, event.title)
+        .catch(() => undefined);
       return savedRegistration;
     } catch (error) {
       const mysqlCode = (error as { code?: string })?.code;
@@ -1400,6 +1405,9 @@ export class EventService {
       'saved',
       event.interestId,
     ).catch(() => undefined);
+    void this.notificationsService
+      .notifyEventSaved(memberId, eventId, event.title)
+      .catch(() => undefined);
     return { saved: true, message: 'Event saved successfully' };
   }
 

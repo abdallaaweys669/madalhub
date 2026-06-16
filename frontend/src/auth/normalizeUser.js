@@ -230,6 +230,11 @@ export function normalizeUser(decodedUser = {}, profile = null) {
       p.profileHidden ?? p.profile_hidden ?? d.profileHidden ?? d.profile_hidden,
       false,
     ),
+    socialWebsite: firstNonEmpty(p.socialWebsite, p.social_website, d.socialWebsite, d.social_website),
+    socialLinkedin: firstNonEmpty(p.socialLinkedin, p.social_linkedin, d.socialLinkedin, d.social_linkedin),
+    socialInstagram: firstNonEmpty(p.socialInstagram, p.social_instagram, d.socialInstagram, d.social_instagram),
+    socialFacebook: firstNonEmpty(p.socialFacebook, p.social_facebook, d.socialFacebook, d.social_facebook),
+    socialTiktok: firstNonEmpty(p.socialTiktok, p.social_tiktok, d.socialTiktok, d.social_tiktok),
     createdAt: p.createdAt ?? p.created_at ?? d.createdAt ?? d.created_at,
     email: p.email ?? d.email ?? '',
   };

@@ -8,5 +8,8 @@ module.exports = (() => {
   config.resolver.assetExts = config.resolver.assetExts.filter(ext => ext !== 'svg');
   config.resolver.sourceExts.push('svg');
 
+  // Fewer parallel workers = less RAM (jest-worker OOM on 8GB machines).
+  config.maxWorkers = 2;
+
   return config;
 })();

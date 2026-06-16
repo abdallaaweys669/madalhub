@@ -29,7 +29,7 @@ async function shareImageFallback(fileUri) {
   await Sharing.shareAsync(fileUri, {
     mimeType: 'image/png',
     UTI: 'public.png',
-    dialogTitle: 'Save QR code',
+    dialogTitle: 'Save ticket',
   });
   return true;
 }
@@ -90,17 +90,19 @@ export function imageSaveAlertTitle(result) {
   return null;
 }
 
-export function imageSaveAlertMessage(result) {
+export function imageSaveAlertMessage(result, kind = 'qr') {
+  const label = kind === 'ticket' ? 'Ticket' : 'QR code';
+
   if (result === 'saved') {
-    return 'QR code saved to your photos.';
+    return `${label} saved to your photos.`;
   }
 
   if (result === 'shared') {
     if (isExpoGo()) {
       if (Platform.OS === 'android') {
-        return 'Expo Go cannot save directly to your gallery. Use Save image or Photos in the share menu.';
+        return `Expo Go cannot save directly to your gallery. Use Save image or Photos in the share menu to save your ${label.toLowerCase()}.`;
       }
-      return 'Use Save Image in the share menu to add the QR code to your photos.';
+      return `Use Save Image in the share menu to add the ${label.toLowerCase()} to your photos.`;
     }
     return 'Choose Save image from the share menu.';
   }

@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { ExploreEventCard } from '@/components/explore/ExploreEventCard';
+import { RecommendedEventCard } from '@/components/event/RecommendedEventCard';
 import { useThemeColors } from '@/theme';
 import NoEventsIllustration from '@/assets/no events.svg';
 
@@ -20,42 +20,6 @@ function isPastByStart(event, now) {
   if (event.eventState === 'ended') return true;
   if (event.eventState === 'live') return false;
   return startsAt.getTime() < now.getTime();
-}
-
-function formatDateTimeLabel(event) {
-  const startDate = event.startsAt ? new Date(event.startsAt) : new Date();
-  const datePart = startDate.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-  const timePart = startDate.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-  return `${datePart.toUpperCase()} • ${timePart}`;
-}
-
-function toExploreCardEvent(event) {
-  const isOnline = Boolean(event.isOnline);
-  return {
-    id: String(event.id),
-    title: event.title,
-    dateTimeLabel: formatDateTimeLabel(event),
-    location: isOnline ? 'Online' : event.city || event.locationName || 'Venue TBD',
-    coverImageUrl: event.coverImageUrl,
-    coverLetter: event.coverLetter,
-    coverGradient: event.coverGradient,
-    goingLabel: `${event.goingCount ?? 0} going`,
-    goingCount: event.goingCount ?? 0,
-    attendeePreviews: event.attendeePreviews,
-    mode: isOnline ? 'online' : 'in-person',
-    statusChip: event.statusChip,
-    urgencyLabel: event.urgencyLabel,
-    categoryName: event.categoryName,
-    eventState: event.eventState,
-  };
 }
 
 function SlimTimeScope({ value, onChange, colors }) {
@@ -96,6 +60,8 @@ export function MemberProfileEventsSection({
   savedEvents,
   loadingGoing,
   isSyncingSaved,
+  readOnly = false,
+  hideSavedTab = false,
 }) {
   const colors = useThemeColors();
   const [timeScope, setTimeScope] = useState('Upcoming');
@@ -119,8 +85,12 @@ export function MemberProfileEventsSection({
   const emptyCopy =
     mainTab === 'going'
       ? timeScope === 'Upcoming'
-        ? 'No upcoming events you\'re going to.'
-        : 'No past events you joined.'
+        ? readOnly
+          ? 'No upcoming events for this member.'
+          : 'No upcoming events you\'re going to.'
+        : readOnly
+          ? 'No past events for this member.'
+          : 'No past events you joined.'
       : timeScope === 'Upcoming'
         ? 'You have no upcoming saved events.'
         : 'You have no past saved events.';
@@ -141,12 +111,14 @@ export function MemberProfileEventsSection({
           </Text>
           {mainTab === 'going' ? <View style={styles.mainTabUnderline} /> : <View style={styles.mainTabUnderlinePlaceholder} />}
         </Pressable>
-        <Pressable onPress={() => onMainTabChange('saved')} style={styles.mainTabHit}>
-          <Text style={[styles.mainTabText, { color: colors.textSecondary }, mainTab === 'saved' && { color: colors.text, fontWeight: '800' }]}>
-            Saved
-          </Text>
-          {mainTab === 'saved' ? <View style={styles.mainTabUnderline} /> : <View style={styles.mainTabUnderlinePlaceholder} />}
-        </Pressable>
+        {!hideSavedTab ? (
+          <Pressable onPress={() => onMainTabChange('saved')} style={styles.mainTabHit}>
+            <Text style={[styles.mainTabText, { color: colors.textSecondary }, mainTab === 'saved' && { color: colors.text, fontWeight: '800' }]}>
+              Saved
+            </Text>
+            {mainTab === 'saved' ? <View style={styles.mainTabUnderline} /> : <View style={styles.mainTabUnderlinePlaceholder} />}
+          </Pressable>
+        ) : null}
       </View>
 
       <SlimTimeScope value={timeScope} onChange={setTimeScope} colors={colors} />
@@ -163,9 +135,7 @@ export function MemberProfileEventsSection({
       ) : (
         <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
           {filtered.map((event) => (
-            <View key={String(event.id)} style={styles.cardWrap}>
-              <ExploreEventCard event={toExploreCardEvent(event)} />
-            </View>
+            <RecommendedEventCard key={String(event.id)} event={event} style={styles.cardSpacing} />
           ))}
         </ScrollView>
       )}
@@ -235,7 +205,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  cardWrap: {
+  cardSpacing: {
     marginBottom: 12,
   },
   loaderWrap: {

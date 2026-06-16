@@ -12,8 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import QRCode from 'react-native-qrcode-svg';
-
+import TicketQrDisplay from '@/components/eventDetail/TicketQrDisplay';
 import { downloadQrFromRef, imageSaveAlertMessage, imageSaveAlertTitle } from '@/utils/saveQrCodeImage';
 
 const ORANGE = '#FF7B3F';
@@ -37,7 +36,7 @@ export default function TicketQrModal({
     try {
       const result = await downloadQrFromRef(qrRef);
       const title = imageSaveAlertTitle(result);
-      const message = imageSaveAlertMessage(result);
+      const message = imageSaveAlertMessage(result, 'qr');
       if (title && message) {
         Alert.alert(title, message);
       }
@@ -61,17 +60,7 @@ export default function TicketQrModal({
           <Text style={styles.subtitle}>Show this at check-in</Text>
 
           <View style={styles.qrTile}>
-            {qrValue ? (
-              <QRCode
-                value={qrValue}
-                size={232}
-                color="#0F172A"
-                backgroundColor="#FFFFFF"
-                getRef={(ref) => {
-                  qrRef.current = ref;
-                }}
-              />
-            ) : null}
+            <TicketQrDisplay value={qrValue} size={232} qrRef={qrRef} />
           </View>
 
           {eventTitle ? (

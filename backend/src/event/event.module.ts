@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventController } from './controller/event.controller';
 import { EventService } from './service/event.service';
 import { Event } from 'src/database/entities/event.entity';
@@ -13,10 +14,11 @@ import { EventCohost } from 'src/database/entities/event-cohost.entity';
 import { EventLike } from 'src/database/entities/event-like.entity';
 import { MemberInterest } from 'src/database/entities/member-interest.entity';
 import { MemberEventInteraction } from 'src/database/entities/member-event-interaction.entity';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
+    NotificationsModule,
     TypeOrmModule.forFeature([
       Event,
       EventSponsor,

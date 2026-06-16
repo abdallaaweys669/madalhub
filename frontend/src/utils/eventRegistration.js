@@ -39,6 +39,22 @@ export function buildTicketQrValue(eventId, userId) {
   return `kulanapp://events/${eid}?ticket=${uid}`;
 }
 
+/** Human-readable ticket ID shown on the pass (e.g. KUL-2026-A1B2-C3D4). */
+export function buildTicketDisplayId(eventId, userId) {
+  const year = new Date().getFullYear();
+  const ePart = String(eventId ?? '')
+    .replace(/\W/g, '')
+    .slice(-4)
+    .toUpperCase()
+    .padStart(4, '0');
+  const uPart = String(userId ?? '')
+    .replace(/\W/g, '')
+    .slice(-4)
+    .toUpperCase()
+    .padStart(4, '0');
+  return `KUL-${year}-${ePart}-${uPart}`;
+}
+
 /** Opens in the Google Calendar app when installed (Android/iOS). */
 export function buildGoogleCalendarAppUrl(event) {
   const fields = buildCalendarEventFields(event);

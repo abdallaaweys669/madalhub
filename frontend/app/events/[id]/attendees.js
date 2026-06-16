@@ -180,7 +180,7 @@ export default function EventAttendeesScreen() {
     (att) => {
       if (att.isAnonymous) return;
       const uid = att.originalUserId ?? att.id;
-      if (uid != null) router.push(`/profile?memberId=${uid}`);
+      if (uid != null) router.push(`/profile?memberId=${uid}&from=attendees`);
     },
     [router],
   );
@@ -254,7 +254,7 @@ export default function EventAttendeesScreen() {
         <Feather name="info" size={14} color="#94A3B8" />
         <View style={styles.footerNoteTextWrap}>
           <Text style={styles.footerNoteTitle}>Browse Attendees</Text>
-          <Text style={styles.footerNoteBody}>Tap any attendee to view their profile.</Text>
+          <Text style={styles.footerNoteBody}>Tap an attendee to view their profile and contact them.</Text>
         </View>
       </View>
     </View>

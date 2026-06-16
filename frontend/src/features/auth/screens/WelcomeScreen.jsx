@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -19,45 +18,26 @@ import { getOrganizerEntryHref } from '@/navigation/organizerGate';
 import WelcomeAnimatedBackground from '@/features/auth/components/welcome/WelcomeAnimatedBackground';
 import WelcomeFloatingIcon from '@/features/auth/components/welcome/WelcomeFloatingIcon';
 import WelcomeHeroIllustration from '@/features/auth/components/welcome/WelcomeHeroIllustration';
-import WelcomeRoleToggle from '@/features/auth/components/welcome/WelcomeRoleToggle';
-import WelcomeSocialAuth from '@/features/auth/components/welcome/WelcomeSocialAuth';
+import WelcomeAuthActions from '@/features/auth/components/welcome/WelcomeAuthActions';
 
 const FONT_HEADING = 'PlayfairDisplay_700Bold';
 const FONT_HEADING_ACCENT = 'PlayfairDisplay_600SemiBold';
 const FONT_BODY = 'PlusJakartaSans_400Regular';
-const FONT_BODY_EMPHASIS = 'PlusJakartaSans_700Bold';
-
-const WELCOME_COPY = {
-  member: {
-    tagline: 'Find local events',
-    line: 'Connect with people who share your interests, ',
-    accent: 'right around you.',
-  },
-  organizer: {
-    tagline: 'Create & manage events',
-    line: 'Reach the right audience and grow your community, ',
-    accent: 'with confidence.',
-  },
-};
 
 export default function WelcomeScreen() {
   const router = useGuardedRouter();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const { isLoggedIn, isOrganizer, organizerStatus } = useAuth();
-  const [role, setRole] = useState('member');
 
   const [fontsLoaded] = useFonts({
     PlayfairDisplay_600SemiBold: require('@/assets/fonts/PlayfairDisplay_600SemiBold.ttf'),
     PlayfairDisplay_700Bold: require('@/assets/fonts/PlayfairDisplay_700Bold.ttf'),
     PlusJakartaSans_400Regular: require('@/assets/fonts/PlusJakartaSans_400Regular.ttf'),
-    PlusJakartaSans_700Bold: require('@/assets/fonts/PlusJakartaSans_700Bold.ttf'),
   });
 
-  const isMember = role === 'member';
-  const welcomeCopy = WELCOME_COPY[role];
   const isCompact = height < 760;
-  const heroWidth = Math.min(width - 32, isCompact ? 280 : 320);
+  const heroWidth = Math.min(width - 28, isCompact ? 300 : 332);
   const heroHeight = Math.round(heroWidth * 0.8);
 
   const handleCancel = () => {
@@ -66,17 +46,6 @@ export default function WelcomeScreen() {
       return;
     }
     router.replace(getMemberTabsReturnHref());
-  };
-
-  const loginHref = isMember ? '/(auth)/login' : '/(auth)/organizer-login';
-  const signupHref = isMember ? '/(auth)/signup' : '/(auth)/organizer-signup';
-
-  const handleGoogle = () => {
-    Alert.alert('Coming soon', 'Google sign-in will be available in a future update.');
-  };
-
-  const handleFacebook = () => {
-    Alert.alert('Coming soon', 'Facebook sign-in will be available in a future update.');
   };
 
   if (!fontsLoaded) {
@@ -103,31 +72,20 @@ export default function WelcomeScreen() {
         style={[
           styles.content,
           {
-            paddingTop: insets.top + 32,
-            paddingBottom: insets.bottom + 8,
+            paddingTop: insets.top + 36,
+            paddingBottom: insets.bottom + 12,
           },
         ]}
       >
         <View style={styles.topSection}>
-          <WelcomeRoleToggle role={role} onRoleChange={setRole} />
-
           <View style={styles.heroBlock}>
-            <View
-              style={[
-                styles.illustrationWrap,
-                { width: heroWidth, height: heroHeight },
-              ]}
-            >
+            <View style={[styles.illustrationWrap, { width: heroWidth, height: heroHeight }]}>
               <WelcomeFloatingIcon
                 name="calendar"
                 delay={0}
                 style={styles.iconCalendar}
               />
-              <WelcomeHeroIllustration
-                role={role}
-                width={heroWidth}
-                height={heroHeight}
-              />
+              <WelcomeHeroIllustration role="member" width={heroWidth} height={heroHeight} />
               <WelcomeFloatingIcon
                 name="map-pin"
                 delay={800}
@@ -150,38 +108,33 @@ export default function WelcomeScreen() {
                 Welcome to <Text style={styles.headingAccent}>Kulan</Text>
               </Text>
               <View style={styles.headingUnderline} />
-
-              <Text
-                style={[styles.roleTagline, isCompact && styles.roleTaglineCompact]}
-              >
-                {welcomeCopy.tagline}
-              </Text>
-              <Text
-                style={[styles.roleDescription, isCompact && styles.roleDescriptionCompact]}
-              >
-                {welcomeCopy.line}
-                <Text style={styles.roleDescriptionAccent}>
-                  {welcomeCopy.accent}
-                </Text>
+              <Text style={[styles.subtitle, isCompact && styles.subtitleCompact]}>
+                Find and join local events near you.
               </Text>
             </View>
-          </View>
-        </View>
 
-        <View style={styles.bottomSection}>
-          <WelcomeSocialAuth
-            onGooglePress={handleGoogle}
-            onFacebookPress={handleFacebook}
-            onEmailPress={() => router.push(signupHref)}
-            compact={isCompact}
-          />
+            <View style={styles.actionsBlock}>
+              <WelcomeAuthActions
+                compact={isCompact}
+                onGetStartedPress={() => router.push('/(auth)/signup')}
+              />
 
-          <View style={styles.footer}>
-            <Pressable onPress={() => router.push(loginHref)}>
-              <Text style={styles.footerText}>
-                Have an account? <Text style={styles.footerLink}>Log in ›</Text>
-              </Text>
-            </Pressable>
+              <View style={styles.footer}>
+                <Pressable onPress={() => router.push('/(auth)/login')} style={styles.footerPressable}>
+                  <Text style={styles.footerText}>
+                    Have an account? <Text style={styles.footerLink}>Log in</Text>
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => router.push('/(auth)/organizer-signup')}
+                  hitSlop={8}
+                  style={styles.footerPressable}
+                >
+                  <Text style={styles.organizerLink}>I&apos;m an organizer</Text>
+                </Pressable>
+              </View>
+            </View>
           </View>
         </View>
       </View>
@@ -212,49 +165,57 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 22,
-    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    alignItems: 'center',
   },
   topSection: {
-    flexGrow: 0,
-    justifyContent: 'flex-start',
+    flexShrink: 0,
+    alignItems: 'center',
+    paddingTop: 4,
+    width: '100%',
   },
-  bottomSection: {
-    flex: 1,
-    marginTop: 18,
-    justifyContent: 'flex-start',
+  actionsBlock: {
+    width: '100%',
+    maxWidth: 360,
+    marginTop: 22,
+    alignItems: 'center',
+    alignSelf: 'center',
   },
   heroBlock: {
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 4,
+    width: '100%',
   },
   illustrationWrap: {
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 0,
+    marginBottom: 4,
     alignSelf: 'center',
   },
   iconCalendar: {
     position: 'absolute',
-    top: 8,
-    left: 4,
+    top: 6,
+    left: 0,
+    zIndex: 2,
   },
   iconLocation: {
     position: 'absolute',
-    top: 24,
-    right: 4,
+    top: 20,
+    right: 0,
+    zIndex: 2,
   },
   iconSave: {
     position: 'absolute',
-    bottom: 36,
-    left: 4,
+    bottom: 28,
+    left: 2,
+    zIndex: 2,
   },
   copyBlock: {
     width: '100%',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    marginTop: -6,
+    alignSelf: 'center',
+    paddingHorizontal: 8,
   },
   heading: {
     fontFamily: FONT_HEADING,
@@ -272,61 +233,51 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   headingUnderline: {
-    width: 200,
+    width: 180,
     height: 3,
     borderRadius: 2,
     backgroundColor: COLORS.primary,
     marginTop: 6,
     marginBottom: 10,
+    alignSelf: 'center',
   },
-  roleTagline: {
-    fontFamily: FONT_HEADING_ACCENT,
-    fontSize: 22,
-    lineHeight: 28,
-    color: COLORS.textDark,
-    textAlign: 'center',
-    letterSpacing: 0.35,
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  roleTaglineCompact: {
-    fontSize: 20,
-    lineHeight: 26,
-    marginBottom: 6,
-  },
-  roleDescription: {
+  subtitle: {
     fontFamily: FONT_BODY,
-    fontSize: 15.5,
+    fontSize: 16,
     lineHeight: 24,
     color: '#5F6B7A',
     textAlign: 'center',
-    paddingHorizontal: 8,
-    letterSpacing: 0.2,
+    paddingHorizontal: 16,
     maxWidth: 340,
     alignSelf: 'center',
   },
-  roleDescriptionCompact: {
-    fontSize: 14.5,
+  subtitleCompact: {
+    fontSize: 15,
     lineHeight: 22,
-    paddingHorizontal: 4,
-  },
-  roleDescriptionAccent: {
-    fontFamily: FONT_BODY_EMPHASIS,
-    color: COLORS.primary,
-    letterSpacing: 0.25,
   },
   footer: {
-    marginTop: 10,
+    marginTop: 14,
+    width: '100%',
     alignItems: 'center',
-    gap: 3,
+    gap: 12,
+  },
+  footerPressable: {
+    alignSelf: 'center',
   },
   footerText: {
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.textLight,
     textAlign: 'center',
   },
   footerLink: {
     color: COLORS.primary,
     fontWeight: '700',
+  },
+  organizerLink: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#8B8E9C',
+    letterSpacing: 0.15,
+    textAlign: 'center',
   },
 });

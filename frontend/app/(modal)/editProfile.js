@@ -14,19 +14,73 @@ import {
 import { useFocusEffect } from 'expo-router';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
 import useAuth from '@/auth/useAuth';
 import authApi from '@/api/auth';
 import { updateMemberMe } from '@/api/member';
 import onboardingApi from '@/api/onboarding';
-import { resolveApiAssetUrl } from '@/utils/mediaUrl';
+import { buildProfileImageUri, pickProfileImagePath } from '@/utils/mediaUrl';
 import { COLORS } from '@/theme/colors';
 import { spacing } from '@/theme';
 import LocationPickerModal from '@/components/createEvent/LocationPickerModal';
 import { normalizeUser } from '@/auth/normalizeUser';
 import AppPopup from '@/components/common/AppPopup';
+import {
+  SOCIAL_LINK_FIELDS,
+  pickSocialLinkValues,
+  buildSocialLinksPayload,
+  getSocialLinksValidationError,
+} from '@/utils/socialLinks';
+
+function SocialInputField({ field, value, onChangeText }) {
+  const IconComponent = field.iconPack === 'FontAwesome5' ? FontAwesome5 : Feather;
+
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: '700', marginBottom: 8, letterSpacing: 1 }}>
+        {field.label.toUpperCase()}
+      </Text>
+      <View
+        style={{
+          minHeight: 56,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          backgroundColor: COLORS.card,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 14,
+        }}
+      >
+        <IconComponent
+          name={field.iconName}
+          size={18}
+          color={field.brandColor}
+          brand={Boolean(field.brand)}
+        />
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={field.placeholder}
+          placeholderTextColor={COLORS.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          style={{
+            flex: 1,
+            marginLeft: 10,
+            color: COLORS.textPrimary,
+            fontSize: 16,
+            paddingVertical: 0,
+            minHeight: 22,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
 
 function InputField({ icon, label, value, onChangeText, placeholder, multiline = false, editable = true }) {
   return (
@@ -125,12 +179,20 @@ export default function EditProfileScreen() {
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [isSuccessPopupVisible, setIsSuccessPopupVisible] = useState(false);
   const [error, setError] = useState('');
+  const [socialLinks, setSocialLinks] = useState({
+    website: '',
+    linkedin: '',
+    instagram: '',
+    facebook: '',
+    tiktok: '',
+  });
 
   const hydrate = useCallback(() => {
     setFullName(String(user?.fullName ?? user?.full_name ?? '').trim());
     setPhone(String(user?.phone ?? user?.phoneNumber ?? '').trim());
     setLocation(String(user?.location ?? '').trim());
-    setProfileImageUri(resolveApiAssetUrl(user?.profileImg || user?.avatarUrl) || '');
+    setSocialLinks(pickSocialLinkValues(user));
+    setProfileImageUri(buildProfileImageUri(user) || '');
     setSelectedProfileImage(null);
     setError('');
   }, [user]);
@@ -170,9 +232,17 @@ export default function EditProfileScreen() {
       setError('Please enter your display name.');
       return;
     }
+
+    const socialError = getSocialLinksValidationError(socialLinks);
+    if (socialError) {
+      setError(socialError);
+      return;
+    }
+
     setError('');
     setSaving(true);
     try {
+      let uploadedProfileImg = null;
       if (selectedProfileImage?.uri) {
         const localUri = selectedProfileImage.uri;
         const fileName =
@@ -184,17 +254,41 @@ export default function EditProfileScreen() {
 
         const formData = new FormData();
         formData.append('file', file);
-        await onboardingApi.uploadMemberProfileImage(formData);
+        const uploadResult = await onboardingApi.uploadMemberProfileImage(formData);
+        uploadedProfileImg =
+          pickProfileImagePath(uploadResult) ||
+          uploadResult?.profileImg ||
+          uploadResult?.profile_img ||
+          null;
       }
 
       await updateMemberMe({
         full_name: fullName.trim(),
         phone: phone.trim() || undefined,
         location: location.trim() || undefined,
+        ...buildSocialLinksPayload(socialLinks),
       });
 
       const me = await authApi.getMe();
-      setUser((prev) => (prev ? normalizeUser(prev, me) : prev));
+      setUser((prev) => {
+        if (!prev) return prev;
+        const merged = normalizeUser(prev, me);
+        if (uploadedProfileImg) {
+          return normalizeUser(merged, {
+            profileImg: uploadedProfileImg,
+            profile_img: uploadedProfileImg,
+          });
+        }
+        return merged;
+      });
+
+      if (uploadedProfileImg) {
+        setProfileImageUri(buildProfileImageUri({ profileImg: uploadedProfileImg }) || '');
+        setSelectedProfileImage(null);
+      } else {
+        setProfileImageUri(buildProfileImageUri(me) || '');
+      }
+
       setIsSuccessPopupVisible(true);
     } catch (e) {
       setError(e?.message || 'Failed to save profile changes');
@@ -295,6 +389,22 @@ export default function EditProfileScreen() {
         <LocationMapField value={location} onOpenMap={() => setLocationModalOpen(true)} />
         <InputField icon="mail" label="EMAIL ADDRESS" value={email} onChangeText={() => {}} placeholder="you@example.com" editable={false} />
         <InputField icon="phone" label="PHONE NUMBER" value={phone} onChangeText={setPhone} placeholder="+252..." />
+
+        <View style={{ marginTop: 8, marginBottom: 6 }}>
+          <Text style={{ color: COLORS.textPrimary, fontSize: 18, fontWeight: '800' }}>Social & web</Text>
+          <Text style={{ marginTop: 6, color: COLORS.textSecondary, fontSize: 13, lineHeight: 18 }}>
+            Optional — add any links you want on your profile, or leave them blank.
+          </Text>
+        </View>
+
+        {SOCIAL_LINK_FIELDS.map((field) => (
+          <SocialInputField
+            key={field.key}
+            field={field}
+            value={socialLinks[field.key]}
+            onChangeText={(text) => setSocialLinks((prev) => ({ ...prev, [field.key]: text }))}
+          />
+        ))}
 
         {error ? (
           <View

@@ -29,7 +29,6 @@ import { useSavedEvents } from '@/context/SavedEventsContext';
 import HomeSkeleton from '@/components/skeletons/HomeSkeleton';
 import { getEvents, getRecommendedEvents, invalidateEventsListCache, peekEventsListCache, DEFAULT_COVER_GRADIENT } from '@/api/events';
 import { trackEventInteraction } from '@/api/trackEventInteraction';
-import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
 import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
 import { spacing, useThemeColors } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,12 +37,7 @@ import { Feather } from '@expo/vector-icons';
 import { HomeHeader } from './HomeHeader';
 import { YourEventsSection, type HomeEventTab } from './YourEventsSection';
 import { HomeMyEventCard } from '@/components/event/home/HomeMyEventCard';
-import {
-  formatCompactLocationLine,
-  formatEventFeedPriceAmount,
-  formatRecommendedDateLine,
-} from '@/components/event/feed/eventFeedCardUtils';
-import { EventFeedCoverActions } from '@/components/event/feed/EventFeedCoverActions';
+import { RecommendedEventCard } from '@/components/event/RecommendedEventCard';
 import { EventDateLocationRows } from '@/components/event/EventDateLocationRows';
 import { buildEventScheduleLocationFields } from '@/utils/eventDisplay';
 
@@ -377,126 +371,6 @@ function HomeInsightSections({ sections }: { sections: HomeInsightSection[] }) {
           </View>
         );
       })}
-    </View>
-  );
-}
-
-function RecommendedMiniCard({ event }: { event: EventCardModel }) {
-  const colors = useThemeColors();
-  const router = useGuardedRouter();
-  const { isLoggedIn } = useAuth();
-
-  const scheduleLocation = getEventScheduleLocation(event as EventCardModel & { city?: string });
-  const dateLine = formatRecommendedDateLine(event.startsAt);
-  const locationLine = formatCompactLocationLine(
-    event as EventCardModel & { city?: string; locationAddress?: string | null },
-    scheduleLocation.locationPrimary,
-  );
-  const priceLabel = formatEventFeedPriceAmount(event);
-  const goingCount = getEventGoingCount(event);
-  const attendeePreviews = event.attendeePreviews?.filter(Boolean).slice(0, 3) ?? [];
-  const showGoing = goingCount > 0;
-
-  useEffect(() => {
-    if (isLoggedIn) trackEventInteraction(event.id, 'viewed');
-  }, [event.id, isLoggedIn]);
-
-  const openDetail = () => {
-    if (isLoggedIn) trackEventInteraction(event.id, 'opened');
-    router.push(`/events/${event.id}`);
-  };
-
-  const shareMessage = `${event.title}\n${dateLine}${locationLine ? `\n${locationLine}` : ''}`;
-
-  return (
-    <View style={[styles.recommendedCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Pressable onPress={openDetail} style={styles.recommendedThumb}>
-        {event.coverImageUrl ? (
-          <Image
-            source={{ uri: event.coverImageUrl }}
-            style={coverBannerImageStyle}
-            resizeMode="cover"
-          />
-        ) : (
-          <CoverPlaceholder
-            letter={event.coverLetter ?? event.title}
-            gradient={(event.coverGradient ?? DEFAULT_COVER_GRADIENT) as readonly [string, string]}
-            borderRadius={10}
-            style={styles.coverBannerFill}
-            letterSize={28}
-          />
-        )}
-      </Pressable>
-
-      <View style={styles.recommendedBody}>
-        <View style={styles.recommendedTitleRow}>
-          <Pressable onPress={openDetail} style={styles.recommendedTitlePress}>
-            <Text numberOfLines={1} style={[styles.recommendedCardTitle, { color: colors.text }]}>
-              {event.title}
-            </Text>
-          </Pressable>
-          <EventFeedCoverActions
-            eventId={event.id}
-            shareMessage={shareMessage}
-            actionStyle="glass"
-            size="compact"
-            layout="inline"
-          />
-        </View>
-
-        <Pressable onPress={openDetail} style={styles.recommendedMetaBlock}>
-          {dateLine ? (
-            <View style={styles.recommendedMetaRow}>
-              <Feather name="clock" size={14} color={colors.primary} />
-              <Text style={styles.recommendedMetaLine} numberOfLines={1} ellipsizeMode="tail">
-                {dateLine}
-              </Text>
-            </View>
-          ) : null}
-          {locationLine ? (
-            <View style={styles.recommendedMetaRow}>
-              <Feather name="map-pin" size={14} color={colors.primary} />
-              <Text style={styles.recommendedMetaLine} numberOfLines={1} ellipsizeMode="tail">
-                {locationLine}
-              </Text>
-            </View>
-          ) : null}
-          <View style={styles.recommendedFooterRow}>
-            <Text style={[styles.recommendedPrice, { color: colors.primary }]}>{priceLabel}</Text>
-            {showGoing ? (
-              <View style={styles.recommendedGoingWrap}>
-                {attendeePreviews.length > 0 ? (
-                  <View style={styles.recommendedAvatarStack}>
-                    {attendeePreviews.map((preview, index) => (
-                      <MemberInitialAvatar
-                        key={
-                          preview.userId != null
-                            ? String(preview.userId)
-                            : `${preview.name}-${index}`
-                        }
-                        name={preview.name}
-                        size={22}
-                        borderWidth={2}
-                        borderColor="#FFFFFF"
-                        style={index > 0 ? styles.recommendedAvatarOverlap : undefined}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-                <View
-                  style={[
-                    styles.recommendedGoingBubble,
-                    { backgroundColor: colors.primary },
-                    attendeePreviews.length > 0 && styles.recommendedGoingBubbleOverlap,
-                  ]}
-                >
-                  <Text style={styles.recommendedGoingBubbleText}>{goingCount}</Text>
-                </View>
-              </View>
-            ) : null}
-          </View>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -880,7 +754,6 @@ function HomeScreen() {
                     <HomeMyEventCard
                       key={`active-${event.id}`}
                       event={event}
-                      activeTab={isGuest ? 'Upcoming' : activeTab}
                       cardWidth={myEventCardWidth}
                     />
                   ))}
@@ -924,7 +797,7 @@ function HomeScreen() {
                     </View>
                     <View style={styles.recommendedList}>
                       {recommendedEvents.slice(0, 2).map((event) => (
-                        <RecommendedMiniCard key={`rec-${event.id}`} event={event} />
+                        <RecommendedEventCard key={`rec-${event.id}`} event={event} />
                       ))}
                     </View>
                   </View>
@@ -1030,120 +903,9 @@ const styles = StyleSheet.create({
   recommendedList: {
     gap: 12,
   },
-  recommendedEmptyWrap: {
-    minHeight: 62,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recommendedEmptyText: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-  recommendedCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  recommendedThumb: {
-    width: 92,
-    height: 92,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: '#E5E7EB',
-    flexShrink: 0,
-  },
   coverBannerFill: {
     width: '100%',
     height: '100%',
-  },
-  recommendedBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  recommendedTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  recommendedTitlePress: {
-    flex: 1,
-    minWidth: 0,
-  },
-  recommendedCardTitle: {
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  recommendedMetaBlock: {
-    gap: 4,
-    paddingTop: 2,
-  },
-  recommendedMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  recommendedMetaLine: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  recommendedFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 2,
-  },
-  recommendedPrice: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '700',
-    flexShrink: 0,
-  },
-  recommendedGoingWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-    minWidth: 0,
-    justifyContent: 'flex-end',
-  },
-  recommendedAvatarStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  recommendedAvatarOverlap: {
-    marginLeft: -7,
-  },
-  recommendedGoingBubble: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    paddingHorizontal: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  recommendedGoingBubbleOverlap: {
-    marginLeft: -7,
-  },
-  recommendedGoingBubbleText: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: '800',
-    color: '#FFFFFF',
   },
   spotlightWrap: {
     marginHorizontal: spacing.md,
@@ -1267,9 +1029,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   emptyIllustration: {
-    width: 132,
-    height: 132,
-    marginBottom: 2,
+    width: 168,
+    height: 168,
+    marginBottom: 4,
   },
   emptyTitle: {
     fontSize: 17,

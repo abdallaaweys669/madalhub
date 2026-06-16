@@ -1,4 +1,4 @@
-import { IsOptional, IsEmail, MinLength, IsBoolean } from 'class-validator';
+import { IsOptional, IsEmail, MinLength, IsBoolean, IsString, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 const toBool = (value: unknown) => {
@@ -39,4 +39,29 @@ export class UpdateMemberDto {
   @Transform(({ value }) => toBool(value))
   @IsBoolean()
   profile_hidden?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  social_website?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  social_linkedin?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  social_instagram?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  social_facebook?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  social_tiktok?: string;
 }

@@ -52,6 +52,7 @@ const EventBottomBar = ({
   joined,
   onRegister,
   onEditAttendance,
+  onViewTicket,
   price = 'Free',
   event,
 }) => {
@@ -93,8 +94,12 @@ const EventBottomBar = ({
   };
 
   const openTicket = () => {
-    if (!event?.id) return;
-    router.push(`/events/${event.id}/ticket`);
+    const ticketEventId = event?.id ?? event?.eventId;
+    if (ticketEventId) {
+      router.push(`/events/${ticketEventId}/ticket`);
+      return;
+    }
+    onViewTicket?.();
   };
 
   const displayPrice = typeof price === 'string' && price.trim().length > 0 ? price.trim() : 'Free';

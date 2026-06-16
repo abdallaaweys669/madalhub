@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
-import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Dimensions, Modal, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   runOnJS,
@@ -11,61 +11,25 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const PARTICLE_COUNT = 22;
-const CONFETTI_COLORS = ['#FF7B3F', '#FF9A3D', '#16A34A', '#FBBF24', '#FFFFFF', '#38BDF8', '#F472B6'];
+import CelebrationConfetti from '@/components/eventDetail/CelebrationConfetti';
 
-function buildParticles() {
-  return Array.from({ length: PARTICLE_COUNT }, (_, index) => ({
-    id: index,
-    x: Math.random() * SCREEN_W,
-    delay: Math.random() * 300,
-    duration: 1600 + Math.random() * 700,
-    drift: (Math.random() - 0.5) * 100,
-    size: 5 + Math.random() * 7,
-    color: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
-    round: Math.random() > 0.4,
-    spin: (Math.random() - 0.5) * 540,
-  }));
+const { width: SCREEN_W } = Dimensions.get('window');
+
+function resetCelebrationValues(values) {
+  values.backdropOpacity.value = 0;
+  values.cardScale.value = 0.82;
+  values.cardOpacity.value = 0;
+  values.emojiScale.value = 0.2;
+  values.emojiRotate.value = -16;
+  values.titleOpacity.value = 0;
+  values.titleY.value = 12;
+  values.subtitleOpacity.value = 0;
 }
 
-function ConfettiPiece({ piece }) {
-  const progress = useSharedValue(0);
+export default function RegistrationCelebration({ visible = false, onFinish, runKey = 0 }) {
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
 
-  useEffect(() => {
-    progress.value = withDelay(
-      piece.delay,
-      withTiming(1, { duration: piece.duration, easing: Easing.out(Easing.quad) }),
-    );
-  }, [piece.delay, piece.duration, progress]);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: 1 - progress.value * 0.4,
-    transform: [
-      { translateX: piece.x + piece.drift * progress.value },
-      { translateY: -20 + (SCREEN_H * 0.55 + piece.size) * progress.value },
-      { rotate: `${piece.spin * progress.value}deg` },
-    ],
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        styles.piece,
-        {
-          width: piece.size,
-          height: piece.round ? piece.size : piece.size * 0.55,
-          borderRadius: piece.round ? piece.size / 2 : 2,
-          backgroundColor: piece.color,
-        },
-        style,
-      ]}
-    />
-  );
-}
-
-export default function RegistrationCelebration({ visible = true, onFinish }) {
-  const particles = useMemo(() => buildParticles(), []);
   const backdropOpacity = useSharedValue(0);
   const cardScale = useSharedValue(0.82);
   const cardOpacity = useSharedValue(0);
@@ -75,8 +39,36 @@ export default function RegistrationCelebration({ visible = true, onFinish }) {
   const titleY = useSharedValue(12);
   const subtitleOpacity = useSharedValue(0);
 
+  const sharedValues = useMemo(
+    () => ({
+      backdropOpacity,
+      cardScale,
+      cardOpacity,
+      emojiScale,
+      emojiRotate,
+      titleOpacity,
+      titleY,
+      subtitleOpacity,
+    }),
+    [
+      backdropOpacity,
+      cardScale,
+      cardOpacity,
+      emojiScale,
+      emojiRotate,
+      titleOpacity,
+      titleY,
+      subtitleOpacity,
+    ],
+  );
+
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      resetCelebrationValues(sharedValues);
+      return;
+    }
+
+    resetCelebrationValues(sharedValues);
 
     backdropOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
     cardOpacity.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) });
@@ -103,26 +95,17 @@ export default function RegistrationCelebration({ visible = true, onFinish }) {
     titleY.value = withDelay(200, withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) }));
     subtitleOpacity.value = withDelay(320, withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) }));
 
+    const finish = () => onFinishRef.current?.();
+
     backdropOpacity.value = withDelay(
-      2200,
+      2400,
       withTiming(0, { duration: 380, easing: Easing.in(Easing.cubic) }, (finished) => {
-        if (finished) runOnJS(onFinish)?.();
+        if (finished) runOnJS(finish)();
       }),
     );
-    cardOpacity.value = withDelay(2200, withTiming(0, { duration: 320, easing: Easing.in(Easing.cubic) }));
-    cardScale.value = withDelay(2200, withTiming(0.94, { duration: 320, easing: Easing.in(Easing.cubic) }));
-  }, [
-    backdropOpacity,
-    cardOpacity,
-    cardScale,
-    emojiRotate,
-    emojiScale,
-    onFinish,
-    subtitleOpacity,
-    titleOpacity,
-    titleY,
-    visible,
-  ]);
+    cardOpacity.value = withDelay(2400, withTiming(0, { duration: 320, easing: Easing.in(Easing.cubic) }));
+    cardScale.value = withDelay(2400, withTiming(0.94, { duration: 320, easing: Easing.in(Easing.cubic) }));
+  }, [visible, runKey, sharedValues]);
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }));
   const cardStyle = useAnimatedStyle(() => ({
@@ -138,26 +121,30 @@ export default function RegistrationCelebration({ visible = true, onFinish }) {
   }));
   const subtitleStyle = useAnimatedStyle(() => ({ opacity: subtitleOpacity.value }));
 
-  if (!visible) return null;
+  const handleDismiss = () => onFinishRef.current?.();
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={onFinish}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={handleDismiss}
+    >
       <Animated.View style={[styles.backdrop, backdropStyle]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onFinish} accessibilityLabel="Dismiss" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleDismiss} accessibilityLabel="Dismiss" />
 
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          {particles.map((piece) => (
-            <ConfettiPiece key={piece.id} piece={piece} />
-          ))}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none" key={runKey}>
+          <CelebrationConfetti active={visible} />
         </View>
 
         <Animated.View style={[styles.card, cardStyle]}>
           <Animated.Text style={[styles.emoji, emojiStyle]} accessibilityLabel="Celebration">
-            🎉
+            🎊
           </Animated.Text>
-          <Animated.Text style={[styles.title, titleStyle]}>You&apos;re going!</Animated.Text>
+          <Animated.Text style={[styles.title, titleStyle]}>Congratulations!</Animated.Text>
           <Animated.Text style={[styles.subtitle, subtitleStyle]}>
-            Your spot is saved. See you at the event!
+            You&apos;re going — your ticket is ready!
           </Animated.Text>
         </Animated.View>
       </Animated.View>
@@ -175,7 +162,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 320,
+    maxWidth: Math.min(320, SCREEN_W - 56),
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     paddingHorizontal: 28,
@@ -207,10 +194,5 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 22,
-  },
-  piece: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
   },
 });
