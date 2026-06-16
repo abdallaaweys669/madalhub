@@ -135,7 +135,7 @@ export function RecommendedEventCard({ event, style }: RecommendedEventCardProps
               <View style={styles.goingWrap}>
                 {attendeePreviews.length > 0 ? (
                   <View style={styles.avatarStack}>
-                    {attendeePreviews.map((preview, index) => (
+                    {attendeePreviews.slice(0, 3).map((preview, index) => (
                       <MemberInitialAvatar
                         key={
                           preview.userId != null
@@ -151,15 +151,15 @@ export function RecommendedEventCard({ event, style }: RecommendedEventCardProps
                     ))}
                   </View>
                 ) : null}
-                <View
+                <Text
                   style={[
-                    styles.goingBubble,
-                    { backgroundColor: colors.primary },
-                    attendeePreviews.length > 0 && styles.goingBubbleOverlap,
+                    styles.goingLabel,
+                    { color: colors.textSecondary },
+                    attendeePreviews.length > 0 && styles.goingLabelAfterAvatars,
                   ]}
                 >
-                  <Text style={styles.goingBubbleText}>{goingCount}</Text>
-                </View>
+                  {goingCount} going
+                </Text>
               </View>
             ) : null}
           </View>
@@ -254,23 +254,12 @@ const styles = StyleSheet.create({
   avatarOverlap: {
     marginLeft: -7,
   },
-  goingBubble: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    paddingHorizontal: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  goingLabel: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '600',
   },
-  goingBubbleOverlap: {
-    marginLeft: -7,
-  },
-  goingBubbleText: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: '800',
-    color: '#FFFFFF',
+  goingLabelAfterAvatars: {
+    marginLeft: 6,
   },
 });

@@ -175,48 +175,45 @@ export function KulanEventFeedCard({
             {showPaidSuffix ? <Text style={styles.priceSuffix}> /Person</Text> : null}
           </View>
           <View style={styles.attendeeWrap}>
-            <View style={styles.avatarStack}>
-              {showPreviews ? (
-                previews.slice(0, EVENT_FEED_AVATAR_PREVIEW_COUNT).map((preview, index) => (
-                  <MemberInitialAvatar
-                    key={
-                      preview.userId != null
-                        ? String(preview.userId)
-                        : `${preview.name}-${index}`
-                    }
-                    name={preview.name}
-                    size={isFlat ? EVENT_FEED_AVATAR_SIZE_FLAT : EVENT_FEED_AVATAR_SIZE}
-                    borderWidth={2}
-                    borderColor="#FFFFFF"
-                    style={index > 0 ? styles.avatarOverlap : undefined}
-                  />
-                ))
-              ) : showAnonymousGoing ? (
-                Array.from({ length: anonymousFaceCount }, (_, index) => (
-                  <MemberInitialAvatar
-                    key={`anon-${index}`}
-                    name={`Attendee ${index + 1}`}
-                    size={isFlat ? EVENT_FEED_AVATAR_SIZE_FLAT : EVENT_FEED_AVATAR_SIZE}
-                    borderWidth={2}
-                    borderColor="#FFFFFF"
-                    style={index > 0 ? styles.avatarOverlap : undefined}
-                  />
-                ))
-              ) : null}
-            </View>
-            {goingCountN > 0 ? (
-              <View style={styles.attendeeMeta}>
-                <View
-                  style={[
-                    styles.countBubble,
-                    isFlat && styles.countBubbleFlat,
-                    (showPreviews || showAnonymousGoing) && styles.countBubbleOverlap,
-                  ]}
-                >
-                  <Text style={styles.countBubbleText}>{goingCountN}</Text>
-                </View>
-                {isFlat ? <Text style={[styles.goingHint, styles.goingHintFlat]}>going</Text> : null}
+            {(showPreviews || showAnonymousGoing) ? (
+              <View style={styles.avatarStack}>
+                {showPreviews
+                  ? previews.slice(0, 3).map((preview, index) => (
+                      <MemberInitialAvatar
+                        key={
+                          preview.userId != null
+                            ? String(preview.userId)
+                            : `${preview.name}-${index}`
+                        }
+                        name={preview.name}
+                        size={isFlat ? EVENT_FEED_AVATAR_SIZE_FLAT : EVENT_FEED_AVATAR_SIZE}
+                        borderWidth={2}
+                        borderColor="#FFFFFF"
+                        style={index > 0 ? styles.avatarOverlap : undefined}
+                      />
+                    ))
+                  : Array.from({ length: anonymousFaceCount }, (_, index) => (
+                      <MemberInitialAvatar
+                        key={`anon-${index}`}
+                        name={`Attendee ${index + 1}`}
+                        size={isFlat ? EVENT_FEED_AVATAR_SIZE_FLAT : EVENT_FEED_AVATAR_SIZE}
+                        borderWidth={2}
+                        borderColor="#FFFFFF"
+                        style={index > 0 ? styles.avatarOverlap : undefined}
+                      />
+                    ))}
               </View>
+            ) : null}
+            {goingCountN > 0 ? (
+              <Text
+                style={[
+                  styles.goingLabel,
+                  isFlat && styles.goingLabelFlat,
+                  (showPreviews || showAnonymousGoing) && styles.goingLabelAfterAvatars,
+                ]}
+              >
+                {goingCountN} going
+              </Text>
             ) : null}
           </View>
         </View>
@@ -318,21 +315,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 0,
+    maxWidth: '48%',
   },
-  attendeeMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  goingHint: {
+  goingLabel: {
     fontSize: 13,
     lineHeight: 16,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: '#6B7280',
   },
-  goingHintFlat: {
+  goingLabelFlat: {
     fontSize: 12,
     lineHeight: 15,
+  },
+  goingLabelAfterAvatars: {
+    marginLeft: 8,
   },
   avatarStack: {
     flexDirection: 'row',
@@ -340,30 +336,5 @@ const styles = StyleSheet.create({
   },
   avatarOverlap: {
     marginLeft: -9,
-  },
-  countBubble: {
-    minWidth: EVENT_FEED_AVATAR_SIZE,
-    height: EVENT_FEED_AVATAR_SIZE,
-    borderRadius: EVENT_FEED_AVATAR_SIZE / 2,
-    paddingHorizontal: 6,
-    backgroundColor: EVENT_FEED_BRAND_ORANGE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  countBubbleFlat: {
-    minWidth: EVENT_FEED_AVATAR_SIZE_FLAT,
-    height: EVENT_FEED_AVATAR_SIZE_FLAT,
-    borderRadius: EVENT_FEED_AVATAR_SIZE_FLAT / 2,
-  },
-  countBubbleOverlap: {
-    marginLeft: -9,
-  },
-  countBubbleText: {
-    fontSize: 11,
-    lineHeight: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
   },
 });
