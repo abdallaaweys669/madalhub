@@ -24,6 +24,10 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import {
+  assertCanPublish,
+  type PublishBlockCode,
+} from 'src/organizer/helpers/publish-eligibility.helper';
 
 const ROLE_ORGANIZER = 2;
 const ROLE_ADMIN = 3;
@@ -339,14 +343,56 @@ export class EventService {
     }
   }
 
-  private ensureOrganizerActive(user: User) {
+  private ensureOrganizerCanManageDrafts(user: User) {
     if (user.roleId !== 2) {
       throw new ForbiddenException('Only organizers can perform this action');
     }
+  }
 
-    if (user.status !== 'active') {
-      throw new ForbiddenException('Organizer must be active');
+  private throwPublishBlocked(code: PublishBlockCode) {
+    const messages: Record<PublishBlockCode, string> = {
+      VERIFICATION_REQUIRED: 'Complete identity verification before publishing.',
+      VERIFICATION_PENDING: 'Your verification is under review.',
+      VERIFICATION_REJECTED: 'Verification was rejected. Update and resubmit.',
+      PAYMENT_REQUIRED: 'Purchase a publish credit to go live.',
+    };
+    throw new ForbiddenException({
+      message: messages[code],
+      code,
+    });
+  }
+
+  private async consumePublishCredit(organizerId: number): Promise<void> {
+    const profile = await this.organizerProfileRepo.findOne({
+      where: { userId: organizerId },
+    });
+    if (!profile) {
+      this.throwPublishBlocked('VERIFICATION_REQUIRED');
     }
+
+    const blockCode = assertCanPublish(profile);
+    if (blockCode) {
+      this.throwPublishBlocked(blockCode);
+    }
+
+    if (!profile!.freePublishUsed) {
+      profile!.freePublishUsed = true;
+      await this.organizerProfileRepo.save(profile!);
+      return;
+    }
+
+    if (profile!.paidPublishCredits > 0) {
+      profile!.paidPublishCredits -= 1;
+      await this.organizerProfileRepo.save(profile!);
+      return;
+    }
+
+    this.throwPublishBlocked('PAYMENT_REQUIRED');
+  }
+
+  /** @deprecated Use ensureOrganizerCanManageDrafts for drafts or consumePublishCredit for publish. */
+  private ensureOrganizerActive(user: User) {
+    this.ensureOrganizerCanManageDrafts(user);
   }
 
   private async syncEventSponsors(
@@ -523,7 +569,7 @@ export class EventService {
       throw new NotFoundException('Organizer not found');
     }
 
-    this.ensureOrganizerActive(user);
+    this.ensureOrganizerCanManageDrafts(user);
 
     if (
       new Date(dto.startDatetime).getTime() >=
@@ -570,7 +616,7 @@ export class EventService {
       throw new NotFoundException('Organizer not found');
     }
 
-    this.ensureOrganizerActive(user);
+    this.ensureOrganizerCanManageDrafts(user);
 
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
 
@@ -587,6 +633,7 @@ export class EventService {
     }
 
     await this.ensurePublishReady(event);
+    await this.consumePublishCredit(organizerId);
 
     event.status = 'published';
     return this.eventRepo.save(event);
@@ -595,7 +642,7 @@ export class EventService {
   async deleteEvent(eventId: number, organizerId: number) {
     const user = await this.userRepo.findOne({ where: { id: organizerId } });
     if (!user) throw new NotFoundException('Organizer not found');
-    this.ensureOrganizerActive(user);
+    this.ensureOrganizerCanManageDrafts(user);
 
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
@@ -619,7 +666,7 @@ export class EventService {
       throw new NotFoundException('Organizer not found');
     }
 
-    this.ensureOrganizerActive(user);
+    this.ensureOrganizerCanManageDrafts(user);
 
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
 

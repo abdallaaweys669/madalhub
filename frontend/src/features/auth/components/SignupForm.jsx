@@ -80,9 +80,10 @@ export default function SignupForm() {
 
       <AuthSubmitButton
         onPress={handleSubmit}
-        disabled={!isValid || loading}
+        disabled={loading}
         loading={loading}
         label="Create account"
+        loadingLabel="Creating account..."
         style={styles.submitButton}
       />
 

@@ -162,7 +162,7 @@ function gradientForEvent(event) {
     normalizeOrganizerName(event) ||
     String(event?.title || '') ||
     String(event?.id || '') ||
-    'kulan';
+    'madalhub';
 
   let hash = 0;
   for (let i = 0; i < seedSource.length; i += 1) {

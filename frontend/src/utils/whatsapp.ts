@@ -11,17 +11,17 @@ function firstName(fullName: string | null | undefined): string {
   return trimmed.split(/\s+/)[0] || 'there';
 }
 
-/** Pre-filled intro when a member contacts another member from a Kulan profile. */
+/** Pre-filled intro when a member contacts another member from a MadalHub profile. */
 export function buildKulanMemberWhatsAppMessage(options: {
   memberName?: string | null;
   visitorName?: string | null;
 } = {}): string {
   const memberFirst = firstName(options.memberName);
-  const visitor = String(options.visitorName ?? '').trim() || 'A Kulan member';
+  const visitor = String(options.visitorName ?? '').trim() || 'A MadalHub member';
 
   return (
     `Hi ${memberFirst}! I'm ${visitor}.\n\n` +
-    `I'm reaching out from Kulan after viewing your member profile. ` +
+    `I'm reaching out from MadalHub after viewing your member profile. ` +
     `I'd like to connect about an event we're both interested in.`
   );
 }

@@ -6,6 +6,8 @@ import { AdminService } from './admin.service';
 import { User } from 'src/database/entities/user.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
 import { OrganizerVerificationDocument } from 'src/database/entities/organizer-verification-document.entity';
+import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
+import { ConfigService } from '@nestjs/config';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -14,6 +16,7 @@ describe('AdminService', () => {
   let organizerDocumentRepository: jest.Mocked<
     Repository<OrganizerVerificationDocument>
   >;
+  let paymentRequestRepository: jest.Mocked<Repository<OrganizerPaymentRequest>>;
 
   const mockRepo = () => ({
     findOne: jest.fn(),
@@ -31,6 +34,19 @@ describe('AdminService', () => {
           provide: getRepositoryToken(OrganizerVerificationDocument),
           useFactory: mockRepo,
         },
+        {
+          provide: getRepositoryToken(OrganizerPaymentRequest),
+          useFactory: mockRepo,
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) => {
+              if (key === 'PUBLISH_BUNDLE_CREDITS') return 5;
+              return undefined;
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -41,6 +57,9 @@ describe('AdminService', () => {
     );
     organizerDocumentRepository = module.get(
       getRepositoryToken(OrganizerVerificationDocument),
+    );
+    paymentRequestRepository = module.get(
+      getRepositoryToken(OrganizerPaymentRequest),
     );
   });
 
@@ -182,22 +201,25 @@ describe('AdminService', () => {
 
   describe('getPendingOrganizers', () => {
     it('should return pending organizers with profile and document info', async () => {
-      const mockUsers = [
+      organizerProfileRepository.find.mockResolvedValue([
         {
-          id: 1,
-          roleId: 2,
-          status: 'pending',
-          fullName: 'Org One',
-          email: 'org1@test.com',
+          userId: 1,
+          verificationStatus: 'pending',
+          organizationName: 'Test Org',
+          organizationDescription: 'Test',
+          website: 'https://test.com',
         },
-      ];
+      ] as OrganizerProfile[]);
 
-      userRepository.find.mockResolvedValue(mockUsers as unknown as User[]);
-      organizerProfileRepository.findOne.mockResolvedValue({
-        organizationName: 'Test Org',
-        organizationDescription: 'Test',
-        website: 'https://test.com',
-      } as OrganizerProfile);
+      userRepository.findOne.mockResolvedValue({
+        id: 1,
+        roleId: 2,
+        status: 'active',
+        fullName: 'Org One',
+        email: 'org1@test.com',
+        phone: '',
+      } as unknown as User);
+
       organizerDocumentRepository.findOne.mockResolvedValue({
         documentType: 'license',
         documentPath: '/uploads/doc.pdf',
@@ -209,6 +231,40 @@ describe('AdminService', () => {
       expect(result).toHaveLength(1);
       expect(result[0].profile).not.toBeNull();
       expect(result[0].document).not.toBeNull();
+    });
+  });
+
+  describe('approvePaymentRequest', () => {
+    it('grants bundle credits on approval', async () => {
+      paymentRequestRepository.findOne.mockResolvedValue({
+        id: 10,
+        organizerId: 1,
+        plan: 'bundle',
+        status: 'pending',
+      } as OrganizerPaymentRequest);
+
+      organizerProfileRepository.findOne.mockResolvedValue({
+        userId: 1,
+        paidPublishCredits: 0,
+      } as OrganizerProfile);
+
+      organizerProfileRepository.save.mockResolvedValue({
+        userId: 1,
+        paidPublishCredits: 5,
+      } as OrganizerProfile);
+
+      paymentRequestRepository.save.mockResolvedValue({
+        id: 10,
+        status: 'approved',
+        creditsGranted: 5,
+      } as OrganizerPaymentRequest);
+
+      const result = await service.approvePaymentRequest(10);
+
+      expect(organizerProfileRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ paidPublishCredits: 5 }),
+      );
+      expect(result.creditsGranted).toBe(5);
     });
   });
 });

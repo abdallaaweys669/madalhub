@@ -105,7 +105,7 @@ export default function WelcomeScreen() {
                 adjustsFontSizeToFit
                 minimumFontScale={0.82}
               >
-                Welcome to <Text style={styles.headingAccent}>Kulan</Text>
+                Welcome to <Text style={styles.headingAccent}>MadalHub</Text>
               </Text>
               <View style={styles.headingUnderline} />
               <Text style={[styles.subtitle, isCompact && styles.subtitleCompact]}>

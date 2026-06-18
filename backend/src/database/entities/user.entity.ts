@@ -62,6 +62,9 @@ export class User {
   })
   status!: string;
 
+  @Column({ name: 'email_verified_at', type: 'datetime', nullable: true })
+  emailVerifiedAt!: Date | null;
+
   @Column({ name: 'created_at' })
   createdAt!: Date;
 

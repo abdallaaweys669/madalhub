@@ -148,7 +148,7 @@ export default function PendingVerificationScreen() {
   };
 
   const handleContactSupport = async () => {
-    const url = 'mailto:support@kulan.app?subject=Organizer Verification Support';
+    const url = 'mailto:support@madalhub.app?subject=Organizer Verification Support';
     const canOpen = await Linking.canOpenURL(url);
     if (canOpen) {
       Linking.openURL(url);

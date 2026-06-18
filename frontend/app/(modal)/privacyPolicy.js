@@ -17,9 +17,9 @@ export default function PrivacyPolicyScreen() {
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: 'Privacy Policy' }} />
-      <Text style={[styles.updated, { color: colors.textSecondary }]}>Last updated: May 2026 · Kulan member app</Text>
+      <Text style={[styles.updated, { color: colors.textSecondary }]}>Last updated: May 2026 · MadalHub member app</Text>
       <Text style={[styles.intro, { color: colors.text }]}>
-        We built Kulan to help you enjoy events with confidence. This policy describes what we collect, why we use it,
+        We built MadalHub to help you enjoy events with confidence. This policy describes what we collect, why we use it,
         and the choices you have — in plain language.
       </Text>
 
@@ -57,13 +57,13 @@ export default function PrivacyPolicyScreen() {
 
       <H colors={colors}>Children</H>
       <P colors={colors}>
-        Kulan is not directed at children under the age required in your region to consent to data processing. If you
+        MadalHub is not directed at children under the age required in your region to consent to data processing. If you
         believe we have collected a child profile in error, contact us for removal.
       </P>
 
       <H colors={colors}>Contact</H>
       <P colors={colors}>
-        For privacy questions, reach out through the support method your organization published for the Kulan app
+        For privacy questions, reach out through the support method your organization published for the MadalHub app
         (email or help desk).
       </P>
     </ScrollView>

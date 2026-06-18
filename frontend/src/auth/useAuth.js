@@ -8,6 +8,7 @@ import { normalizeUser } from './normalizeUser';
 
 const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
+const ROLE_ADMIN = 3;
 
 export default () => {
   const {
@@ -35,28 +36,30 @@ export default () => {
     await authStorage.storeUserRole(role);
     setUserRole(role);
 
-    let normalizedUser = normalizeUser(decodedUser);
-    try {
-      const profile = await authApi.getMe();
-      normalizedUser = normalizeUser(decodedUser, profile);
-      if (role === ROLE_ORGANIZER) {
-        const orgStatus = profile.organizerStatus ?? 'pending';
-        const orgReason = profile.rejectionReason ?? null;
-        setOrganizerStatus(orgStatus);
-        setRejectionReason(orgReason);
-        await authStorage.storeOrganizerStatus(orgStatus);
-        await authStorage.storeRejectionReason(orgReason);
-      }
-    } catch (error) {
-      console.log('Unable to fetch profile during login, using token user.', error?.message);
-    }
-
-    setUser(normalizedUser);
+    // Let navigation continue quickly; enrich profile in background.
+    setUser(normalizeUser(decodedUser));
 
     if (completed !== null && completed !== undefined) {
       setProfileCompleted(Boolean(completed));
       await authStorage.storeProfileCompleted(Boolean(completed));
     }
+
+    void (async () => {
+      try {
+        const profile = await authApi.getMe();
+        setUser(normalizeUser(decodedUser, profile));
+        if (role === ROLE_ORGANIZER) {
+          const orgStatus = profile.organizerStatus ?? 'pending';
+          const orgReason = profile.rejectionReason ?? null;
+          setOrganizerStatus(orgStatus);
+          setRejectionReason(orgReason);
+          await authStorage.storeOrganizerStatus(orgStatus);
+          await authStorage.storeRejectionReason(orgReason);
+        }
+      } catch (error) {
+        console.log('Unable to fetch profile during login, using token user.', error?.message);
+      }
+    })();
   };
 
   const loginAsOrganizer = async (authToken, orgStatus, orgReason = null) => {
@@ -70,15 +73,16 @@ export default () => {
     await authStorage.storeOrganizerStatus(orgStatus);
     await authStorage.storeRejectionReason(orgReason);
 
-    let normalizedUser = normalizeUser(decodedUser);
-    try {
-      const profile = await authApi.getMe();
-      normalizedUser = normalizeUser(decodedUser, profile);
-    } catch (error) {
-      console.log('Unable to fetch profile during organizer login, using token user.', error?.message);
-    }
+    setUser(normalizeUser(decodedUser));
 
-    setUser(normalizedUser);
+    void (async () => {
+      try {
+        const profile = await authApi.getMe();
+        setUser(normalizeUser(decodedUser, profile));
+      } catch (error) {
+        console.log('Unable to fetch profile during organizer login, using token user.', error?.message);
+      }
+    })();
   };
 
   const logout = async () => {
@@ -114,5 +118,6 @@ export default () => {
     setRejectionReason,
     isOrganizer,
     isMember,
+    isAdmin: userRole === ROLE_ADMIN,
   };
 };

@@ -33,6 +33,7 @@ import { coerceProfileVisibilityBool, pickDisplayName, pickLocationLabel } from 
 import { mergeAuthenticatedUserFromMe } from '@/auth/mergeAuthenticatedUserFromMe';
 import { canViewerSeeHiddenProfile } from '@/utils/anonymize';
 import { openKulanMemberWhatsApp } from '@/utils/whatsapp';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 function formatJoinedDate(iso) {
   if (!iso) return null;
@@ -58,7 +59,7 @@ const ProfileScreen = () => {
   const rawMemberId = params.memberId ?? params.member_id;
   const memberIdNum = rawMemberId != null && rawMemberId !== '' ? Number(rawMemberId) : null;
 
-  const { user, setUser, logout, userRole } = useAuth();
+  const { user, setUser, userRole } = useAuth();
   const { savedEvents = [], isSyncingSaved, refreshSavedEvents } = useSavedEvents() || {};
 
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -83,7 +84,7 @@ const ProfileScreen = () => {
   const canEditProfile = isOwnProfile && !forceVisitorView;
 
   const displayUser = isOwnProfile ? user : viewedMember;
-  const visitorName = pickDisplayName(user) || 'A Kulan member';
+  const visitorName = pickDisplayName(user) || 'A MadalHub member';
 
   const profileHidden = coerceProfileVisibilityBool(
     displayUser?.profileHidden ?? displayUser?.profile_hidden,
@@ -245,10 +246,6 @@ const ProfileScreen = () => {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/(tabs)');
-  };
 
   const handleVisitorWhatsApp = useCallback(() => {
     void openKulanMemberWhatsApp(phoneRaw, {
@@ -443,7 +440,7 @@ const ProfileScreen = () => {
           ) : (
             <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
               {isVisitorProfile
-                ? 'Shared details from this member. Tap WhatsApp to message with a Kulan intro.'
+                ? 'Shared details from this member. Tap WhatsApp to message with a MadalHub intro.'
                 : 'Contact options when this member chooses to share them.'}
             </Text>
           )}
@@ -579,10 +576,7 @@ const ProfileScreen = () => {
 
         {canEditProfile ? (
           <View style={[styles.section, { borderTopColor: colors.border }]}>
-            <TouchableOpacity style={[styles.logoutItem, { backgroundColor: colors.primarySoft }]} onPress={handleLogout}>
-              <Text style={styles.logoutText}>Sign out</Text>
-              <Feather name="log-out" size={20} color="#E65A3A" />
-            </TouchableOpacity>
+            <SignOutButton redirectTo="/(tabs)/" style={styles.signOutButton} />
           </View>
         ) : null}
       </ScrollView>
@@ -853,19 +847,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 18,
   },
-  logoutItem: {
+  signOutButton: {
     marginTop: 4,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  logoutText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#E65A3A',
   },
 });
 

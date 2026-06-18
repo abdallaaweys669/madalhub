@@ -24,6 +24,7 @@ import { UpdateReviewDto } from '../dto/update-review.dto';
 import { FollowOrganizerDto } from '../dto/follow-organizer.dto';
 import { UpdateMemberDto } from '../dto/update-member.dto';
 import { SocialLoginDto } from '../dto/social-login.dto';
+import { CreateOrganizerPaymentRequestDto } from '../dto/create-payment-request.dto';
 
 class OrganizerLoginDto {
   email!: string;
@@ -147,6 +148,37 @@ export class OrganizerController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.service.deleteReview(user.userId, id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Get('publish-eligibility')
+  getPublishEligibility(@CurrentUser() user: any) {
+    return this.service.getPublishEligibility(user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Get('payment-config')
+  getPaymentConfig() {
+    return this.service.getPaymentConfig();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Post('payment-requests')
+  createPaymentRequest(
+    @CurrentUser() user: any,
+    @Body() dto: CreateOrganizerPaymentRequestDto,
+  ) {
+    return this.service.createPaymentRequest(user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Get('payment-requests')
+  getMyPaymentRequests(@CurrentUser() user: any) {
+    return this.service.getMyPaymentRequests(user.userId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

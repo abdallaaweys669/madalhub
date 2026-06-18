@@ -189,7 +189,7 @@ export default function EventAttendeesScreen() {
     const title = eventTitle || 'this event';
     try {
       await Share.share({
-        message: `Join me at ${title} on Kulan!`,
+        message: `Join me at ${title} on MadalHub!`,
       });
     } catch {
       /* user dismissed */

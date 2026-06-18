@@ -24,6 +24,8 @@ import { createOrganizerEvent, getEventInterests, patchOrganizerEvent, publishOr
 import { uploadEventCoverImage } from '@/api/eventAssets';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 import useAuth from '@/auth/useAuth';
+import { getPublishEligibility } from '@/api/organizer';
+import { resolveOrganizerPublishGate } from '@/utils/organizerPublish';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
 import WysiwygHeader from '@/components/createEvent/WysiwygHeader';
@@ -456,7 +458,7 @@ export default function CreateEventScreen() {
     }
   };
 
-  const onPublishPress = () => {
+  const onPublishPress = async () => {
     if (!canPublish) {
       setPublishWarningOpen(true);
       return;
@@ -465,7 +467,14 @@ export default function CreateEventScreen() {
       runPublish();
       return;
     }
-    setPublishConfirmOpen(true);
+    try {
+      const eligibility = await getPublishEligibility();
+      const canProceed = await resolveOrganizerPublishGate(router, eligibility);
+      if (!canProceed) return;
+      setPublishConfirmOpen(true);
+    } catch (e) {
+      setPublishErrorMessage(e?.message || 'Could not check publish eligibility.');
+    }
   };
 
   const applyDatePart = (base, picked) => {

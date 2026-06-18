@@ -250,7 +250,7 @@ export default function ProfileImage() {
         visible={permissionPopup}
         variant="warning"
         title="Camera access needed"
-        message="Please enable camera access for Kulan in your device settings to take a photo."
+        message="Please enable camera access for MadalHub in your device settings to take a photo."
         primaryLabel="OK"
         onPrimary={() => setPermissionPopup(false)}
       />

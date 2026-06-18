@@ -33,7 +33,7 @@ export default function SignupLegalBlock({
 function TermsLabel() {
   return (
     <Text style={styles.termsText}>
-      I agree to Kulan's{' '}
+      I agree to MadalHub's{' '}
       {/* TODO: open Terms of Service screen */}
       <Text style={styles.link} onPress={() => {}}>Terms of Service</Text>
       {' '}and{' '}

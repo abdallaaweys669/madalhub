@@ -2,16 +2,16 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import KulanLogo from '@/assets/kulan_logo.svg';
 
-const KULAN_AT_PATTERN = /^(.+?)\s+at\s+Kulan$/i;
+const MADALHUB_AT_PATTERN = /^(.+?)\s+at\s+MadalHub$/i;
 
 /**
- * Renders a one-line subtitle; replaces trailing "at Kulan" with the app wordmark.
+ * Renders a one-line subtitle; replaces trailing "at MadalHub" with the app wordmark.
  */
 export default function AttendeeSubtitle({ text, style, logoHeight = 14 }) {
   if (typeof text !== 'string' || !text.trim()) return null;
 
   const trimmed = text.trim();
-  const match = trimmed.match(KULAN_AT_PATTERN);
+  const match = trimmed.match(MADALHUB_AT_PATTERN);
   const logoWidth = Math.round(logoHeight * 3.35);
 
   if (match) {
@@ -24,7 +24,7 @@ export default function AttendeeSubtitle({ text, style, logoHeight = 14 }) {
           width={logoWidth}
           height={logoHeight}
           preserveAspectRatio="xMidYMid meet"
-          accessibilityLabel="Kulan"
+          accessibilityLabel="MadalHub"
         />
       </View>
     );

@@ -18,6 +18,7 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
   let service: EventService;
   let eventRepo: jest.Mocked<Repository<Event>>;
   let userRepo: jest.Mocked<Repository<User>>;
+  let organizerProfileRepo: jest.Mocked<Repository<OrganizerProfile>>;
 
   const mockRepo = () => ({
     findOne: jest.fn(),
@@ -74,6 +75,7 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
     service = module.get<EventService>(EventService);
     eventRepo = module.get(getRepositoryToken(Event));
     userRepo = module.get(getRepositoryToken(User));
+    organizerProfileRepo = module.get(getRepositoryToken(OrganizerProfile));
   });
 
   describe('createEvent - status gating', () => {
@@ -111,33 +113,45 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
       expect(result.status).toBe('draft');
     });
 
-    it('should reject pending organizer from creating event', async () => {
+    it('should allow pending organizer to create draft event', async () => {
       userRepo.findOne.mockResolvedValue({
         id: 1,
         roleId: 2,
         status: 'pending',
       } as unknown as User);
 
-      await expect(
-        service.createEvent(1, {
-          title: 'Test Event',
-          description: 'Test',
-          startDatetime: '2026-06-01T10:00:00Z',
-          endDatetime: '2026-06-01T12:00:00Z',
-          locationName: 'Test Location',
-          isPhysical: true,
-          capacity: 100,
-          interestId: 1,
-          totalPrice: 0,
-        }),
-      ).rejects.toThrow(ForbiddenException);
+      eventRepo.create.mockReturnValue({
+        id: 1,
+        organizerId: 1,
+        status: 'draft',
+      } as Event);
+
+      eventRepo.save.mockResolvedValue({
+        id: 1,
+        organizerId: 1,
+        status: 'draft',
+      } as Event);
+
+      const result = await service.createEvent(1, {
+        title: 'Test Event',
+        description: 'Test',
+        startDatetime: '2026-06-01T10:00:00Z',
+        endDatetime: '2026-06-01T12:00:00Z',
+        locationName: 'Test Location',
+        isPhysical: true,
+        capacity: 100,
+        interestId: 1,
+        totalPrice: 0,
+      });
+
+      expect(result.status).toBe('draft');
     });
 
-    it('should reject rejected organizer from creating event', async () => {
+    it('should reject non-organizer from creating event', async () => {
       userRepo.findOne.mockResolvedValue({
         id: 1,
-        roleId: 2,
-        status: 'rejected',
+        roleId: 1,
+        status: 'active',
       } as unknown as User);
 
       await expect(
@@ -164,6 +178,20 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
         status: 'active',
       } as unknown as User);
 
+      organizerProfileRepo.findOne.mockResolvedValue({
+        userId: 1,
+        verificationStatus: 'approved',
+        freePublishUsed: false,
+        paidPublishCredits: 0,
+      } as OrganizerProfile);
+
+      organizerProfileRepo.save.mockResolvedValue({
+        userId: 1,
+        verificationStatus: 'approved',
+        freePublishUsed: true,
+        paidPublishCredits: 0,
+      } as OrganizerProfile);
+
       eventRepo.findOne.mockResolvedValue({
         id: 1,
         organizerId: 1,
@@ -184,6 +212,9 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
       const result = await service.publishEvent(1, 1);
 
       expect(result.status).toBe('published');
+      expect(organizerProfileRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ freePublishUsed: true }),
+      );
     });
 
     it('should reject organizer trying to publish another organizer event', async () => {

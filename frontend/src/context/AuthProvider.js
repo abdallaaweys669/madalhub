@@ -8,6 +8,7 @@ import { normalizeUser } from '../auth/normalizeUser';
 
 const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
+const ROLE_ADMIN = 3;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -100,6 +101,7 @@ export const AuthProvider = ({ children }) => {
         setRejectionReason,
         isOrganizer: userRole === ROLE_ORGANIZER,
         isMember: userRole === ROLE_MEMBER,
+        isAdmin: userRole === ROLE_ADMIN,
       }}
     >
       {children}

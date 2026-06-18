@@ -52,16 +52,32 @@ export class OnboardingService {
     profile.verificationStatus = 'pending';
     profile.rejectionReason = null;
     await this.organizerProfileRepository.save(profile);
+  }
 
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (
-      user &&
-      user.roleId === ORGANIZER_ROLE_ID &&
-      user.status === 'rejected'
-    ) {
-      user.status = 'pending';
-      await this.userRepository.save(user);
+  private async markVerificationPendingIfReady(userId: number): Promise<void> {
+    const profile = await this.organizerProfileRepository.findOne({
+      where: { userId },
+    });
+    if (!profile) return;
+
+    if (!['unverified', 'rejected'].includes(profile.verificationStatus)) {
+      return;
     }
+
+    if (!this.isProfileComplete(profile)) {
+      return;
+    }
+
+    const document = await this.organizerDocumentRepository.findOne({
+      where: { organizerId: userId },
+    });
+    if (!document) {
+      return;
+    }
+
+    profile.verificationStatus = 'pending';
+    profile.rejectionReason = null;
+    await this.organizerProfileRepository.save(profile);
   }
 
   private async resolveDocumentType(input: string): Promise<string> {
@@ -247,6 +263,7 @@ export class OnboardingService {
     }
 
     const savedProfile = await this.organizerProfileRepository.save(profile);
+    await this.markVerificationPendingIfReady(userId);
 
     return {
       userId: savedProfile.userId,
@@ -293,6 +310,7 @@ export class OnboardingService {
       const updated =
         await this.organizerDocumentRepository.save(existingDocument);
       await this.resetVerificationAfterResubmit(userId);
+      await this.markVerificationPendingIfReady(userId);
       return {
         id: updated.id,
         organizerId: updated.organizerId,
@@ -315,6 +333,7 @@ export class OnboardingService {
     const saved = await this.organizerDocumentRepository.save(created);
 
     await this.resetVerificationAfterResubmit(userId);
+    await this.markVerificationPendingIfReady(userId);
 
     return {
       id: saved.id,

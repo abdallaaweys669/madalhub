@@ -4,6 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
+import { OtpService } from './otp.service';
+import { MemberService } from 'src/member/services/member.service';
 import { User } from 'src/database/entities/user.entity';
 import { MemberProfile } from 'src/database/entities/member-profile.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
@@ -47,6 +49,14 @@ describe('AuthService - Role Enforcement', () => {
         {
           provide: JwtService,
           useValue: { sign: jest.fn().mockReturnValue('test-token') },
+        },
+        {
+          provide: OtpService,
+          useValue: { sendOtp: jest.fn(), verifyOtpCode: jest.fn() },
+        },
+        {
+          provide: MemberService,
+          useValue: { register: jest.fn() },
         },
       ],
     }).compile();

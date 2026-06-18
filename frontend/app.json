@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "kulan-app",
-    "slug": "kulan-app",
+    "name": "MadalHub",
+    "slug": "madalhub",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/icon.png",
@@ -15,7 +15,10 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["whatsapp", "whatsapp-api"]
+        "LSApplicationQueriesSchemes": [
+          "whatsapp",
+          "whatsapp-api"
+        ]
       }
     },
     "android": {
@@ -25,7 +28,17 @@
       },
       "edgeToEdgeEnabled": true,
       "usesCleartextTraffic": true,
-      "package": "com.anonymous.kulanapp"
+      "package": "com.madalhub.app",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./src/assets/favicon.png"
@@ -37,27 +50,35 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow Kulan to access your camera to take a profile photo.",
+          "cameraPermission": "Allow MadalHub to access your camera to take a profile photo.",
           "microphonePermission": false,
-          "photosPermission": "Allow Kulan to access your photos to set a profile photo."
+          "photosPermission": "Allow MadalHub to access your photos to set a profile photo."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Kulan to access your location to show nearby events."
+          "locationWhenInUsePermission": "Allow MadalHub to access your location to show nearby events."
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow Kulan to save your ticket QR code to your photo library.",
-          "savePhotosPermission": "Allow Kulan to save your ticket QR code to your photo library.",
+          "photosPermission": "Allow MadalHub to save your ticket QR code to your photo library.",
+          "savePhotosPermission": "Allow MadalHub to save your ticket QR code to your photo library.",
           "isAccessMediaLocationEnabled": false
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-secure-store"
     ],
-    "scheme": "kulanapp"
+    "scheme": "madalhub",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7f1dc3a9-41f0-4b9d-8f27-feb555a4928c"
+      }
+    },
+    "owner": "abdallaaweis669"
   }
 }

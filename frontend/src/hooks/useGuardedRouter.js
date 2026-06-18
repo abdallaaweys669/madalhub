@@ -1,12 +1,53 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useRootNavigationState, useRouter } from 'expo-router';
 
-/**
- * Window (ms) during which a second navigation call is ignored.
- * Covers the screen transition so a rapid double-tap can't stack
- * the same screen twice.
- */
+/** Short burst guard for back / dismiss actions. */
 const NAVIGATION_GUARD_MS = 800;
+
+/** Longer guard when pushing the same screen again (survives remounts). */
+const SAME_ROUTE_GUARD_MS = 2000;
+
+let globalLastNavAt = 0;
+let globalLastSignature = '';
+
+/** Clears the debounce guard (e.g. before sign-out navigation). */
+export function resetNavigationGuard() {
+  globalLastNavAt = 0;
+  globalLastSignature = '';
+}
+
+function getNavSignature(method, args) {
+  const target = args[0];
+  if (typeof target === 'string') return `${method}:${target}`;
+  if (target && typeof target === 'object') {
+    const pathname = target.pathname ?? '';
+    const params = target.params ? JSON.stringify(target.params) : '';
+    return `${method}:${pathname}:${params}`;
+  }
+  return `${method}:${String(target ?? '')}`;
+}
+
+function isNavigationBlocked(method, args) {
+  const now = Date.now();
+  const signature = getNavSignature(method, args);
+
+  if (['push', 'replace', 'navigate'].includes(method)) {
+    if (signature === globalLastSignature && now - globalLastNavAt < SAME_ROUTE_GUARD_MS) {
+      return true;
+    }
+  } else if (now - globalLastNavAt < NAVIGATION_GUARD_MS) {
+    return true;
+  }
+
+  globalLastNavAt = now;
+  globalLastSignature = signature;
+  return false;
+}
+
+function runNavigation(router, method, args) {
+  if (isNavigationBlocked(method, args)) return undefined;
+  return router[method](...args);
+}
 
 /**
  * Drop-in replacement for expo-router's `useRouter` that debounces
@@ -23,7 +64,6 @@ export default function useGuardedRouter() {
   const router = useRouter();
   const rootNavigationState = useRootNavigationState();
   const isNavigationReady = Boolean(rootNavigationState?.key);
-  const lastNavRef = useRef(0);
   const pendingNavRef = useRef(null);
   const routerRef = useRef(router);
 
@@ -34,12 +74,7 @@ export default function useGuardedRouter() {
 
     const { method, args } = pendingNavRef.current;
     pendingNavRef.current = null;
-
-    const now = Date.now();
-    if (now - lastNavRef.current < NAVIGATION_GUARD_MS) return;
-    lastNavRef.current = now;
-
-    routerRef.current[method](...args);
+    runNavigation(routerRef.current, method, args);
   }, [isNavigationReady]);
 
   return useMemo(() => {
@@ -50,10 +85,7 @@ export default function useGuardedRouter() {
           return undefined;
         }
 
-        const now = Date.now();
-        if (now - lastNavRef.current < NAVIGATION_GUARD_MS) return undefined;
-        lastNavRef.current = now;
-        return router[method](...args);
+        return runNavigation(router, method, args);
       };
     };
 

@@ -14,15 +14,19 @@ import { Event } from 'src/database/entities/event.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { OrganizerFollow } from 'src/database/entities/organizer-follow.entity';
 import { OrganizerReview } from 'src/database/entities/organizer-review.entity';
-import { ChangePasswordDto } from '../dto/change-password.dto';
-import { CreateReviewDto } from '../dto/create-review.dto';
-import { UpdateReviewDto } from '../dto/update-review.dto';
-import { SocialLoginDto } from '../dto/social-login.dto';
+import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { randomUUID } from 'crypto';
+import { computePublishEligibility } from '../helpers/publish-eligibility.helper';
+import { CreateOrganizerPaymentRequestDto } from '../dto/create-payment-request.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
+import { CreateReviewDto } from '../dto/create-review.dto';
+import { UpdateReviewDto } from '../dto/update-review.dto';
+import { SocialLoginDto } from '../dto/social-login.dto';
+import { isProfileComplete } from 'src/onboarding/helpers/organizer-profile.helper';
 
 @Injectable()
 export class OrganizerService {
@@ -42,6 +46,8 @@ export class OrganizerService {
     private organizerFollowRepository: Repository<OrganizerFollow>,
     @InjectRepository(OrganizerReview)
     private organizerReviewRepository: Repository<OrganizerReview>,
+    @InjectRepository(OrganizerPaymentRequest)
+    private paymentRequestRepository: Repository<OrganizerPaymentRequest>,
     private configService: ConfigService,
     private jwtService: JwtService,
   ) {}
@@ -66,17 +72,19 @@ export class OrganizerService {
       phone: dto.phone || '',
       location: dto.location || '',
       roleId: 2,
-      status: 'pending',
+      status: 'active',
     });
 
     const saved = await this.userRepository.save(organizer);
 
     const organizerProfile = this.organizerProfileRepository.create({
       userId: saved.id,
-      organizationName: '',
+      organizationName: (dto.full_name || '').trim() || '',
       organizationDescription: '',
       website: '',
-      verificationStatus: 'pending',
+      verificationStatus: 'unverified',
+      freePublishUsed: false,
+      paidPublishCredits: 0,
       createdAt: new Date(),
     });
     await this.organizerProfileRepository.save(organizerProfile);
@@ -141,8 +149,10 @@ export class OrganizerService {
 
     return {
       access_token: this.jwtService.sign(payload),
-      organizerStatus: organizerProfile?.verificationStatus ?? 'pending',
+      organizerStatus: organizerProfile?.verificationStatus ?? 'unverified',
       rejectionReason: organizerProfile?.rejectionReason ?? null,
+      freePublishUsed: organizerProfile?.freePublishUsed ?? false,
+      paidPublishCredits: organizerProfile?.paidPublishCredits ?? 0,
     };
   }
 
@@ -204,7 +214,7 @@ export class OrganizerService {
         phone: '',
         location: '',
         roleId: 2,
-        status: 'pending',
+        status: 'active',
       });
       const saved = await this.userRepository.save(created);
       await this.organizerProfileRepository.save(
@@ -213,7 +223,9 @@ export class OrganizerService {
           organizationName: '',
           organizationDescription: '',
           website: '',
-          verificationStatus: 'pending',
+          verificationStatus: 'unverified',
+          freePublishUsed: false,
+          paidPublishCredits: 0,
           createdAt: new Date(),
         }),
       );
@@ -251,8 +263,10 @@ export class OrganizerService {
       email: user.email,
       fullName: user.fullName,
       userStatus: user.status,
-      verificationStatus: organizerProfile?.verificationStatus ?? 'pending',
+      verificationStatus: organizerProfile?.verificationStatus ?? 'unverified',
       rejectionReason: organizerProfile?.rejectionReason ?? null,
+      freePublishUsed: organizerProfile?.freePublishUsed ?? false,
+      paidPublishCredits: organizerProfile?.paidPublishCredits ?? 0,
       organizationName: organizerProfile?.organizationName ?? null,
       organizationDescription: organizerProfile?.organizationDescription ?? null,
       hasDocument: !!document,
@@ -644,6 +658,89 @@ export class OrganizerService {
       updatedAt: r.updatedAt,
       memberName: r.memberName ?? 'Member',
       memberProfileImg: r.memberProfileImg ?? null,
+    }));
+  }
+
+  async getPublishEligibility(userId: number) {
+    const profile = await this.organizerProfileRepository.findOne({
+      where: { userId },
+    });
+    const pendingPayment = await this.paymentRequestRepository.findOne({
+      where: { organizerId: userId, status: 'pending' },
+      order: { id: 'DESC' },
+    });
+    return computePublishEligibility(profile, !!pendingPayment);
+  }
+
+  getPaymentConfig() {
+    return {
+      paymentPhone: this.configService.get<string>('ORGANIZER_PAYMENT_PHONE')?.trim() || '',
+      single: {
+        priceUsd: Number(this.configService.get('PUBLISH_PRICE_SINGLE') ?? 5),
+        credits: 1,
+      },
+      bundle: {
+        priceUsd: Number(this.configService.get('PUBLISH_PRICE_BUNDLE') ?? 20),
+        credits: Number(this.configService.get('PUBLISH_BUNDLE_CREDITS') ?? 5),
+      },
+    };
+  }
+
+  async createPaymentRequest(userId: number, dto: CreateOrganizerPaymentRequestDto) {
+    const profile = await this.organizerProfileRepository.findOne({
+      where: { userId },
+    });
+    if (!profile || profile.verificationStatus !== 'approved') {
+      throw new BadRequestException('Verify your organizer account before purchasing publish credits.');
+    }
+
+    const existingPending = await this.paymentRequestRepository.findOne({
+      where: { organizerId: userId, status: 'pending' },
+    });
+    if (existingPending) {
+      throw new BadRequestException('You already have a payment request awaiting approval.');
+    }
+
+    const config = this.getPaymentConfig();
+    const planConfig = dto.plan === 'bundle' ? config.bundle : config.single;
+
+    const request = this.paymentRequestRepository.create({
+      organizerId: userId,
+      plan: dto.plan,
+      amountUsd: String(planConfig.priceUsd),
+      paymentReference: dto.paymentReference?.trim() || null,
+      note: dto.note?.trim() || null,
+      status: 'pending',
+      creditsGranted: 0,
+      adminNote: null,
+    });
+
+    const saved = await this.paymentRequestRepository.save(request);
+    return {
+      id: saved.id,
+      plan: saved.plan,
+      amountUsd: Number(saved.amountUsd),
+      status: saved.status,
+      message: 'Payment request submitted. We will review it shortly.',
+    };
+  }
+
+  async getMyPaymentRequests(userId: number) {
+    const rows = await this.paymentRequestRepository.find({
+      where: { organizerId: userId },
+      order: { id: 'DESC' },
+      take: 10,
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      plan: row.plan,
+      amountUsd: Number(row.amountUsd),
+      paymentReference: row.paymentReference,
+      note: row.note,
+      status: row.status,
+      creditsGranted: row.creditsGranted,
+      adminNote: row.adminNote,
+      createdAt: row.createdAt,
     }));
   }
 

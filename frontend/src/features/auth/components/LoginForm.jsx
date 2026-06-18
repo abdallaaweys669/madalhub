@@ -102,6 +102,10 @@ export default function LoginForm() {
         style={styles.submitButton}
       />
 
+      <Pressable onPress={() => router.push('/(auth)/login-otp')} style={styles.altLinkRow}>
+        <Text style={styles.altLink}>Log in with email code instead</Text>
+      </Pressable>
+
       <Pressable onPress={() => router.push('/(auth)/signup')} style={styles.signupRow}>
         <Text style={styles.signupText}>
           Don't have an account?{' '}
@@ -155,7 +159,16 @@ const styles = StyleSheet.create({
     fontFamily: FONT_JAKARTA_BOLD,
   },
   submitButton: {
-    marginBottom: 18,
+    marginBottom: 12,
+  },
+  altLinkRow: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  altLink: {
+    fontFamily: FONT_JAKARTA_BOLD,
+    color: COLORS.primary,
+    fontSize: 14,
   },
   signupRow: {
     alignItems: 'center',

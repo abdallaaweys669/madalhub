@@ -20,13 +20,13 @@ function buildCalendarEventFields(event) {
 
   const details = [
     event?.description?.trim(),
-    event?.id ? `Open in Kulan: kulanapp://events/${event.id}` : '',
+    event?.id ? `Open in MadalHub: madalhub://events/${event.id}` : '',
   ]
     .filter(Boolean)
     .join('\n\n');
 
   return {
-    text: event?.title || 'Kulan Event',
+    text: event?.title || 'MadalHub Event',
     dates: `${start}/${end}`,
     details,
     location: [event?.locationName, event?.locationAddress, event?.city].filter(Boolean).join(', '),
@@ -36,7 +36,7 @@ function buildCalendarEventFields(event) {
 export function buildTicketQrValue(eventId, userId) {
   const eid = String(eventId || '').trim();
   const uid = String(userId || '').trim();
-  return `kulanapp://events/${eid}?ticket=${uid}`;
+  return `madalhub://events/${eid}?ticket=${uid}`;
 }
 
 /** Human-readable ticket ID shown on the pass (e.g. KUL-2026-A1B2-C3D4). */
@@ -150,7 +150,7 @@ export async function shareEventRegistration(event, memberName) {
       : [event?.locationName, event?.city].filter(Boolean).join(', ');
 
   const message = [
-    `I'm going to ${event?.title || 'an event'} on Kulan!`,
+    `I'm going to ${event?.title || 'an event'} on MadalHub!`,
     when ? `When: ${when}` : '',
     where ? `Where: ${where}` : '',
     memberName ? `— ${memberName}` : '',
@@ -161,8 +161,8 @@ export async function shareEventRegistration(event, memberName) {
   try {
     await Share.share({
       message,
-      title: event?.title || 'Kulan Event',
-      ...(Platform.OS === 'ios' ? { url: `kulanapp://events/${event?.id}` } : {}),
+      title: event?.title || 'MadalHub Event',
+      ...(Platform.OS === 'ios' ? { url: `madalhub://events/${event?.id}` } : {}),
     });
     return true;
   } catch {

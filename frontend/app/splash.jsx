@@ -4,12 +4,11 @@ import { useRootNavigationState } from "expo-router";
 import useGuardedRouter from "@/hooks/useGuardedRouter";
 import * as NavigationBar from "expo-navigation-bar";
 import useAuth from "@/auth/useAuth";
-import organizerApi from "@/api/organizer";
-import { isOrganizerSubmissionReadyForReview } from "@/utils/organizerVerification";
 import KulanLogo from "../src/assets/kulan_logo.svg";
 
 const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
+const ROLE_ADMIN = 3;
 
 const BRAND_ORANGE = "#FF7B3F";
 /** Expanding circle — was peach (#FFEFE5); white when fully expanded like the hold frame. */
@@ -19,7 +18,7 @@ export default function Splash() {
   const router = useGuardedRouter();
   const rootNavigationState = useRootNavigationState();
   const isNavigationReady = Boolean(rootNavigationState?.key);
-  const { user, profileCompleted, isHydrated, userRole, organizerStatus } = useAuth();
+  const { user, profileCompleted, isHydrated, userRole } = useAuth();
 
   const circleScale = useRef(new Animated.Value(0)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
@@ -62,27 +61,13 @@ export default function Splash() {
         return;
       }
 
+      if (userRole === ROLE_ADMIN) {
+        go('/(admin)/organizers');
+        return;
+      }
+
       if (userRole === ROLE_ORGANIZER) {
-        if (organizerStatus === 'approved') {
-          go("/(organizer)/dashboard");
-        } else if (organizerStatus === 'rejected') {
-          go("/(organizer-status)/verification-failed");
-        } else {
-          (async () => {
-            try {
-              const detail = await organizerApi.getOrganizerStatus();
-              if (cancelled) return;
-              const ready = isOrganizerSubmissionReadyForReview(detail);
-              go(
-                ready
-                  ? "/(organizer-status)/pending-verification"
-                  : "/(organizer-status)/resubmit-verification"
-              );
-            } catch {
-              go("/(organizer-status)/resubmit-verification");
-            }
-          })();
-        }
+        go('/(organizer)/dashboard');
         return;
       }
 
@@ -133,7 +118,6 @@ export default function Splash() {
     router,
     user,
     userRole,
-    organizerStatus,
     circleScale,
     logoOpacity,
   ]);

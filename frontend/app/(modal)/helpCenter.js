@@ -19,7 +19,7 @@ export default function HelpCenterScreen() {
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: 'Help Center' }} />
       <Text style={[styles.lead, { color: colors.textSecondary }]}>
-        Quick answers for members using Kulan to discover events, save favourites, and stay organised.
+        Quick answers for members using MadalHub to discover events, save favourites, and stay organised.
       </Text>
 
       <Block title="Finding events" colors={colors}>

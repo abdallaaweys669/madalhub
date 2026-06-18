@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, Animated, ActivityIndicator, ScrollView } from "react-native";
 import { useFonts } from "expo-font";
 import { Ionicons } from "@expo/vector-icons";
@@ -48,11 +48,17 @@ function BenefitRow({ icon, title, desc }) {
 
 export default function WelcomeIntro() {
   const router = useGuardedRouter();
-  const [fontsLoaded] = useFonts(authFontAssets);
+  const [fontsLoaded, fontsError] = useFonts(authFontAssets);
 
   const { fade, slideUp, heroFloat } = useOnboardingAnimation();
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    if (fontsError) {
+      console.warn("[Onboarding] Failed to load custom fonts, using fallback fonts.");
+    }
+  }, [fontsError]);
+
+  if (!fontsLoaded && !fontsError) {
     return (
       <View style={[styles.container, styles.loading]}>
         <ActivityIndicator color={colors.primary} />

@@ -17,13 +17,19 @@ export class OrganizerProfile {
   @Column({
     name: 'verification_status',
     type: 'enum',
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending',
+    enum: ['unverified', 'pending', 'approved', 'rejected'],
+    default: 'unverified',
   })
   verificationStatus!: string;
 
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason!: string | null;
+
+  @Column({ name: 'free_publish_used', type: 'boolean', default: false })
+  freePublishUsed!: boolean;
+
+  @Column({ name: 'paid_publish_credits', type: 'int', default: 0 })
+  paidPublishCredits!: number;
 
   @Column({ name: 'created_at' })
   createdAt!: Date;

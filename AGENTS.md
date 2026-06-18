@@ -1,11 +1,11 @@
-# AGENTS.md — Kulan
+# AGENTS.md — MadalHub
 
 Read this first. It captures the conventions and gotchas that aren't obvious from
 the code alone, so you can make changes that match how this project already works.
 
-## What Kulan is
+## What MadalHub is
 
-Kulan is an events app with two user roles:
+MadalHub is an events app with two user roles:
 
 - **Member** — finds, saves, and joins local events.
 - **Organizer** — creates and manages events (with a verification flow before going live).
@@ -85,6 +85,9 @@ router.push('/(auth)/signup');
   `AuthCheckbox`, `SignupLegalBlock` (18+ / Terms & Privacy), `TextField`, `PasswordField`.
 - Inputs are white (`#FFFFFF`) with a subtle orange border so they read clearly on the
   cream background.
+- For Clerk flows, use `getClerkSessionToken` (`src/features/auth/hooks/getClerkSessionToken.js`)
+  after `setActive` / OTP verification instead of a one-shot `getToken()` call (avoids flaky
+  "missing session token" errors right after auth completes).
 
 ### Fonts
 - Loaded via `expo-font` using `authFontAssets` from `src/features/auth/theme/authTypography.js`.
@@ -94,7 +97,7 @@ router.push('/(auth)/signup');
 ### Splash (`app/splash.jsx`)
 - Original animation: orange canvas (`#FF7B3F`), logo fades in, white circle expands to fill the screen.
 - Expanding circle is **white** (`#FFFFFF`), not peach (`#FFEFE5`), so the hold frame matches a white app chrome.
-- Orange Kulan wordmark SVG on top (default asset colors).
+- Orange MadalHub wordmark SVG on top (asset: `kulan_logo.svg`, default colors).
 
 ### Warnings
 - Known harmless warnings (Reanimated reduced-motion, `setLayoutAnimationEnabledExperimental`)
@@ -111,6 +114,46 @@ router.push('/(auth)/signup');
   (`@MinLength(8)` in `create-member.dto.ts` and `create-organizer.dto.ts`).
 - A `401 UnauthorizedException` on protected routes for unauthenticated requests is
   **expected** behavior, not a crash.
+- **Member email OTP** (signup + passwordless login): Resend via `RESEND_API_KEY` and
+  `EMAIL_FROM` in `backend/.env` (see `.env.example`). Without a key, OTP is logged to
+  the backend console in dev. Dev sender `onboarding@resend.dev` only delivers to your
+  Resend account email until a domain is verified.
+
+## Organizer progressive verification and paid publish
+
+Organizers get **immediate dashboard access** after signup (`verificationStatus = unverified`,
+`user.status = active`). They can create and edit **drafts** anytime; **publish** is gated.
+
+| Stage | Can do | Cannot do |
+| --- | --- | --- |
+| `unverified` | Dashboard, drafts | Publish live events |
+| `pending` | Same + see “under review” banner | Publish |
+| `approved`, free unused | Publish **1 event free** | 2nd publish without payment/credits |
+| `approved`, no credits | Drafts, submit payment request | Publish |
+| Payment approved | Publish (uses 1 credit) | Publish when credits = 0 |
+
+**Frontend routing:** `getOrganizerEntryHref()` in `src/navigation/organizerGate.js` always returns
+`/(organizer)/dashboard`. Splash and login use this — do not redirect new organizers to
+`(organizer-status)` on signup.
+
+**Publish flow:** Before publish, call `GET /organizer/publish-eligibility` and branch via
+`resolveOrganizerPublishGate()` in `src/utils/organizerPublish.js` (verification wizard,
+pending screen, or `/(organizer)/pay-to-publish`). Save draft never checks eligibility.
+
+**Pricing (env):** `ORGANIZER_PAYMENT_PHONE`, `PUBLISH_PRICE_SINGLE=5`, `PUBLISH_PRICE_BUNDLE=20`,
+`PUBLISH_BUNDLE_CREDITS=5`. Admin approves payment requests via `(admin)/payments` (role `3` JWT).
+
+**Admin dashboard:** Expo route group `(admin)/` — login with role-3 account (`backend/scripts/create-admin.md`).
+Screens: pending organizer verification + pending payment approvals.
+
+**Backend publish errors:** Structured `ForbiddenException` body with `code`:
+`VERIFICATION_REQUIRED`, `VERIFICATION_PENDING`, `VERIFICATION_REJECTED`, `PAYMENT_REQUIRED`.
+
+**Manual QA checklist:**
+1. Organizer signup → lands on dashboard → create draft (no publish).
+2. Tap Publish → verification wizard → admin approves identity → first event goes live free.
+3. Second publish → pay-to-publish screen → submit payment → admin approves → second event live.
+4. Bundle purchase → admin grants 5 credits → publish multiple events.
 
 ## Working agreements for agents
 - Keep changes consistent with the patterns above; prefer reusing the shared auth

@@ -1,4 +1,6 @@
-# Kulan Frontend
+# MadalHub Frontend
+
+Expo / React Native app for MadalHub members and organizers.
 
 ## Reliable Auth On Any Wi-Fi (Dev)
 

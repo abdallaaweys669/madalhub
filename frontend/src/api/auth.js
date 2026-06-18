@@ -8,16 +8,15 @@ const getNetworkErrorMessage = (error) => {
   return 'Network error. Check your internet connection and API tunnel URL.';
 };
 
+const mapTokenResponse = (data) => ({
+  token: data.access_token,
+  onboardingCompleted: data.profileCompleted,
+});
+
 export const login = async (credentials) => {
   try {
     const response = await apiClient.post('/auth/login', credentials);
-    const data = response.data;
-    const token = data.access_token;
-
-    return {
-      token,
-      onboardingCompleted: data.profileCompleted,
-    };
+    return mapTokenResponse(response.data);
   } catch (error) {
     if (error.response) {
       const message = error.response.data?.message || 'Login failed';
@@ -27,6 +26,78 @@ export const login = async (credentials) => {
   }
 };
 
+export const sendOtp = async ({ email, purpose }) => {
+  try {
+    const response = await apiClient.post('/auth/otp/send', { email, purpose });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = error.response.data?.message || 'Could not send verification code';
+      const err = new Error(message);
+      err.response = error.response;
+      throw err;
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const verifyOtpLogin = async ({ email, code }) => {
+  try {
+    const response = await apiClient.post('/auth/otp/verify', {
+      email,
+      code,
+      purpose: 'login',
+    });
+    return mapTokenResponse(response.data);
+  } catch (error) {
+    if (error.response) {
+      const message = error.response.data?.message || 'Verification failed';
+      const err = new Error(message);
+      err.response = error.response;
+      throw err;
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const verifyOtpSignup = async (payload) => {
+  try {
+    const response = await apiClient.post('/auth/otp/verify-signup', payload);
+    return mapTokenResponse(response.data);
+  } catch (error) {
+    if (error.response) {
+      const data = error.response.data;
+      if (Array.isArray(data?.errors)) {
+        throw { fieldErrors: data.errors };
+      }
+      const message = data?.message || 'Verification failed';
+      const err = new Error(message);
+      err.response = error.response;
+      throw err;
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const clerkExchange = async ({ token, role = 'member', fullName, password }) => {
+  try {
+    const response = await apiClient.post('/auth/clerk-exchange', {
+      token,
+      role,
+      ...(fullName && { fullName }),
+      ...(password && { password }),
+    });
+    return mapTokenResponse(response.data);
+  } catch (error) {
+    if (error.response) {
+      const message = error.response.data?.message || 'Authentication failed';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+/** @deprecated Prefer verifyOtpSignup after email verification step */
 export const register = async (userInfo) => {
   try {
     await apiClient.post('/member/register', userInfo);
@@ -66,5 +137,9 @@ export const getMe = async () => {
 export default {
   register,
   login,
+  sendOtp,
+  verifyOtpLogin,
+  verifyOtpSignup,
+  clerkExchange,
   getMe,
 };

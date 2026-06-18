@@ -49,7 +49,7 @@ export default function WelcomeIntro() {
           { opacity: fade, transform: [{ translateY: slideUp }] },
         ]}
       >
-        Welcome to Kulan
+        Welcome to MadalHub
       </Animated.Text>
 
       {/* SUBTITLE */}

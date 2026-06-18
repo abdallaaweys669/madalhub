@@ -1,10 +1,9 @@
 /**
- * Matches backend admin approval rules: profile complete (name + description) + one document.
  * @param {{ verificationStatus?: string, organizationName?: string | null, organizationDescription?: string | null, hasDocument?: boolean } | null | undefined} status
  */
 export function isOrganizerSubmissionReadyForReview(status) {
   if (!status || status.verificationStatus !== 'pending') {
-    return true;
+    return false;
   }
   const name = typeof status.organizationName === 'string' ? status.organizationName.trim() : '';
   const desc =

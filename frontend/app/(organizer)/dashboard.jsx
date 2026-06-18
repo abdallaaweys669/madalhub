@@ -18,6 +18,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import useAuth from '@/auth/useAuth';
 import organizerApi from '@/api/organizer';
 import { useThemeColors } from '@/theme';
+import {
+  attemptOrganizerPublish,
+  getOrganizerBannerPressHref,
+  getOrganizerBannerStyles,
+  getOrganizerDashboardBanner,
+} from '@/utils/organizerPublish';
 import KulanLogo from '@/assets/kulan_logo.svg';
 import NoEventsIllustration from '@/assets/no events.svg';
 import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
@@ -112,6 +118,7 @@ export default function OrganizerDashboardScreen() {
   const [headerProfileImg, setHeaderProfileImg] = useState('');
   const [headerFullName, setHeaderFullName] = useState('');
   const [verificationStatus, setVerificationStatus] = useState('');
+  const [publishEligibility, setPublishEligibility] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('All');
@@ -122,15 +129,17 @@ export default function OrganizerDashboardScreen() {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const [eventsData, profileData] = await Promise.all([
+      const [eventsData, profileData, eligibilityData] = await Promise.all([
         organizerApi.getOrganizerEvents(),
         organizerApi.getProfileDashboard().catch(() => null),
+        organizerApi.getPublishEligibility().catch(() => null),
       ]);
       setEvents(eventsData);
       setOrganizationName((profileData?.organizationName ?? '').trim());
       setHeaderFullName((profileData?.fullName ?? '').trim());
       setHeaderProfileImg(resolveApiAssetUrl(profileData?.profileImg) || '');
-      setVerificationStatus((profileData?.verificationStatus ?? '').trim().toLowerCase());
+      setVerificationStatus((profileData?.verificationStatus ?? eligibilityData?.verificationStatus ?? '').trim().toLowerCase());
+      setPublishEligibility(eligibilityData);
     } catch (error) {
       console.error('Failed to fetch organizer events:', error);
     }
@@ -288,6 +297,8 @@ export default function OrganizerDashboardScreen() {
     organizationName || headerFullName || user?.organizationName || user?.fullName || 'Organizer';
   const headerInitials = initials(organizationName || headerFullName || user?.fullName);
   const isVerifiedOrganizer = verificationStatus === 'approved';
+  const statusBanner = getOrganizerDashboardBanner(publishEligibility, verificationStatus);
+  const bannerStyles = statusBanner ? getOrganizerBannerStyles(statusBanner.tone) : null;
   const headerSubtitle = loading
     ? 'Loading your dashboard...'
     : hasEvents
@@ -440,6 +451,29 @@ export default function OrganizerDashboardScreen() {
               <Ionicons name="chevron-forward" size={18} color="#64748B" />
             </View>
           </Pressable>
+
+          {statusBanner ? (
+            <Pressable
+              onPress={() => router.push(getOrganizerBannerPressHref(publishEligibility, verificationStatus))}
+              style={({ pressed }) => ({
+                marginTop: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: bannerStyles.border,
+                backgroundColor: pressed ? bannerStyles.bg : bannerStyles.bg,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              })}
+            >
+              <Text style={{ color: bannerStyles.fg, fontSize: 14, fontWeight: '800', flex: 1, paddingRight: 8 }}>
+                {statusBanner.text}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={bannerStyles.fg} />
+            </Pressable>
+          ) : null}
 
           <Text style={{ marginTop: 16, color: '#0F172A', fontSize: 24, fontWeight: '900', letterSpacing: -0.5 }}>
             Good morning, {greetingName}
@@ -913,10 +947,12 @@ export default function OrganizerDashboardScreen() {
                       <Pressable
                         onPress={async () => {
                           try {
-                            await organizerApi.publishEvent(event.id);
-                            await fetchEvents();
+                            const published = await attemptOrganizerPublish(router, async () => {
+                              await organizerApi.publishEvent(event.id);
+                            });
+                            if (published) await fetchEvents();
                           } catch (error) {
-                            console.error('Publish event failed:', error);
+                            Alert.alert('Publish failed', error?.message || 'Could not publish event');
                           }
                         }}
                         style={{

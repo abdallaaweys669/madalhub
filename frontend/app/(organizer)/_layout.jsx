@@ -2,12 +2,11 @@ import React from 'react';
 import { Redirect, Stack } from 'expo-router';
 
 import useAuth from '@/auth/useAuth';
-import { getOrganizerEntryHref } from '@/navigation/organizerGate';
 
 const ROLE_ORGANIZER = 2;
 
 export default function OrganizerLayout() {
-  const { isHydrated, userRole, organizerStatus } = useAuth();
+  const { isHydrated, userRole } = useAuth();
 
   if (!isHydrated) {
     return null;
@@ -15,10 +14,6 @@ export default function OrganizerLayout() {
 
   if (userRole !== ROLE_ORGANIZER) {
     return <Redirect href="/(tabs)" />;
-  }
-
-  if (organizerStatus !== 'approved') {
-    return <Redirect href={getOrganizerEntryHref(organizerStatus)} />;
   }
 
   return (
@@ -30,6 +25,7 @@ export default function OrganizerLayout() {
       <Stack.Screen name="edit-profile" />
       <Stack.Screen name="create-event" />
       <Stack.Screen name="edit-event" />
+      <Stack.Screen name="pay-to-publish" />
     </Stack>
   );
 }

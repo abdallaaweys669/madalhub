@@ -121,11 +121,7 @@ describe('OnboardingService', () => {
           rejectionReason: null,
         }),
       );
-      expect(userRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: 'pending',
-        }),
-      );
+      expect(userRepository.save).not.toHaveBeenCalled();
     });
 
     it('sets profile and user back to pending when creating first doc after rejection state', async () => {
@@ -174,9 +170,7 @@ describe('OnboardingService', () => {
           rejectionReason: null,
         }),
       );
-      expect(userRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'pending' }),
-      );
+      expect(userRepository.save).not.toHaveBeenCalled();
     });
 
     it('does not change profile when verification was already pending', async () => {

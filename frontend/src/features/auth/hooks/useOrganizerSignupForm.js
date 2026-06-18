@@ -4,7 +4,7 @@ import useGuardedRouter from '@/hooks/useGuardedRouter';
 import organizerApi from '@/api/organizer';
 import useAuth from '@/auth/useAuth';
 import useAuthSignupForm from '@/features/auth/hooks/useAuthSignupForm';
-import { isOrganizerSubmissionReadyForReview } from '@/utils/organizerVerification';
+import { getOrganizerEntryHref } from '@/navigation/organizerGate';
 import {
   getSignupPayload,
   inferFieldErrorsFromMessage,
@@ -18,23 +18,6 @@ export default function useOrganizerSignupForm() {
   const [formError, setFormError] = useState('');
 
   const form = useAuthSignupForm('organizer');
-
-  const routeOrganizerAfterLogin = async (result) => {
-    await loginAsOrganizer(result.token, result.organizerStatus, result.rejectionReason);
-    if (result.organizerStatus === 'approved') {
-      router.replace('/(organizer)/dashboard');
-      return;
-    }
-    if (result.organizerStatus === 'rejected') {
-      router.replace('/(organizer-status)/verification-failed');
-      return;
-    }
-    const detail = await organizerApi.getOrganizerStatus();
-    const ready = isOrganizerSubmissionReadyForReview(detail);
-    router.replace(
-      ready ? '/(organizer-status)/pending-verification' : '/(organizer-status)/resubmit-verification',
-    );
-  };
 
   const onSubmit = async () => {
     form.markAllTouched();
@@ -53,7 +36,8 @@ export default function useOrganizerSignupForm() {
         password: payload.password,
       });
 
-      await routeOrganizerAfterLogin(result);
+      await loginAsOrganizer(result.token, result.organizerStatus, result.rejectionReason);
+      router.replace(getOrganizerEntryHref(result.organizerStatus));
     } catch (error) {
       const message = error?.message || 'Registration failed. Please try again.';
       const inferredErrors = inferFieldErrorsFromMessage(message);
@@ -79,10 +63,7 @@ export default function useOrganizerSignupForm() {
     onBlur: form.onBlur,
     onSubmit,
     formError,
-    routeOrganizerAfterLogin,
     organizerEmail: form.values.email,
     organizerName: normalizePersonName(form.values.organizationName),
-    setFormError,
-    clearServerErrors: form.clearServerErrors,
   };
 }

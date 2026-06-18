@@ -12,7 +12,7 @@ import TextField from '@/features/auth/components/TextField';
 import PasswordField from '@/features/auth/components/PasswordField';
 import useAuth from '@/auth/useAuth';
 import organizerApi from '@/api/organizer';
-import { isOrganizerSubmissionReadyForReview } from '@/utils/organizerVerification';
+import { getOrganizerEntryHref } from '@/navigation/organizerGate';
 import {
   getInvalidCredentialsErrors,
   getLoginErrors,
@@ -56,21 +56,7 @@ export default function OrganizerLoginScreen() {
 
   const routeOrganizerAfterLogin = async (result) => {
     await loginAsOrganizer(result.token, result.organizerStatus, result.rejectionReason);
-    if (result.organizerStatus === 'approved') {
-      router.replace('/(organizer)/dashboard');
-      return;
-    }
-    if (result.organizerStatus === 'rejected') {
-      router.replace('/(organizer-status)/verification-failed');
-      return;
-    }
-    const detail = await organizerApi.getOrganizerStatus();
-    const ready = isOrganizerSubmissionReadyForReview(detail);
-    router.replace(
-      ready
-        ? '/(organizer-status)/pending-verification'
-        : '/(organizer-status)/resubmit-verification',
-    );
+    router.replace(getOrganizerEntryHref(result.organizerStatus));
   };
 
   const onSubmit = async () => {

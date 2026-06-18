@@ -28,6 +28,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="(organizer)" options={{ headerShown: false }} />
                 <Stack.Screen name="(organizer-status)" options={{ headerShown: false }} />
+                <Stack.Screen name="(admin)" options={{ headerShown: false }} />
                 <Stack.Screen name="events/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="events/[id]/going" options={{ headerShown: false }} />
                 <Stack.Screen name="events/[id]/ticket" options={{ headerShown: false }} />

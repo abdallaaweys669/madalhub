@@ -41,8 +41,10 @@ export const organizerLogin = async (credentials) => {
     const data = response.data;
     return {
       token: data.access_token,
-      organizerStatus: data.organizerStatus || 'pending',
+      organizerStatus: data.organizerStatus || 'unverified',
       rejectionReason: data.rejectionReason || null,
+      freePublishUsed: Boolean(data.freePublishUsed),
+      paidPublishCredits: Number(data.paidPublishCredits ?? 0),
     };
   } catch (error) {
     if (error.response) {
@@ -65,12 +67,70 @@ export const organizerSocialLogin = async ({ provider, idToken, accessToken, ful
     const data = response.data;
     return {
       token: data.access_token,
-      organizerStatus: data.organizerStatus || 'pending',
+      organizerStatus: data.organizerStatus || 'unverified',
       rejectionReason: data.rejectionReason || null,
+      freePublishUsed: Boolean(data.freePublishUsed),
+      paidPublishCredits: Number(data.paidPublishCredits ?? 0),
     };
   } catch (error) {
     if (error.response) {
       const message = extractApiMessage(error) || 'Organizer social login failed';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const getPublishEligibility = async () => {
+  try {
+    const response = await apiClient.get('/organizer/publish-eligibility');
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to load publish eligibility';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const getPaymentConfig = async () => {
+  try {
+    const response = await apiClient.get('/organizer/payment-config');
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to load payment info';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const createPaymentRequest = async ({ plan, paymentReference, note }) => {
+  try {
+    const response = await apiClient.post('/organizer/payment-requests', {
+      plan,
+      paymentReference,
+      note,
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to submit payment request';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const getMyPaymentRequests = async () => {
+  try {
+    const response = await apiClient.get('/organizer/payment-requests');
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to load payment requests';
       throw new Error(message);
     }
     throw new Error(getNetworkErrorMessage(error));
@@ -287,6 +347,10 @@ export default {
   organizerRegister,
   organizerLogin,
   organizerSocialLogin,
+  getPublishEligibility,
+  getPaymentConfig,
+  createPaymentRequest,
+  getMyPaymentRequests,
   getOrganizerStatus,
   updateOrganizerContact,
   getOrganizerEvents,

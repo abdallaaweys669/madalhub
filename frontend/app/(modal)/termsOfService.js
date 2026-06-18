@@ -17,15 +17,15 @@ export default function TermsOfServiceScreen() {
   return (
     <ScrollView style={[styles.screen, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: 'Terms of Service' }} />
-      <Text style={[styles.updated, { color: colors.textSecondary }]}>Last updated: May 2026 · Kulan member app</Text>
+      <Text style={[styles.updated, { color: colors.textSecondary }]}>Last updated: May 2026 · MadalHub member app</Text>
       <Text style={[styles.intro, { color: colors.text }]}>
-        These terms explain how you may use Kulan as an attendee. By creating an account or using the app, you agree to
+        These terms explain how you may use MadalHub as an attendee. By creating an account or using the app, you agree to
         them. If you do not agree, please do not use the service.
       </Text>
 
       <H colors={colors}>1. The service</H>
       <P colors={colors}>
-        Kulan helps you discover events, save favourites, and manage your participation. Features may change as we
+        MadalHub helps you discover events, save favourites, and manage your participation. Features may change as we
         improve the product. We try to keep event information accurate, but organizers are responsible for their own
         listings.
       </P>
@@ -39,13 +39,13 @@ export default function TermsOfServiceScreen() {
       <H colors={colors}>3. Acceptable use</H>
       <P colors={colors}>
         Do not misuse the app: no harassment, hate speech, spam, scraping that overloads our systems, or attempts to
-        access others accounts or data. Do not use Kulan for illegal events or fraudulent ticketing.
+        access others accounts or data. Do not use MadalHub for illegal events or fraudulent ticketing.
       </P>
 
       <H colors={colors}>4. Events & third parties</H>
       <P colors={colors}>
         Events are created by independent organizers. Your attendance is between you and the organizer (including
-        safety, refunds, and venue rules). Kulan is not the seller of tickets unless clearly stated otherwise in the
+        safety, refunds, and venue rules). MadalHub is not the seller of tickets unless clearly stated otherwise in the
         product.
       </P>
 

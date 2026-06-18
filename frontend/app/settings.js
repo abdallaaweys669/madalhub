@@ -1,13 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, StatusBar, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Stack, useFocusEffect } from 'expo-router';
+import { Redirect, Stack, useFocusEffect } from 'expo-router';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
 import useAuth from '@/auth/useAuth';
 import authApi from '@/api/auth';
 import { updateMemberMe } from '@/api/member';
 import { useThemeColors } from '@/theme';
 import { normalizeUser, coerceProfileVisibilityBool } from '@/auth/normalizeUser';
+import SignOutButton from '@/components/auth/SignOutButton';
 
 const SettingItem = ({ icon, name, isSwitch, value, onValueChange, onPress, colors }) => (
   <TouchableOpacity onPress={onPress} disabled={!onPress} style={[styles.item, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
@@ -31,7 +32,7 @@ const SettingItem = ({ icon, name, isSwitch, value, onValueChange, onPress, colo
 const SettingsScreen = () => {
   const router = useGuardedRouter();
   const colors = useThemeColors();
-  const { user, setUser } = useAuth();
+  const { user, setUser, isLoggedIn, isHydrated } = useAuth();
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [isUpdatingPrivacy, setIsUpdatingPrivacy] = useState(false);
@@ -92,10 +93,14 @@ const SettingsScreen = () => {
     }
   };
 
+  if (isHydrated && !isLoggedIn) {
+    return <Redirect href="/(auth)/welcome" />;
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.backgroundMuted }]}>
       <Stack.Screen options={{ title: 'Settings', headerBackTitle: 'Profile' }} />
-      <ScrollView>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Account</Text>
           <SettingItem icon="edit-3" name="Edit Profile" colors={colors} onPress={() => router.push('/(modal)/editProfile')} />
@@ -199,9 +204,7 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.card }]}>
-            <Text style={styles.logoutButtonText}>Log Out</Text>
-          </TouchableOpacity>
+          <SignOutButton />
         </View>
       </ScrollView>
     </View>
@@ -212,6 +215,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: StatusBar.currentHeight || 0,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   section: {
     marginTop: 20,
@@ -314,16 +320,6 @@ const styles = StyleSheet.create({
   anonymousPreviewLabel: {
     fontSize: 11,
     marginTop: 1,
-  },
-  logoutButton: {
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  logoutButtonText: {
-    color: '#ff3b30',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
 

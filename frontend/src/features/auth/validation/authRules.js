@@ -245,3 +245,26 @@ export const getSignupPayload = (values, variant = 'member') => {
     password: values.password,
   };
 };
+
+export const getOtpCodeError = (value) => {
+  const code = String(value || '').trim();
+  if (!code) return 'Enter the 6-digit code from your email.';
+  if (!/^\d{6}$/.test(code)) return 'Code must be exactly 6 digits.';
+  return '';
+};
+
+export const parseOtpApiMessage = (error) => {
+  const status = error?.response?.status;
+  const message =
+    error?.response?.data?.message ||
+    error?.message ||
+    'Something went wrong. Please try again.';
+
+  if (status === 429) {
+    return message;
+  }
+  if (status === 401) {
+    return message;
+  }
+  return message;
+};

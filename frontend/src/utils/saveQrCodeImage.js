@@ -75,7 +75,7 @@ export async function saveQrCodeImage(dataUrl) {
   }
 
   const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-  const fileUri = `${FileSystem.cacheDirectory}kulan-ticket-qr-${Date.now()}.png`;
+  const fileUri = `${FileSystem.cacheDirectory}madalhub-ticket-qr-${Date.now()}.png`;
 
   await FileSystem.writeAsStringAsync(fileUri, base64, {
     encoding: FileSystem.EncodingType.Base64,

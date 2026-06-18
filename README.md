@@ -1,6 +1,8 @@
-# Kulan Platform
+# MadalHub
 
-Monorepo for the Kulan events app.
+**MadalHub** is the events app (members discover/join events; organizers create and manage them).
+
+This repository is hosted at [github.com/abdallaaweys669/Kulan-platform](https://github.com/abdallaaweys669/Kulan-platform) — the GitHub repo name is legacy; the product branding is **MadalHub**.
 
 | Folder | Stack | Purpose |
 | --- | --- | --- |

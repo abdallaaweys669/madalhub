@@ -168,7 +168,7 @@ export default function PublicOrganizerProfileScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `${displayName} on Kulan`,
+        message: `${displayName} on MadalHub`,
       });
     } catch {
       /* ignore */
