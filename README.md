@@ -2,7 +2,7 @@
 
 **MadalHub** is the events app (members discover/join events; organizers create and manage them).
 
-This repository is hosted at [github.com/abdallaaweys669/Kulan-platform](https://github.com/abdallaaweys669/Kulan-platform) — the GitHub repo name is legacy; the product branding is **MadalHub**.
+This repository: [github.com/abdallaaweys669/madalhub](https://github.com/abdallaaweys669/madalhub)
 
 | Folder | Stack | Purpose |
 | --- | --- | --- |

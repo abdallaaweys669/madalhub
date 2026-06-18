@@ -9,7 +9,7 @@
 The following was completed **before** this prompt runs. **Do not repeat** unless you verify it is missing:
 
 1. **Git**
-   - Latest work was **committed and pushed** to GitHub on branch **`main`** (remote: `origin`, repo **Kulan-platform**).
+   - Latest work was **committed and pushed** to GitHub on branch **`main`** (remote: `origin`, repo **madalhub**).
    - Commit message included: *WYSIWYG create-event, organizer dashboard polish, event detail & API*, plus backend migrations for program roster / format / photo URL.
 
 2. **Database migrations (existing codebase — already applied on dev DB)**
