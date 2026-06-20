@@ -12,9 +12,12 @@ import { OrganizerFollow } from 'src/database/entities/organizer-follow.entity';
 import { OrganizerReview } from 'src/database/entities/organizer-review.entity';
 import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
+    ConfigModule,
+    NotificationsModule,
     TypeOrmModule.forFeature([
       User,
       OrganizerProfile,

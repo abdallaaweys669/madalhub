@@ -8,6 +8,7 @@ type CoverPlaceholderProps = {
   borderRadius?: number;
   style?: StyleProp<ViewStyle>;
   letterSize?: number;
+  showLetter?: boolean;
 };
 
 export function CoverPlaceholder({
@@ -16,13 +17,16 @@ export function CoverPlaceholder({
   borderRadius = 0,
   style,
   letterSize = 44,
+  showLetter = true,
 }: CoverPlaceholderProps) {
   const initial = letter.trim().slice(0, 1).toUpperCase() || '?';
 
   return (
     <View style={[styles.wrap, { borderRadius }, style]}>
       <LinearGradient colors={[...gradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.gradient, { borderRadius }]}>
-        <Text style={[styles.letter, { fontSize: letterSize }]}>{initial}</Text>
+        {showLetter ? (
+          <Text style={[styles.letter, { fontSize: letterSize }]}>{initial}</Text>
+        ) : null}
       </LinearGradient>
     </View>
   );

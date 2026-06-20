@@ -72,26 +72,33 @@ function SpeakerCard({ person, onPress }) {
   );
 }
 
-const FeaturedSpeakersCarousel = ({ roster, onSpeakerPress }) => {
-  if (!roster?.length) return null;
+const FeaturedSpeakersCarousel = ({ roster, onSpeakerPress, showTitle = true, ListFooterComponent = null }) => {
+  if (!roster?.length && !ListFooterComponent) return null;
+
+  const cards = (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.scrollContent}
+      decelerationRate="fast"
+    >
+      {roster.map((person, index) => (
+        <SpeakerCard
+          key={person.id ?? `${person.displayName}-${index}`}
+          person={person}
+          onPress={onSpeakerPress ? () => onSpeakerPress(person, index) : undefined}
+        />
+      ))}
+      {ListFooterComponent}
+    </ScrollView>
+  );
+
+  if (!showTitle) return <View style={styles.section}>{cards}</View>;
 
   return (
     <View style={styles.section}>
       <Text style={detailStyles.sectionTitle}>Featured Speakers</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        decelerationRate="fast"
-      >
-        {roster.map((person, index) => (
-          <SpeakerCard
-            key={person.id ?? `${person.displayName}-${index}`}
-            person={person}
-            onPress={onSpeakerPress ? () => onSpeakerPress(person, index) : undefined}
-          />
-        ))}
-      </ScrollView>
+      {cards}
     </View>
   );
 };

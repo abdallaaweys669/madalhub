@@ -132,9 +132,37 @@ Organizers get **immediate dashboard access** after signup (`verificationStatus 
 | `approved`, no credits | Drafts, submit payment request | Publish |
 | Payment approved | Publish (uses 1 credit) | Publish when credits = 0 |
 
-**Frontend routing:** `getOrganizerEntryHref()` in `src/navigation/organizerGate.js` always returns
-`/(organizer)/dashboard`. Splash and login use this — do not redirect new organizers to
+**Frontend routing:** `getOrganizerEntryHref()` in `src/navigation/organizerGate.js` returns
+`/(organizer)/(tabs)` (Home tab). Splash and login use this — do not redirect new organizers to
 `(organizer-status)` on signup.
+
+**Organizer app shell:** Route group `(organizer)/(tabs)/` — bottom tabs **Home · Events · Inbox · Profile**
+(tab route file remains `organization.jsx`). Shared chrome lives in `OrganizerTabScaffold`
+(`src/features/organizer/components/`): hamburger drawer, header bell (unread badge), and FAB (+) for create event.
+
+**Organizer drawer:** Does **not** duplicate tab destinations. Menu: Attendees, Identity verification,
+Billing & publish credits, Analytics, Settings. Header shows org avatar/name + publish credit summary.
+Help center, Terms, and Privacy live under **Settings**. Sign out sits at the **bottom of the drawer**.
+Coming soon in drawer: Team & co-hosts.
+
+**Organizer stack screens** (above tabs in `(organizer)/_layout.jsx`, hide tab bar): `create-event`, `edit-event`,
+`pay-to-publish`, `edit-profile`, `attendees`, `followers`, `reviews`, `analytics`, `settings`.
+
+**Organizer account APIs:** `GET /organizer/attendees` (paginated registrations across organizer events),
+`GET /organizer/analytics` (event/audience overview), existing `GET /organizer/followers` and
+`GET /organizer/reviews/:organizerId` power Followers and Reviews screens from Profile stat tiles.
+
+**Organizer notifications:** `GET /organizer/notifications` (+ unread-count, mark read). Emitted when
+admin approves/rejects verification or payment, and when a member registers for an organizer event.
+Inbox tab: `(organizer)/(tabs)/inbox`.
+
+**Legacy redirects:** `/(organizer)/dashboard`, `profile`, `my-events` redirect into tabs.
+
+**Create event audience targeting:** Organizer create/edit includes an **Audience** card with
+`all`, `female`, or `male` saved as `events.audience_gender`. Restricted events are hidden from
+non-matching members in `/events` and recommendations, blocked on direct event open, and blocked
+on join. Member gender comes from `member_profiles.gender` (`Female` / `Male` from onboarding).
+Capacity `0` means unlimited.
 
 **Publish flow:** Before publish, call `GET /organizer/publish-eligibility` and branch via
 `resolveOrganizerPublishGate()` in `src/utils/organizerPublish.js` (verification wizard,
@@ -150,10 +178,11 @@ Screens: pending organizer verification + pending payment approvals.
 `VERIFICATION_REQUIRED`, `VERIFICATION_PENDING`, `VERIFICATION_REJECTED`, `PAYMENT_REQUIRED`.
 
 **Manual QA checklist:**
-1. Organizer signup → lands on dashboard → create draft (no publish).
-2. Tap Publish → verification wizard → admin approves identity → first event goes live free.
-3. Second publish → pay-to-publish screen → submit payment → admin approves → second event live.
-4. Bundle purchase → admin grants 5 credits → publish multiple events.
+1. Organizer signup → lands on Home tab → create draft (no publish).
+2. Bottom tabs navigate Home / Events / Inbox / Profile; drawer shows secondary items only; FAB creates event.
+3. Tap Publish → verification wizard → admin approves identity → first event goes live free; Inbox shows notification.
+4. Second publish → pay-to-publish screen → submit payment → admin approves → second event live.
+5. Member registers for event → organizer Inbox shows registration notification.
 
 ## Working agreements for agents
 - Keep changes consistent with the patterns above; prefer reusing the shared auth

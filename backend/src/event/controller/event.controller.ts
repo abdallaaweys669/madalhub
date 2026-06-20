@@ -112,17 +112,21 @@ export class EventController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(1)
   @Post('interactions')
-  trackEventInteraction(@CurrentUser() user, @Body() dto: TrackEventInteractionDto) {
-    return this.eventService.trackEventInteraction(user.userId, dto.eventId, dto.action);
+  trackEventInteraction(
+    @CurrentUser() user,
+    @Body() dto: TrackEventInteractionDto,
+  ) {
+    return this.eventService.trackEventInteraction(
+      user.userId,
+      dto.eventId,
+      dto.action,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(1)
   @Get('recommended')
-  getRecommendedEvents(
-    @CurrentUser() user,
-    @Query('limit') limit?: string,
-  ) {
+  getRecommendedEvents(@CurrentUser() user, @Query('limit') limit?: string) {
     const parsedLimit = limit ? Number(limit) : 8;
     return this.eventService.getRecommendedEvents(
       user.userId,

@@ -25,6 +25,11 @@ import { FollowOrganizerDto } from '../dto/follow-organizer.dto';
 import { UpdateMemberDto } from '../dto/update-member.dto';
 import { SocialLoginDto } from '../dto/social-login.dto';
 import { CreateOrganizerPaymentRequestDto } from '../dto/create-payment-request.dto';
+import { OrganizerNotificationsService } from 'src/notifications/organizer-notifications.service';
+import {
+  CheckInEventAttendeeDto,
+  MessageEventAttendeesDto,
+} from '../dto/message-event-attendees.dto';
 
 class OrganizerLoginDto {
   email!: string;
@@ -33,7 +38,10 @@ class OrganizerLoginDto {
 
 @Controller('organizer')
 export class OrganizerController {
-  constructor(private service: OrganizerService) {}
+  constructor(
+    private service: OrganizerService,
+    private organizerNotificationsService: OrganizerNotificationsService,
+  ) {}
 
   @Post('register')
   register(@Body() dto: CreateOrganizerDto) {
@@ -123,6 +131,29 @@ export class OrganizerController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Get('attendees')
+  getOrganizerAttendees(
+    @CurrentUser() user: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('eventId') eventId?: string,
+  ) {
+    return this.service.getOrganizerAttendees(user.userId, {
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      eventId: eventId ? Number(eventId) : undefined,
+    });
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Get('analytics')
+  getOrganizerAnalytics(@CurrentUser() user: any) {
+    return this.service.getOrganizerAnalytics(user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(1)
   @Post('review')
   createReview(@CurrentUser() user: any, @Body() dto: CreateReviewDto) {
@@ -183,10 +214,112 @@ export class OrganizerController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(2)
-  @Get('reviews/:organizerId')
-  getOrganizerReviews(
-    @Param('organizerId', ParseIntPipe) organizerId: number,
+  @Get('notifications')
+  listNotifications(@CurrentUser() user: { userId: number; role?: number }) {
+    return this.organizerNotificationsService.listForOrganizer(
+      user.userId,
+      user.role,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Get('notifications/unread-count')
+  notificationUnreadCount(
+    @CurrentUser() user: { userId: number; role?: number },
   ) {
+    return this.organizerNotificationsService.getUnreadCount(
+      user.userId,
+      user.role,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Patch('notifications/read-all')
+  markAllNotificationsRead(
+    @CurrentUser() user: { userId: number; role?: number },
+  ) {
+    return this.organizerNotificationsService.markAllRead(
+      user.userId,
+      user.role,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Patch('notifications/:id/read')
+  markNotificationRead(
+    @CurrentUser() user: { userId: number; role?: number },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.organizerNotificationsService.markRead(
+      user.userId,
+      id,
+      user.role,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Get('reviews/:organizerId')
+  getOrganizerReviews(@Param('organizerId', ParseIntPipe) organizerId: number) {
     return this.service.getOrganizerReviews(organizerId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Post('events/:eventId/message-attendees')
+  messageEventAttendees(
+    @CurrentUser() user: { userId: number },
+    @Param('eventId', ParseIntPipe) eventId: number,
+    @Body() dto: MessageEventAttendeesDto,
+  ) {
+    return this.service.messageEventAttendees(
+      user.userId,
+      eventId,
+      dto.title,
+      dto.body,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Post('events/:eventId/check-in')
+  checkInEventAttendee(
+    @CurrentUser() user: { userId: number },
+    @Param('eventId', ParseIntPipe) eventId: number,
+    @Body() dto: CheckInEventAttendeeDto,
+  ) {
+    return this.service.checkInEventAttendee(
+      user.userId,
+      eventId,
+      dto.memberId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Post('events/:eventId/cancel')
+  cancelEventAndNotify(
+    @CurrentUser() user: { userId: number },
+    @Param('eventId', ParseIntPipe) eventId: number,
+  ) {
+    return this.service.cancelEventAndNotify(user.userId, eventId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Post('events/:eventId/postpone-notify')
+  notifyEventPostponed(
+    @CurrentUser() user: { userId: number },
+    @Param('eventId', ParseIntPipe) eventId: number,
+    @Body() body: { message?: string },
+  ) {
+    return this.service.notifyEventPostponed(
+      user.userId,
+      eventId,
+      body?.message ?? '',
+    );
   }
 }

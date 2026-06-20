@@ -46,7 +46,9 @@ export class AddUserSocialLinkColumns1747900000000 implements MigrationInterface
 
     for (const column of [...this.columns].reverse()) {
       if (have.has(column)) {
-        await queryRunner.query(`ALTER TABLE \`users\` DROP COLUMN \`${column}\``);
+        await queryRunner.query(
+          `ALTER TABLE \`users\` DROP COLUMN \`${column}\``,
+        );
       }
     }
   }

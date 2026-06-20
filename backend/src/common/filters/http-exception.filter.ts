@@ -56,8 +56,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     const isMissingUpload =
-      status === HttpStatus.NOT_FOUND &&
-      request.url.startsWith('/uploads/');
+      status === HttpStatus.NOT_FOUND && request.url.startsWith('/uploads/');
 
     if (!isMissingUpload) {
       console.error(exception);

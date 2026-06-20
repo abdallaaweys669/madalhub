@@ -8,6 +8,7 @@ import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity
 import { OrganizerVerificationDocument } from 'src/database/entities/organizer-verification-document.entity';
 import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
 import { ConfigService } from '@nestjs/config';
+import { OrganizerNotificationsService } from 'src/notifications/organizer-notifications.service';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -16,7 +17,9 @@ describe('AdminService', () => {
   let organizerDocumentRepository: jest.Mocked<
     Repository<OrganizerVerificationDocument>
   >;
-  let paymentRequestRepository: jest.Mocked<Repository<OrganizerPaymentRequest>>;
+  let paymentRequestRepository: jest.Mocked<
+    Repository<OrganizerPaymentRequest>
+  >;
 
   const mockRepo = () => ({
     findOne: jest.fn(),
@@ -45,6 +48,15 @@ describe('AdminService', () => {
               if (key === 'PUBLISH_BUNDLE_CREDITS') return 5;
               return undefined;
             }),
+          },
+        },
+        {
+          provide: OrganizerNotificationsService,
+          useValue: {
+            notifyVerificationApproved: jest.fn().mockResolvedValue(undefined),
+            notifyVerificationRejected: jest.fn().mockResolvedValue(undefined),
+            notifyPaymentApproved: jest.fn().mockResolvedValue(undefined),
+            notifyPaymentRejected: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

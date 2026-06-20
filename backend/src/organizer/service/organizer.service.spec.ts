@@ -222,7 +222,6 @@ describe('OrganizerService', () => {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/unbound-method
   describe('getMyEvents - owner scoping', () => {
     it('should return only events owned by the organizer', async () => {
       userRepository.findOne.mockResolvedValue({

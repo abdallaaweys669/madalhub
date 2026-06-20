@@ -6,16 +6,22 @@ import { User } from 'src/database/entities/user.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
 import { OrganizerVerificationDocument } from 'src/database/entities/organizer-verification-document.entity';
 import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
+import { Event } from 'src/database/entities/event.entity';
+import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { ConfigModule } from '@nestjs/config';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
     ConfigModule,
+    NotificationsModule,
     TypeOrmModule.forFeature([
       User,
       OrganizerProfile,
       OrganizerVerificationDocument,
       OrganizerPaymentRequest,
+      Event,
+      EventRegistration,
     ]),
   ],
   controllers: [AdminController],

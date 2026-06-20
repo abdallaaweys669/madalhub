@@ -3,5 +3,5 @@
  * @param {string | null | undefined} _organizerStatus
  */
 export function getOrganizerEntryHref(_organizerStatus) {
-  return '/(organizer)/dashboard';
+  return '/(organizer)/(tabs)';
 }

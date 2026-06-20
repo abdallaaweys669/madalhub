@@ -4,7 +4,8 @@ export class CreateEmailOtpsAndVerifiedAt1748100000000 implements MigrationInter
   name = 'CreateEmailOtpsAndVerifiedAt1748100000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    const verifiedCol: Array<{ COLUMN_NAME: string }> = await queryRunner.query(`
+    const verifiedCol: Array<{ COLUMN_NAME: string }> =
+      await queryRunner.query(`
       SELECT COLUMN_NAME
       FROM information_schema.COLUMNS
       WHERE TABLE_SCHEMA = DATABASE()
@@ -47,7 +48,8 @@ export class CreateEmailOtpsAndVerifiedAt1748100000000 implements MigrationInter
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query('DROP TABLE IF EXISTS `email_otps`');
 
-    const verifiedCol: Array<{ COLUMN_NAME: string }> = await queryRunner.query(`
+    const verifiedCol: Array<{ COLUMN_NAME: string }> =
+      await queryRunner.query(`
       SELECT COLUMN_NAME
       FROM information_schema.COLUMNS
       WHERE TABLE_SCHEMA = DATABASE()

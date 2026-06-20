@@ -139,7 +139,9 @@ export class OnboardingService {
       const trimmed = String(dto.location ?? '').trim();
       user.location = trimmed;
       await this.userRepository.save(user);
-      const reloaded = await this.userRepository.findOne({ where: { id: userId } });
+      const reloaded = await this.userRepository.findOne({
+        where: { id: userId },
+      });
       if (reloaded) {
         user.location = reloaded.location ?? '';
       }

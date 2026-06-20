@@ -12,8 +12,12 @@ export class EventRegistration {
   @Column({ name: 'member_id' })
   memberId!: number;
 
-  @Column()
-  status!: string;
+  @Column({
+    type: 'enum',
+    enum: ['registered', 'attended', 'cancelled', 'checked_in'],
+    default: 'registered',
+  })
+  status!: 'registered' | 'attended' | 'cancelled' | 'checked_in';
 
   @Column({ name: 'ticket_qr', nullable: true, type: 'varchar', length: 255 })
   ticketQr!: string | null;

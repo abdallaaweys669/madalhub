@@ -43,10 +43,14 @@ export class AddUserProfileVisibilityColumns1747500000000 implements MigrationIn
     const have = new Set(rows.map((r) => r.COLUMN_NAME));
 
     if (have.has('profile_show_phone')) {
-      await queryRunner.query(`ALTER TABLE \`users\` DROP COLUMN \`profile_show_phone\``);
+      await queryRunner.query(
+        `ALTER TABLE \`users\` DROP COLUMN \`profile_show_phone\``,
+      );
     }
     if (have.has('profile_show_email')) {
-      await queryRunner.query(`ALTER TABLE \`users\` DROP COLUMN \`profile_show_email\``);
+      await queryRunner.query(
+        `ALTER TABLE \`users\` DROP COLUMN \`profile_show_email\``,
+      );
     }
   }
 }

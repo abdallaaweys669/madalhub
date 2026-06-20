@@ -32,6 +32,7 @@ export type EventCoverBannerProps = {
   width?: number | `${number}%`;
   onPress?: () => void;
   placeholderLetterSize?: number;
+  hidePlaceholderLetter?: boolean;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
 };
@@ -59,6 +60,7 @@ export function EventCoverBanner({
   width,
   onPress,
   placeholderLetterSize = 34,
+  hidePlaceholderLetter = false,
   style,
   children,
 }: EventCoverBannerProps) {
@@ -110,6 +112,7 @@ export function EventCoverBanner({
             borderRadius={0}
             style={mediaFillStyle}
             letterSize={placeholderLetterSize}
+            showLetter={!hidePlaceholderLetter}
           />
         )}
       </View>

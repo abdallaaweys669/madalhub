@@ -1,90 +1,132 @@
 import React from 'react';
-import { Pressable, ScrollView, Text, View, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
-import {
-  SPONSOR_TILE_GAP,
-  SPONSOR_TILE_HEIGHT,
-  SPONSOR_TILE_WIDTH,
-} from '@/constants/sponsorTiles';
+
+const CARD_WIDTH = 124;
+const LOGO_HEIGHT = 88;
+
+function SponsorCard({ sponsor, onPress }) {
+  const name = sponsor.name?.trim() || 'Sponsor';
+
+  return (
+    <Pressable onPress={onPress} style={styles.card}>
+      <View style={styles.logoWrap}>
+        {sponsor.image?.uri ? (
+          <Image source={{ uri: sponsor.image.uri }} style={styles.logo} resizeMode="contain" />
+        ) : (
+          <Feather name="image" size={28} color="#9CA3AF" />
+        )}
+      </View>
+      <View style={styles.textBlock}>
+        <Text style={styles.name} numberOfLines={2}>
+          {name}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
 
 export default function WysiwygSponsors({ sponsors, onPressAddSponsor, onEditSponsor }) {
   return (
     <View>
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: 24,
-          marginBottom: 14,
-        }}
-      >
-        <Text style={[eventStyles.sectionTitle, { marginTop: 0, marginBottom: 0 }]}>Sponsors</Text>
+      <View style={styles.headerRow}>
+        <Text style={[eventStyles.sectionTitle, styles.sectionTitle]}>Sponsors</Text>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: 8,
-          paddingRight: 4,
-          alignItems: 'flex-start',
-        }}
-      >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {sponsors.map((s) => (
-          <Pressable
-            key={s.id}
-            onPress={() => onEditSponsor?.(s.id)}
-            style={{
-              width: SPONSOR_TILE_WIDTH,
-              marginRight: SPONSOR_TILE_GAP,
-              alignItems: 'center',
-            }}
-          >
-            <View style={[eventStyles.sponsorLogoTile, { marginBottom: 10 }]}>
-              {s.image?.uri ? (
-                <Image
-                  source={{ uri: s.image.uri }}
-                  style={eventStyles.sponsorLogo}
-                  resizeMode="contain"
-                />
-              ) : (
-                <Ionicons name="image-outline" size={34} color="#9CA3AF" />
-              )}
-            </View>
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: '600',
-                color: '#111827',
-                textAlign: 'center',
-                lineHeight: 18,
-              }}
-              numberOfLines={2}
-            >
-              {s.name || 'Sponsor'}
-            </Text>
-          </Pressable>
+          <SponsorCard key={s.id} sponsor={s} onPress={() => onEditSponsor?.(s.id)} />
         ))}
 
-        <Pressable
-          onPress={onPressAddSponsor}
-          style={{
-            width: SPONSOR_TILE_WIDTH,
-            height: SPONSOR_TILE_HEIGHT,
-            borderWidth: 1.5,
-            borderStyle: 'dashed',
-            borderColor: '#FDBA74',
-            borderRadius: 14,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#FFFBF5',
-          }}
-        >
-          <Ionicons name="add-outline" size={34} color="#EA580C" />
+        <Pressable onPress={onPressAddSponsor} style={styles.addCard}>
+          <View style={styles.addLogoWrap}>
+            <Feather name="plus" size={28} color="#EA580C" />
+          </View>
+          <View style={styles.textBlock}>
+            <Text style={styles.addLabel}>Add sponsor</Text>
+          </View>
         </Pressable>
       </ScrollView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  row: {
+    gap: 12,
+    paddingBottom: 4,
+  },
+  card: {
+    width: CARD_WIDTH,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  logoWrap: {
+    width: CARD_WIDTH,
+    height: LOGO_HEIGHT,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+  },
+  logo: {
+    width: '100%',
+    height: '100%',
+  },
+  textBlock: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 10,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  name: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111111',
+    lineHeight: 17,
+    textAlign: 'center',
+  },
+  addCard: {
+    width: CARD_WIDTH,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#FDBA74',
+    backgroundColor: '#FFFBF5',
+    overflow: 'hidden',
+  },
+  addLogoWrap: {
+    width: CARD_WIDTH,
+    height: LOGO_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF7ED',
+  },
+  addLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#EA580C',
+    textAlign: 'center',
+  },
+});

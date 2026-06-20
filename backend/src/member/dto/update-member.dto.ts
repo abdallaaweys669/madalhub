@@ -1,9 +1,18 @@
-import { IsOptional, IsEmail, MinLength, IsBoolean, IsString, MaxLength } from 'class-validator';
+import {
+  IsOptional,
+  IsEmail,
+  MinLength,
+  IsBoolean,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 
 const toBool = (value: unknown) => {
-  if (value === true || value === 1 || value === '1' || value === 'true') return true;
-  if (value === false || value === 0 || value === '0' || value === 'false') return false;
+  if (value === true || value === 1 || value === '1' || value === 'true')
+    return true;
+  if (value === false || value === 0 || value === '0' || value === 'false')
+    return false;
   return value;
 };
 

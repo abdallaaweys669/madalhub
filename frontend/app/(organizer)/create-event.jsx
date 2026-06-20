@@ -54,6 +54,8 @@ const COMPACT_TEMPLATES = [
   { key: 'panel', label: 'Panel', icon: 'mic-outline' },
 ];
 
+import AudienceDropdown from '@/components/createEvent/AudienceDropdown';
+
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -139,6 +141,8 @@ export default function CreateEventScreen() {
   const [onlineLink, setOnlineLink] = useState('');
   const [locationPin, setLocationPin] = useState(null);
   const [ticketPaid, setTicketPaid] = useState(false);
+  const [audienceGender, setAudienceGender] = useState('all');
+  const [enableWaitlist, setEnableWaitlist] = useState(false);
 
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -258,6 +262,7 @@ export default function CreateEventScreen() {
             : null,
         );
         setCoverImagePath(data.image || data.coverImage || null);
+        setAudienceGender(['all', 'female', 'male'].includes(data.audienceGender) ? data.audienceGender : 'all');
         setRemoteStatus(data.status ?? null);
         setTicketPaid(Number(data.price ?? data.totalPrice ?? 0) > 0);
         setPeople(Array.isArray(data.roster) ? data.roster.map((r, i) => ({ key: `r-${r.id ?? i}`, fullName: r.displayName || '', role: r.role || 'speaker', title: r.title || '', photoPath: r.photoUrl || null })) : []);
@@ -290,9 +295,10 @@ export default function CreateEventScreen() {
     isOnline: !isInPerson,
     isHybrid: false,
     onlineLink: !isInPerson ? onlineLink.trim() : undefined,
+    audienceGender,
     sponsors: sponsorRows.filter((s) => s.name.trim()).map((s) => ({ name: s.name.trim(), ...(s.logoPath ? { logo: s.logoPath } : {}) })),
     roster: people.filter((p) => p.fullName.trim()).map((p, idx) => ({ role: p.role, displayName: p.fullName.trim(), title: p.title.trim() || null, sortOrder: idx, photoUrl: p.photoPath || null })),
-  }), [values, startDate, endDate, coverImagePath, isInPerson, locationPin, ticketPaid, onlineLink, template, eduSubtype, sponsorRows, people]);
+  }), [values, startDate, endDate, coverImagePath, isInPerson, locationPin, ticketPaid, onlineLink, audienceGender, template, eduSubtype, sponsorRows, people]);
 
   const saveDraft = async () => {
     if (effectiveEventId) await patchOrganizerEvent(effectiveEventId, buildPayload(true));
@@ -516,9 +522,27 @@ export default function CreateEventScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 150 }} bounces={false}>
-          <WysiwygHeader coverPath={coverImagePath} title={values.title} onBack={() => router.back()} onPickCover={onPickCover} coverUploading={coverUploading} onOpenSettings={() => setCategorySheetOpen(true)} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
+          nestedScrollEnabled
+          contentContainerStyle={{ paddingBottom: insets.bottom + 150 }}
+          bounces={false}
+        >
+          <WysiwygHeader
+            coverPath={coverImagePath}
+            title={values.title}
+            onBack={() => router.back()}
+            onPickCover={onPickCover}
+            coverUploading={coverUploading}
+          />
           <View style={eventStyles.contentContainer}>
             <WysiwygInfoCard
               title={values.title}
@@ -570,6 +594,52 @@ export default function CreateEventScreen() {
               onEditSponsor={editSponsorLogo}
               onRemoveSponsor={removeSponsor}
             />
+            <AudienceDropdown value={audienceGender} onChange={setAudienceGender} />
+            <View style={{ marginTop: 24 }}>
+              <Text style={eventStyles.sectionTitle}>Waitlist</Text>
+              <Pressable
+                onPress={() => setEnableWaitlist((v) => !v)}
+                style={{
+                  marginTop: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: enableWaitlist ? '#FF7A00' : '#E5E7EB',
+                  backgroundColor: enableWaitlist ? '#FFF7ED' : '#FAFAFA',
+                  paddingHorizontal: 14,
+                  paddingVertical: 13,
+                }}
+              >
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827' }}>Enable waitlist</Text>
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4, lineHeight: 17 }}>
+                    Auto-fill spots when someone cancels a full event.
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: 48,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: enableWaitlist ? '#FF7A00' : '#D1D5DB',
+                    justifyContent: 'center',
+                    paddingHorizontal: 3,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      backgroundColor: '#fff',
+                      alignSelf: enableWaitlist ? 'flex-end' : 'flex-start',
+                    }}
+                  />
+                </View>
+              </Pressable>
+            </View>
             <View style={{ marginTop: 24 }}>
               <Text style={eventStyles.sectionTitle}>Ticketing & Capacity</Text>
               <View style={{ backgroundColor: '#F9FAFB', borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB', padding: 14, gap: 14 }}>

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class OrganizerProgressiveVerificationAndPayments1748200000000
-  implements MigrationInterface
-{
+export class OrganizerProgressiveVerificationAndPayments1748200000000 implements MigrationInterface {
   name = 'OrganizerProgressiveVerificationAndPayments1748200000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -85,7 +83,9 @@ export class OrganizerProgressiveVerificationAndPayments1748200000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS \`organizer_payment_requests\``);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS \`organizer_payment_requests\``,
+    );
 
     const creditsCol = await queryRunner.query(`
       SELECT COLUMN_NAME FROM information_schema.COLUMNS

@@ -1,4 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ClerkExchangeDto } from 'src/auth/DTO/clerk-exchange.dto';
 import { LoginDto } from 'src/auth/DTO/login.dto';
 import { SendOtpDto } from 'src/auth/DTO/send-otp.dto';
@@ -31,7 +38,9 @@ export class AuthController {
   @Post('otp/verify')
   verifyOtpLogin(@Body() dto: VerifyOtpDto) {
     if (dto.purpose !== 'login') {
-      throw new BadRequestException('Use /auth/otp/verify-signup for signup verification.');
+      throw new BadRequestException(
+        'Use /auth/otp/verify-signup for signup verification.',
+      );
     }
     return this.authService.verifyOtpLogin(dto.email, dto.code);
   }

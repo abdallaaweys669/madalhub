@@ -37,19 +37,44 @@ export class User {
   @Column({ name: 'profile_hidden', type: 'boolean', default: false })
   profileHidden!: boolean;
 
-  @Column({ name: 'social_website', type: 'varchar', length: 512, nullable: true })
+  @Column({
+    name: 'social_website',
+    type: 'varchar',
+    length: 512,
+    nullable: true,
+  })
   socialWebsite!: string | null;
 
-  @Column({ name: 'social_linkedin', type: 'varchar', length: 512, nullable: true })
+  @Column({
+    name: 'social_linkedin',
+    type: 'varchar',
+    length: 512,
+    nullable: true,
+  })
   socialLinkedin!: string | null;
 
-  @Column({ name: 'social_instagram', type: 'varchar', length: 512, nullable: true })
+  @Column({
+    name: 'social_instagram',
+    type: 'varchar',
+    length: 512,
+    nullable: true,
+  })
   socialInstagram!: string | null;
 
-  @Column({ name: 'social_facebook', type: 'varchar', length: 512, nullable: true })
+  @Column({
+    name: 'social_facebook',
+    type: 'varchar',
+    length: 512,
+    nullable: true,
+  })
   socialFacebook!: string | null;
 
-  @Column({ name: 'social_tiktok', type: 'varchar', length: 512, nullable: true })
+  @Column({
+    name: 'social_tiktok',
+    type: 'varchar',
+    length: 512,
+    nullable: true,
+  })
   socialTiktok!: string | null;
 
   @Column({ name: 'role_id' })

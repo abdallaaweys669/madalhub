@@ -49,7 +49,10 @@ export class OtpService {
     return String(Math.floor(100000 + Math.random() * 900000));
   }
 
-  async sendOtp(rawEmail: string, purpose: EmailOtpPurpose): Promise<{ message: string }> {
+  async sendOtp(
+    rawEmail: string,
+    purpose: EmailOtpPurpose,
+  ): Promise<{ message: string }> {
     const email = this.normalizeEmail(rawEmail);
     const user = await this.userRepository.findOne({ where: { email } });
 
@@ -60,7 +63,8 @@ export class OtpService {
     } else if (purpose === 'login') {
       if (!user || user.roleId !== MEMBER_ROLE_ID) {
         return {
-          message: 'If an account exists for this email, a verification code was sent.',
+          message:
+            'If an account exists for this email, a verification code was sent.',
         };
       }
     }
@@ -101,7 +105,9 @@ export class OtpService {
     const code = this.generateCode();
     const codeHash = await bcrypt.hash(code, 10);
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + this.getExpiresMinutes() * 60 * 1000);
+    const expiresAt = new Date(
+      now.getTime() + this.getExpiresMinutes() * 60 * 1000,
+    );
 
     await this.otpRepository.delete({ email, purpose });
 
@@ -119,7 +125,8 @@ export class OtpService {
 
     if (purpose === 'login' && (!user || user.roleId !== MEMBER_ROLE_ID)) {
       return {
-        message: 'If an account exists for this email, a verification code was sent.',
+        message:
+          'If an account exists for this email, a verification code was sent.',
       };
     }
 
@@ -150,7 +157,9 @@ export class OtpService {
 
     if (otp.expiresAt.getTime() < Date.now()) {
       await this.otpRepository.delete({ id: otp.id });
-      throw new UnauthorizedException('Verification code expired. Request a new one.');
+      throw new UnauthorizedException(
+        'Verification code expired. Request a new one.',
+      );
     }
 
     if (otp.attempts >= this.getMaxAttempts()) {

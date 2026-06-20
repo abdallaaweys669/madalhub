@@ -67,6 +67,14 @@ export class Event {
   })
   eventFormat!: string | null;
 
+  @Column({
+    name: 'audience_gender',
+    type: 'varchar',
+    length: 20,
+    default: 'all',
+  })
+  audienceGender!: string;
+
   @Column({ name: 'created_at' })
   createdAt!: Date;
 

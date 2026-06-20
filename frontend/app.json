@@ -26,6 +26,7 @@
         "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "softwareKeyboardLayoutMode": "resize",
       "edgeToEdgeEnabled": true,
       "usesCleartextTraffic": true,
       "package": "com.madalhub.app",
@@ -53,6 +54,12 @@
           "cameraPermission": "Allow MadalHub to access your camera to take a profile photo.",
           "microphonePermission": false,
           "photosPermission": "Allow MadalHub to access your photos to set a profile photo."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow MadalHub to scan attendee ticket QR codes at the door."
         }
       ],
       [

@@ -117,6 +117,9 @@ export class OnboardingController {
     }),
   )
   updateOrganizerProfileImage(@CurrentUser() user, @UploadedFile() file: any) {
-    return this.onboardingService.updateOrganizerProfileImage(user.userId, file);
+    return this.onboardingService.updateOrganizerProfileImage(
+      user.userId,
+      file,
+    );
   }
 }

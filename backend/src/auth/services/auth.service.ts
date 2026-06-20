@@ -99,7 +99,9 @@ export class AuthService {
     }
 
     if (user.roleId === 2) {
-      throw new UnauthorizedException('Use organizer login from the Welcome screen.');
+      throw new UnauthorizedException(
+        'Use organizer login from the Welcome screen.',
+      );
     }
 
     const isMatch = await bcrypt.compare(loginDto.password, user.password);
@@ -115,7 +117,10 @@ export class AuthService {
     return this.otpService.sendOtp(email, purpose);
   }
 
-  async verifyOtpLogin(email: string, code: string): Promise<AuthTokenResponse> {
+  async verifyOtpLogin(
+    email: string,
+    code: string,
+  ): Promise<AuthTokenResponse> {
     const emailNorm = (email ?? '').trim().toLowerCase();
     await this.otpService.verifyOtpCode(emailNorm, code, 'login');
 
@@ -165,7 +170,9 @@ export class AuthService {
   async clerkExchange(dto: ClerkExchangeDto): Promise<AuthTokenResponse> {
     const secretKey = this.configService.get<string>('CLERK_SECRET_KEY');
     if (!secretKey) {
-      throw new UnauthorizedException('Clerk is not configured on this server.');
+      throw new UnauthorizedException(
+        'Clerk is not configured on this server.',
+      );
     }
 
     const clerk = createClerkClient({ secretKey });
@@ -181,11 +188,15 @@ export class AuthService {
     const clerkUser = await clerk.users.getUser(clerkUserId);
     const email = clerkUser.emailAddresses[0]?.emailAddress;
     if (!email) {
-      throw new UnauthorizedException('No email associated with this Clerk account.');
+      throw new UnauthorizedException(
+        'No email associated with this Clerk account.',
+      );
     }
 
     const emailNorm = email.trim().toLowerCase();
-    let user = await this.userRepository.findOne({ where: { email: emailNorm } });
+    let user = await this.userRepository.findOne({
+      where: { email: emailNorm },
+    });
 
     if (!user) {
       const fullName =
@@ -200,12 +211,18 @@ export class AuthService {
         phone: '',
       });
 
-      await this.userRepository.update(savedUser.id, { emailVerifiedAt: new Date() });
+      await this.userRepository.update(savedUser.id, {
+        emailVerifiedAt: new Date(),
+      });
 
-      user = await this.userRepository.findOne({ where: { id: (savedUser as any).id } });
+      user = await this.userRepository.findOne({
+        where: { id: (savedUser as any).id },
+      });
       if (!user) throw new UnauthorizedException('User creation failed.');
     } else if (!user.emailVerifiedAt) {
-      await this.userRepository.update(user.id, { emailVerifiedAt: new Date() });
+      await this.userRepository.update(user.id, {
+        emailVerifiedAt: new Date(),
+      });
     }
 
     return this.issueTokenForUser(user.id);

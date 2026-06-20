@@ -67,7 +67,7 @@ export default function Splash() {
       }
 
       if (userRole === ROLE_ORGANIZER) {
-        go('/(organizer)/dashboard');
+        go('/(organizer)/(tabs)');
         return;
       }
 

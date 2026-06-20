@@ -135,7 +135,7 @@ export default function PayToPublishScreen() {
             <Feather name="arrow-left" size={22} color={COLORS.textPrimary} />
           </Pressable>
           <Text style={{ flex: 1, textAlign: 'center', color: COLORS.textPrimary, fontSize: 22, fontWeight: '800' }}>
-            Pay to publish
+            Billing & publish credits
           </Text>
           <View style={{ width: 30 }} />
         </View>

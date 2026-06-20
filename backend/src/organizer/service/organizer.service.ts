@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -27,6 +28,7 @@ import { CreateReviewDto } from '../dto/create-review.dto';
 import { UpdateReviewDto } from '../dto/update-review.dto';
 import { SocialLoginDto } from '../dto/social-login.dto';
 import { isProfileComplete } from 'src/onboarding/helpers/organizer-profile.helper';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 @Injectable()
 export class OrganizerService {
@@ -50,7 +52,30 @@ export class OrganizerService {
     private paymentRequestRepository: Repository<OrganizerPaymentRequest>,
     private configService: ConfigService,
     private jwtService: JwtService,
+    private notificationsService: NotificationsService,
   ) {}
+
+  private async assertOrganizerOwnsEvent(organizerId: number, eventId: number) {
+    const user = await this.userRepository.findOne({ where: { id: organizerId } });
+    if (!user || user.roleId !== 2) {
+      throw new NotFoundException('Organizer not found');
+    }
+
+    const event = await this.eventRepository.findOne({ where: { id: eventId } });
+    if (!event || event.organizerId !== organizerId) {
+      throw new ForbiddenException('You do not own this event');
+    }
+
+    return event;
+  }
+
+  private async getEventRegistrantMemberIds(eventId: number): Promise<number[]> {
+    const rows = await this.eventRegistrationRepository.find({
+      where: { eventId },
+      select: ['memberId'],
+    });
+    return rows.map((row) => row.memberId);
+  }
 
   async register(dto: CreateOrganizerDto) {
     const existingUser = await this.userRepository.findOne({
@@ -94,8 +119,13 @@ export class OrganizerService {
     return safe;
   }
 
-  async updateContact(userId: number, dto: { phone?: string; location?: string }) {
-    const user = await this.userRepository.findOne({ where: { id: userId, roleId: 2 } });
+  async updateContact(
+    userId: number,
+    dto: { phone?: string; location?: string },
+  ) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId, roleId: 2 },
+    });
     if (!user) {
       throw new NotFoundException('Organizer not found');
     }
@@ -135,7 +165,9 @@ export class OrganizerService {
     return this.issueOrganizerToken(user);
   }
 
-  private async issueOrganizerToken(user: Pick<User, 'id' | 'roleId' | 'email' | 'status'>) {
+  private async issueOrganizerToken(
+    user: Pick<User, 'id' | 'roleId' | 'email' | 'status'>,
+  ) {
     const payload = {
       sub: user.id,
       role: user.roleId,
@@ -182,9 +214,15 @@ export class OrganizerService {
       const fbResponse = await fetch(
         `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(dto.accessToken)}`,
       );
-      const fbData = (await fbResponse.json()) as { email?: string; name?: string; error?: { message?: string } };
+      const fbData = (await fbResponse.json()) as {
+        email?: string;
+        name?: string;
+        error?: { message?: string };
+      };
       if (!fbResponse.ok || fbData?.error) {
-        throw new BadRequestException(fbData?.error?.message || 'Invalid Facebook token');
+        throw new BadRequestException(
+          fbData?.error?.message || 'Invalid Facebook token',
+        );
       }
       if (!fbData?.email) {
         throw new BadRequestException('Facebook email permission is required');
@@ -199,8 +237,12 @@ export class OrganizerService {
       (dto.email || '').split('@')[0] ||
       'Organizer';
 
-    let user: { id: number; roleId: number; status: string; email: string } | null =
-      await this.userRepository.findOne({
+    let user: {
+      id: number;
+      roleId: number;
+      status: string;
+      email: string;
+    } | null = await this.userRepository.findOne({
       where: { email: providerEmail },
       select: ['id', 'roleId', 'status', 'email'],
     });
@@ -229,11 +271,18 @@ export class OrganizerService {
           createdAt: new Date(),
         }),
       );
-      user = { id: saved.id, roleId: saved.roleId, status: saved.status, email: saved.email };
+      user = {
+        id: saved.id,
+        roleId: saved.roleId,
+        status: saved.status,
+        email: saved.email,
+      };
     }
 
     if (user.roleId !== 2) {
-      throw new UnauthorizedException('This account is not registered as an organizer.');
+      throw new UnauthorizedException(
+        'This account is not registered as an organizer.',
+      );
     }
 
     return this.issueOrganizerToken(user);
@@ -268,7 +317,8 @@ export class OrganizerService {
       freePublishUsed: organizerProfile?.freePublishUsed ?? false,
       paidPublishCredits: organizerProfile?.paidPublishCredits ?? 0,
       organizationName: organizerProfile?.organizationName ?? null,
-      organizationDescription: organizerProfile?.organizationDescription ?? null,
+      organizationDescription:
+        organizerProfile?.organizationDescription ?? null,
       hasDocument: !!document,
       documentStatus: document?.status ?? null,
     };
@@ -283,15 +333,53 @@ export class OrganizerService {
       throw new NotFoundException('Organizer not found');
     }
 
-    const where: Record<string, unknown> = { organizerId: userId };
+    const eventsQb = this.eventRepository
+      .createQueryBuilder('event')
+      .select('event.id', 'id')
+      .addSelect('event.title', 'title')
+      .addSelect('event.description', 'description')
+      .addSelect('event.status', 'status')
+      .addSelect('event.start_datetime', 'startDatetime')
+      .addSelect('event.end_datetime', 'endDatetime')
+      .addSelect('event.location_name', 'locationName')
+      .addSelect('event.capacity', 'capacity')
+      .addSelect('event.total_price', 'totalPrice')
+      .addSelect('event.is_physical', 'isPhysical')
+      .addSelect('event.cover_image', 'coverImage')
+      .where('event.organizer_id = :organizerId', { organizerId: userId })
+      .orderBy('event.created_at', 'DESC');
+
     if (status) {
-      where.status = status;
+      eventsQb.andWhere('event.status = :status', { status });
     }
 
-    const events = await this.eventRepository.find({
-      where,
-      order: { createdAt: 'DESC' },
-    });
+    const eventRows = await eventsQb.getRawMany<{
+      id: number;
+      title: string;
+      description: string;
+      status: string;
+      startDatetime: Date | string;
+      endDatetime: Date | string;
+      locationName: string | null;
+      capacity: number | string;
+      totalPrice: number | string;
+      isPhysical: number | boolean;
+      coverImage: string | null;
+    }>();
+
+    const events = eventRows.map((row) => ({
+      id: Number(row.id),
+      title: row.title ?? '',
+      description: row.description ?? '',
+      status: row.status ?? 'draft',
+      startDatetime: row.startDatetime ? new Date(row.startDatetime) : null,
+      endDatetime: row.endDatetime ? new Date(row.endDatetime) : null,
+      locationName: row.locationName ?? null,
+      capacity: Number(row.capacity ?? 0),
+      totalPrice: Number(row.totalPrice ?? 0),
+      isPhysical: row.isPhysical === true || row.isPhysical === 1,
+      coverImage: row.coverImage ?? null,
+    }));
 
     const registrationCountByEventId = new Map<number, number>();
     if (events.length > 0) {
@@ -364,7 +452,9 @@ export class OrganizerService {
       .where('rev.organizerId = :organizerId', { organizerId: userId })
       .getRawOne<{ avg: string | null; cnt: string }>();
 
-    const ratingAverage = ratingStats?.avg ? Number(Number(ratingStats.avg).toFixed(1)) : null;
+    const ratingAverage = ratingStats?.avg
+      ? Number(Number(ratingStats.avg).toFixed(1))
+      : null;
     const ratingCount = ratingStats ? Number(ratingStats.cnt) : 0;
 
     const recentFollowRows = await this.organizerFollowRepository
@@ -378,7 +468,11 @@ export class OrganizerService {
       .where('f.organizerId = :organizerId', { organizerId: userId })
       .orderBy('f.createdAt', 'DESC')
       .limit(4)
-      .getRawMany<{ memberId: number; fullName: string; profileImg: string | null }>();
+      .getRawMany<{
+        memberId: number;
+        fullName: string;
+        profileImg: string | null;
+      }>();
 
     const recentFollowers = recentFollowRows.map((r) => ({
       memberId: Number(r.memberId),
@@ -393,7 +487,8 @@ export class OrganizerService {
       location: user.location ?? null,
       profileImg: user.profileImg ?? null,
       organizationName: organizerProfile?.organizationName ?? null,
-      organizationDescription: organizerProfile?.organizationDescription ?? null,
+      organizationDescription:
+        organizerProfile?.organizationDescription ?? null,
       website: organizerProfile?.website ?? null,
       verificationStatus: organizerProfile?.verificationStatus ?? 'pending',
       rejectionReason: organizerProfile?.rejectionReason ?? null,
@@ -438,7 +533,9 @@ export class OrganizerService {
       .where('rev.organizerId = :organizerId', { organizerId })
       .getRawOne<{ avg: string | null; cnt: string }>();
 
-    const ratingAverage = ratingStats?.avg ? Number(Number(ratingStats.avg).toFixed(1)) : null;
+    const ratingAverage = ratingStats?.avg
+      ? Number(Number(ratingStats.avg).toFixed(1))
+      : null;
     const ratingCount = ratingStats ? Number(ratingStats.cnt) : 0;
 
     let isFollowing = false;
@@ -450,7 +547,9 @@ export class OrganizerService {
     }
 
     const displayName =
-      (organizerProfile?.organizationName || '').trim() || user.fullName || 'Organizer';
+      (organizerProfile?.organizationName || '').trim() ||
+      user.fullName ||
+      'Organizer';
 
     return {
       organizerId: user.id,
@@ -459,7 +558,8 @@ export class OrganizerService {
       location: user.location ?? null,
       profileImg: user.profileImg ?? null,
       organizationName: organizerProfile?.organizationName ?? null,
-      organizationDescription: organizerProfile?.organizationDescription ?? null,
+      organizationDescription:
+        organizerProfile?.organizationDescription ?? null,
       website: organizerProfile?.website ?? null,
       verificationStatus: organizerProfile?.verificationStatus ?? 'pending',
       eventsCount: publishedCount,
@@ -526,7 +626,12 @@ export class OrganizerService {
       ])
       .where('f.organizerId = :organizerId', { organizerId })
       .orderBy('f.createdAt', 'DESC')
-      .getRawMany<{ memberId: number; fullName: string; profileImg: string | null; followedAt: Date }>();
+      .getRawMany<{
+        memberId: number;
+        fullName: string;
+        profileImg: string | null;
+        followedAt: Date;
+      }>();
 
     return rows.map((r) => ({
       memberId: Number(r.memberId),
@@ -619,6 +724,161 @@ export class OrganizerService {
     return { message: 'Review deleted' };
   }
 
+  async getOrganizerAttendees(
+    userId: number,
+    options?: { page?: number; limit?: number; eventId?: number },
+  ) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || user.roleId !== 2) {
+      throw new NotFoundException('Organizer not found');
+    }
+
+    const page = Math.max(1, options?.page ?? 1);
+    const limit = Math.min(50, Math.max(1, options?.limit ?? 20));
+    const offset = (page - 1) * limit;
+
+    const qb = this.eventRegistrationRepository
+      .createQueryBuilder('reg')
+      .innerJoin(Event, 'event', 'event.id = reg.eventId')
+      .innerJoin(User, 'member', 'member.id = reg.memberId')
+      .where('event.organizerId = :organizerId', { organizerId: userId });
+
+    if (options?.eventId) {
+      qb.andWhere('event.id = :eventId', { eventId: options.eventId });
+    }
+
+    qb.select('reg.id', 'registrationId')
+      .addSelect('reg.createdAt', 'joinedAt')
+      .addSelect('member.id', 'memberId')
+      .addSelect('member.full_name', 'fullName')
+      .addSelect('member.profile_img', 'profileImg')
+      .addSelect('member.email', 'email')
+      .addSelect('member.phone', 'phone')
+      .addSelect('event.id', 'eventId')
+      .addSelect('event.title', 'eventTitle')
+      .addSelect('event.status', 'eventStatus')
+      .orderBy('reg.createdAt', 'DESC');
+
+    const total = await qb.getCount();
+    const rows = await qb.offset(offset).limit(limit).getRawMany<{
+      registrationId: number | string;
+      joinedAt: Date | string;
+      memberId: number | string;
+      fullName: string;
+      profileImg: string | null;
+      email: string | null;
+      phone: string | null;
+      eventId: number | string;
+      eventTitle: string;
+      eventStatus: string;
+    }>();
+
+    return {
+      items: rows.map((row) => ({
+        registrationId: Number(row.registrationId),
+        memberId: Number(row.memberId),
+        fullName: row.fullName ?? 'Member',
+        profileImg: row.profileImg ?? null,
+        email: row.email ?? null,
+        phone: row.phone ?? null,
+        eventId: Number(row.eventId),
+        eventTitle: row.eventTitle ?? 'Untitled event',
+        eventStatus: row.eventStatus ?? 'draft',
+        joinedAt: row.joinedAt,
+      })),
+      page,
+      limit,
+      total,
+      hasMore: offset + rows.length < total,
+    };
+  }
+
+  async getOrganizerAnalytics(userId: number) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || user.roleId !== 2) {
+      throw new NotFoundException('Organizer not found');
+    }
+
+    const events = await this.eventRepository.find({
+      where: { organizerId: userId },
+    });
+
+    const now = Date.now();
+    let drafts = 0;
+    let publishedActive = 0;
+    let past = 0;
+    let upcoming = 0;
+
+    events.forEach((event) => {
+      if (event.status === 'draft') {
+        drafts += 1;
+        return;
+      }
+      if (event.status !== 'published') return;
+
+      const startMs = event.startDatetime
+        ? new Date(event.startDatetime).getTime()
+        : null;
+      const endMs = event.endDatetime
+        ? new Date(event.endDatetime).getTime()
+        : null;
+
+      const isPast =
+        (endMs != null && now > endMs) ||
+        (endMs == null && startMs != null && now > startMs + 86400000);
+
+      if (isPast) {
+        past += 1;
+        return;
+      }
+
+      publishedActive += 1;
+      if (startMs != null && startMs > now) {
+        upcoming += 1;
+      }
+    });
+
+    const dashboard = await this.getProfileDashboard(userId);
+
+    const topEventRows = await this.eventRegistrationRepository
+      .createQueryBuilder('reg')
+      .innerJoin(Event, 'event', 'event.id = reg.eventId')
+      .where('event.organizerId = :organizerId', { organizerId: userId })
+      .select('event.id', 'eventId')
+      .addSelect('event.title', 'title')
+      .addSelect('event.status', 'status')
+      .addSelect('COUNT(reg.id)', 'registrationCount')
+      .groupBy('event.id')
+      .addGroupBy('event.title')
+      .addGroupBy('event.status')
+      .orderBy('registrationCount', 'DESC')
+      .limit(5)
+      .getRawMany<{
+        eventId: number | string;
+        title: string;
+        status: string;
+        registrationCount: string;
+      }>();
+
+    return {
+      eventsTotal: events.length,
+      drafts,
+      publishedActive,
+      past,
+      upcoming,
+      totalAttendees: dashboard.attendeesTotal,
+      followersCount: dashboard.followersCount,
+      ratingAverage: dashboard.ratingAverage,
+      ratingCount: dashboard.ratingCount,
+      topEventsByAttendees: topEventRows.map((row) => ({
+        eventId: Number(row.eventId),
+        title: row.title ?? 'Untitled event',
+        status: row.status ?? 'draft',
+        registrationCount: Number(row.registrationCount ?? 0),
+      })),
+    };
+  }
+
   async getOrganizerReviews(organizerId: number) {
     const rows = await this.organizerReviewRepository
       .createQueryBuilder('rev')
@@ -674,7 +934,8 @@ export class OrganizerService {
 
   getPaymentConfig() {
     return {
-      paymentPhone: this.configService.get<string>('ORGANIZER_PAYMENT_PHONE')?.trim() || '',
+      paymentPhone:
+        this.configService.get<string>('ORGANIZER_PAYMENT_PHONE')?.trim() || '',
       single: {
         priceUsd: Number(this.configService.get('PUBLISH_PRICE_SINGLE') ?? 5),
         credits: 1,
@@ -686,19 +947,26 @@ export class OrganizerService {
     };
   }
 
-  async createPaymentRequest(userId: number, dto: CreateOrganizerPaymentRequestDto) {
+  async createPaymentRequest(
+    userId: number,
+    dto: CreateOrganizerPaymentRequestDto,
+  ) {
     const profile = await this.organizerProfileRepository.findOne({
       where: { userId },
     });
     if (!profile || profile.verificationStatus !== 'approved') {
-      throw new BadRequestException('Verify your organizer account before purchasing publish credits.');
+      throw new BadRequestException(
+        'Verify your organizer account before purchasing publish credits.',
+      );
     }
 
     const existingPending = await this.paymentRequestRepository.findOne({
       where: { organizerId: userId, status: 'pending' },
     });
     if (existingPending) {
-      throw new BadRequestException('You already have a payment request awaiting approval.');
+      throw new BadRequestException(
+        'You already have a payment request awaiting approval.',
+      );
     }
 
     const config = this.getPaymentConfig();
@@ -764,5 +1032,107 @@ export class OrganizerService {
     await this.userRepository.save(user);
 
     return { message: 'Password changed successfully' };
+  }
+
+  async messageEventAttendees(
+    organizerId: number,
+    eventId: number,
+    title: string,
+    body: string,
+  ) {
+    const event = await this.assertOrganizerOwnsEvent(organizerId, eventId);
+    const memberIds = await this.getEventRegistrantMemberIds(eventId);
+
+    await Promise.all(
+      memberIds.map((memberId) =>
+        this.notificationsService.notifyOrganizerBlast(
+          memberId,
+          eventId,
+          title.trim(),
+          body.trim(),
+        ),
+      ),
+    );
+
+    return { success: true, notifiedCount: memberIds.length, eventTitle: event.title };
+  }
+
+  async checkInEventAttendee(
+    organizerId: number,
+    eventId: number,
+    memberId: number,
+  ) {
+    await this.assertOrganizerOwnsEvent(organizerId, eventId);
+
+    const registration = await this.eventRegistrationRepository.findOne({
+      where: { eventId, memberId },
+    });
+
+    if (!registration) {
+      throw new BadRequestException('This ticket is not registered for this event');
+    }
+
+    if (registration.status === 'checked_in') {
+      const member = await this.userRepository.findOne({ where: { id: memberId } });
+      return {
+        success: true,
+        alreadyCheckedIn: true,
+        memberName: member?.fullName ?? 'Member',
+      };
+    }
+
+    registration.status = 'checked_in';
+    await this.eventRegistrationRepository.save(registration);
+
+    const member = await this.userRepository.findOne({ where: { id: memberId } });
+    return {
+      success: true,
+      alreadyCheckedIn: false,
+      memberName: member?.fullName ?? 'Member',
+    };
+  }
+
+  async cancelEventAndNotify(organizerId: number, eventId: number) {
+    const event = await this.assertOrganizerOwnsEvent(organizerId, eventId);
+    event.status = 'cancelled';
+    await this.eventRepository.save(event);
+
+    const memberIds = await this.getEventRegistrantMemberIds(eventId);
+    await Promise.all(
+      memberIds.map((memberId) =>
+        this.notificationsService.notifyEventCancelled(
+          memberId,
+          eventId,
+          event.title,
+        ),
+      ),
+    );
+
+    return { success: true, notifiedCount: memberIds.length };
+  }
+
+  async notifyEventPostponed(
+    organizerId: number,
+    eventId: number,
+    body: string,
+  ) {
+    const event = await this.assertOrganizerOwnsEvent(organizerId, eventId);
+    const message =
+      body.trim() ||
+      'The schedule changed. Open the event page for the latest date and time.';
+
+    const memberIds = await this.getEventRegistrantMemberIds(eventId);
+    await Promise.all(
+      memberIds.map((memberId) =>
+        this.notificationsService.notifyEventPostponed(
+          memberId,
+          eventId,
+          event.title,
+          message,
+        ),
+      ),
+    );
+
+    return { success: true, notifiedCount: memberIds.length };
   }
 }

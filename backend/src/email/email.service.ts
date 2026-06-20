@@ -14,9 +14,7 @@ export class EmailService {
       'onboarding@resend.dev';
 
     if (!apiKey) {
-      this.logger.warn(
-        `[DEV] RESEND_API_KEY missing — OTP for ${to}: ${code}`,
-      );
+      this.logger.warn(`[DEV] RESEND_API_KEY missing — OTP for ${to}: ${code}`);
       return;
     }
 

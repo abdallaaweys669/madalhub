@@ -50,7 +50,7 @@ export default function PendingVerificationScreen() {
       await authStorage.storeOrganizerStatus('approved');
       setOrganizerStatus('approved');
       setNotice(null);
-      router.replace('/(organizer)/dashboard');
+      router.replace('/(organizer)/(tabs)');
       return;
     }
 

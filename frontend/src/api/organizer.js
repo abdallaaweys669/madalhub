@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { getEvents, publishOrganizerEvent } from './events';
+import { createOrganizerEvent, getEvents, patchOrganizerEvent, publishOrganizerEvent } from './events';
 
 const getNetworkErrorMessage = (error) => {
   const code = error?.code;
@@ -190,6 +190,107 @@ export const deleteEvent = async (eventId) => {
   }
 };
 
+export const cancelOrganizerEvent = async (eventId) => {
+  try {
+    const response = await apiClient.post(`/organizer/events/${eventId}/cancel`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to cancel event';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const messageEventAttendees = async (eventId, { title, body }) => {
+  try {
+    const response = await apiClient.post(`/organizer/events/${eventId}/message-attendees`, {
+      title,
+      body,
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to send message';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const checkInEventAttendee = async (eventId, memberId) => {
+  try {
+    const response = await apiClient.post(`/organizer/events/${eventId}/check-in`, { memberId });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Check-in failed';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const notifyEventPostponed = async (eventId, message = '') => {
+  try {
+    const response = await apiClient.post(`/organizer/events/${eventId}/postpone-notify`, { message });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const messageText = extractApiMessage(error) || 'Failed to notify attendees';
+      throw new Error(messageText);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const duplicateOrganizerEvent = async (eventId) => {
+  try {
+    const { data } = await apiClient.get(`/events/${eventId}`);
+    const title = `${(data.title || 'Untitled event').trim()} (Copy)`;
+    const payload = {
+      title,
+      description: data.description || '',
+      startDatetime: data.startsAt || data.startDatetime,
+      endDatetime: data.endsAt || data.endDatetime,
+      coverImage: data.image || data.coverImage || null,
+      locationName: data.locationName || data.location?.name || 'Venue TBD',
+      locationAddress: data.locationAddress || data.location?.address || '',
+      locationLatitude: data.location?.latitude ?? data.locationLatitude ?? null,
+      locationLongitude: data.location?.longitude ?? data.locationLongitude ?? null,
+      capacity: Number(data.capacity) || 0,
+      totalPrice: Number(data.price ?? data.totalPrice ?? 0) || 0,
+      interestId: Number(data.interestId) || 1,
+      isPhysical: data.isOnline !== true,
+      isOnline: data.isOnline === true,
+      isHybrid: false,
+      onlineLink: data.onlineLink || undefined,
+      eventFormat: data.eventFormat || null,
+      audienceGender: ['all', 'female', 'male'].includes(data.audienceGender) ? data.audienceGender : 'all',
+      sponsors: Array.isArray(data.sponsors)
+        ? data.sponsors.map((s) => ({ name: s.name, ...(s.logo ? { logo: s.logo } : {}) }))
+        : [],
+      roster: Array.isArray(data.roster)
+        ? data.roster.map((r, idx) => ({
+            role: r.role,
+            displayName: r.displayName,
+            title: r.title || null,
+            sortOrder: idx,
+            photoUrl: r.photoUrl || null,
+          }))
+        : [],
+    };
+    return createOrganizerEvent(payload);
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to duplicate event';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
 /** Publish a draft event (same as `publishOrganizerEvent` in `@/api/events`, keeps list cache in sync). */
 export const publishEvent = publishOrganizerEvent;
 
@@ -288,6 +389,34 @@ export const getOrganizerFollowers = async () => {
   }
 };
 
+export const getOrganizerAttendees = async ({ page = 1, limit = 20, eventId } = {}) => {
+  try {
+    const params = { page, limit };
+    if (eventId != null) params.eventId = eventId;
+    const response = await apiClient.get('/organizer/attendees', { params });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to load attendees';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const getOrganizerAnalytics = async () => {
+  try {
+    const response = await apiClient.get('/organizer/analytics');
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to load analytics';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
 export const createOrganizerReview = async (organizerId, rating, comment) => {
   try {
     const response = await apiClient.post('/organizer/review', { organizerId, rating, comment });
@@ -355,6 +484,11 @@ export default {
   updateOrganizerContact,
   getOrganizerEvents,
   deleteEvent,
+  cancelOrganizerEvent,
+  duplicateOrganizerEvent,
+  messageEventAttendees,
+  checkInEventAttendee,
+  notifyEventPostponed,
   publishEvent,
   getProfileDashboard,
   getPublicOrganizerProfile,
@@ -363,6 +497,8 @@ export default {
   followOrganizer,
   unfollowOrganizer,
   getOrganizerFollowers,
+  getOrganizerAttendees,
+  getOrganizerAnalytics,
   createOrganizerReview,
   updateOrganizerReview,
   deleteOrganizerReview,

@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsArray,
+  IsIn,
   ValidateNested,
 } from 'class-validator';
 import { EventSponsorInputDto } from './event-sponsor-input.dto';
@@ -82,6 +83,10 @@ export class CreateEventDto {
   @IsOptional()
   @IsString()
   eventFormat?: string | null;
+
+  @IsOptional()
+  @IsIn(['all', 'female', 'male'])
+  audienceGender?: 'all' | 'female' | 'male';
 
   @IsOptional()
   @IsArray()

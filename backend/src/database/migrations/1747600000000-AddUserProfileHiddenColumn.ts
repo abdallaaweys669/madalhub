@@ -35,7 +35,9 @@ export class AddUserProfileHiddenColumn1747600000000 implements MigrationInterfa
     const have = new Set(rows.map((r) => r.COLUMN_NAME));
 
     if (have.has('profile_hidden')) {
-      await queryRunner.query(`ALTER TABLE \`users\` DROP COLUMN \`profile_hidden\``);
+      await queryRunner.query(
+        `ALTER TABLE \`users\` DROP COLUMN \`profile_hidden\``,
+      );
     }
   }
 }

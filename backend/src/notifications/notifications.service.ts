@@ -13,7 +13,10 @@ const ROLE_MEMBER = 1;
 export type MemberNotificationType =
   | 'profile_complete'
   | 'event_joined'
-  | 'event_saved';
+  | 'event_saved'
+  | 'organizer_message'
+  | 'event_cancelled'
+  | 'event_postponed';
 
 export type MemberNotificationDto = {
   id: number;
@@ -37,7 +40,9 @@ export class NotificationsService {
 
   private assertMemberRole(role?: number) {
     if (role != null && Number(role) !== ROLE_MEMBER) {
-      throw new ForbiddenException('Notifications are available for members only');
+      throw new ForbiddenException(
+        'Notifications are available for members only',
+      );
     }
   }
 
@@ -157,6 +162,72 @@ export class NotificationsService {
       type: 'event_saved',
       title: `Saved: ${eventTitle}`,
       body: 'We added this event to your saved list.',
+      eventId,
+      actionRoute: `/events/${eventId}`,
+    });
+  }
+
+  async createMemberNotification(input: {
+    userId: number;
+    dedupeKey: string;
+    type: string;
+    title: string;
+    body: string;
+    eventId?: number;
+    actionRoute?: string;
+  }) {
+    return this.upsertByDedupeKey({
+      userId: input.userId,
+      dedupeKey: input.dedupeKey,
+      type: input.type as MemberNotificationType,
+      title: input.title,
+      body: input.body,
+      eventId: input.eventId,
+      actionRoute: input.actionRoute,
+    });
+  }
+
+  async notifyOrganizerBlast(
+    userId: number,
+    eventId: number,
+    title: string,
+    body: string,
+  ) {
+    return this.createMemberNotification({
+      userId,
+      dedupeKey: `organizer_blast_${eventId}_${Date.now()}_${userId}`,
+      type: 'organizer_message',
+      title,
+      body,
+      eventId,
+      actionRoute: `/events/${eventId}`,
+    });
+  }
+
+  async notifyEventCancelled(userId: number, eventId: number, eventTitle: string) {
+    return this.createMemberNotification({
+      userId,
+      dedupeKey: `event_cancelled_${eventId}_${userId}`,
+      type: 'event_cancelled',
+      title: `${eventTitle} was cancelled`,
+      body: 'The organizer cancelled this event. You will not be charged for any ticket.',
+      eventId,
+      actionRoute: `/events/${eventId}`,
+    });
+  }
+
+  async notifyEventPostponed(
+    userId: number,
+    eventId: number,
+    eventTitle: string,
+    body: string,
+  ) {
+    return this.createMemberNotification({
+      userId,
+      dedupeKey: `event_postponed_${eventId}_${Date.now()}_${userId}`,
+      type: 'event_postponed',
+      title: `${eventTitle} was postponed`,
+      body,
       eventId,
       actionRoute: `/events/${eventId}`,
     });

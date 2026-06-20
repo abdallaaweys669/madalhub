@@ -125,7 +125,9 @@ describe('AuthService - Role Enforcement', () => {
       await expect(
         service.login({ email: 'organizer@test.com', password: 'password123' }),
       ).rejects.toThrow(
-        new UnauthorizedException('Use organizer login from the Welcome screen.'),
+        new UnauthorizedException(
+          'Use organizer login from the Welcome screen.',
+        ),
       );
 
       expect(bcrypt.compare).not.toHaveBeenCalled();

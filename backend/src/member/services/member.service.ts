@@ -16,7 +16,9 @@ const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
 const ROLE_ADMIN = 3;
 
-function canViewerSeeHiddenProfile(viewer?: { userId?: number; role?: number } | null): boolean {
+function canViewerSeeHiddenProfile(
+  viewer?: { userId?: number; role?: number } | null,
+): boolean {
   const role = viewer?.role != null ? Number(viewer.role) : null;
   return role === ROLE_ORGANIZER || role === ROLE_ADMIN;
 }
@@ -33,7 +35,9 @@ export class MemberService {
 
   // member.controller.ts
 
-  async findAll(viewer?: { userId?: number; role?: number } | null): Promise<Omit<User, 'password'>[]> {
+  async findAll(
+    viewer?: { userId?: number; role?: number } | null,
+  ): Promise<Omit<User, 'password'>[]> {
     const users = await this.userRepository.find();
     return users.map((user) => this.applyHiddenProfileRules(user, viewer));
   }

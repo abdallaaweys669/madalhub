@@ -17,6 +17,7 @@ import { EventLike } from 'src/database/entities/event-like.entity';
 import { MemberInterest } from 'src/database/entities/member-interest.entity';
 import { MemberEventInteraction } from 'src/database/entities/member-event-interaction.entity';
 import type { MemberEventInteractionAction } from 'src/database/entities/member-event-interaction.entity';
+import { MemberProfile } from 'src/database/entities/member-profile.entity';
 import {
   BadRequestException,
   ForbiddenException,
@@ -24,6 +25,7 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { OrganizerNotificationsService } from 'src/notifications/organizer-notifications.service';
 import {
   assertCanPublish,
   type PublishBlockCode,
@@ -38,7 +40,9 @@ const BROWSING_TASTE_WEIGHTS: Record<'viewed' | 'opened' | 'shared', number> = {
   shared: 2,
 };
 
-function canViewerSeeHiddenProfile(viewer?: { userId?: number; role?: number } | null): boolean {
+function canViewerSeeHiddenProfile(
+  viewer?: { userId?: number; role?: number } | null,
+): boolean {
   const role = viewer?.role != null ? Number(viewer.role) : null;
   return role === ROLE_ORGANIZER || role === ROLE_ADMIN;
 }
@@ -70,13 +74,88 @@ export class EventService {
     private memberInterestRepo: Repository<MemberInterest>,
     @InjectRepository(MemberEventInteraction)
     private memberEventInteractionRepo: Repository<MemberEventInteraction>,
+    @InjectRepository(MemberProfile)
+    private memberProfileRepo: Repository<MemberProfile>,
     private notificationsService: NotificationsService,
+    private organizerNotificationsService: OrganizerNotificationsService,
   ) {}
 
   private ensureMember(user: User) {
     if (user.roleId !== 1) {
       throw new ForbiddenException('Only members can perform this action');
     }
+  }
+
+  private normalizeAudienceGender(
+    value?: string | null,
+  ): 'all' | 'female' | 'male' {
+    const normalized = String(value || 'all')
+      .trim()
+      .toLowerCase();
+    if (
+      normalized === 'female' ||
+      normalized === 'women' ||
+      normalized === 'woman'
+    ) {
+      return 'female';
+    }
+    if (normalized === 'male' || normalized === 'men' || normalized === 'man') {
+      return 'male';
+    }
+    return 'all';
+  }
+
+  private async getMemberGender(memberId: number): Promise<string | null> {
+    const profile = await this.memberProfileRepo.findOne({
+      where: { userId: memberId },
+      select: ['gender'],
+    });
+    return typeof profile?.gender === 'string'
+      ? profile.gender.trim().toLowerCase()
+      : null;
+  }
+
+  private async canAccessEventAudience(
+    event: Event,
+    viewerId?: number,
+    viewerRole?: number,
+  ): Promise<boolean> {
+    const audienceGender = this.normalizeAudienceGender(event.audienceGender);
+    if (audienceGender === 'all') return true;
+    if (viewerRole === ROLE_ORGANIZER || viewerRole === ROLE_ADMIN) return true;
+    if (viewerId == null) return false;
+
+    const memberGender = await this.getMemberGender(viewerId);
+    return memberGender === audienceGender;
+  }
+
+  private applyAudienceVisibilityFilter(
+    qb: ReturnType<Repository<Event>['createQueryBuilder']>,
+    userId?: number,
+    userRole?: number,
+  ) {
+    if (userRole === ROLE_ORGANIZER || userRole === ROLE_ADMIN) return;
+
+    if (userId == null) {
+      qb.andWhere(
+        "(event.audience_gender IS NULL OR event.audience_gender = 'all')",
+      );
+      return;
+    }
+
+    qb.andWhere(
+      `(
+        event.audience_gender IS NULL
+        OR event.audience_gender = 'all'
+        OR EXISTS (
+          SELECT 1
+          FROM member_profiles mp_audience
+          WHERE mp_audience.user_id = :audienceUserId
+            AND LOWER(mp_audience.gender) = event.audience_gender
+        )
+      )`,
+      { audienceUserId: userId },
+    );
   }
 
   private mapEventSummary(
@@ -128,6 +207,7 @@ export class EventService {
       isSaved,
       attendeePreviews: attendeePreviews ?? [],
       eventFormat: event.eventFormat ?? null,
+      audienceGender: this.normalizeAudienceGender(event.audienceGender),
       likeCount,
       isLiked,
       createdAt: event.createdAt,
@@ -220,19 +300,24 @@ export class EventService {
 
       const profileImg = pickRaw(row, ['profileImg', 'profile_img']);
       const fullName = pickRaw(row, ['fullName', 'full_name']);
-      const profileHidden = Boolean(pickRaw(row, ['profileHidden', 'profile_hidden']));
+      const profileHidden = Boolean(
+        pickRaw(row, ['profileHidden', 'profile_hidden']),
+      );
       const isSelf = viewerId != null && viewerId === uid;
       const shouldMask = profileHidden && !canRevealHidden && !isSelf;
 
       list.push({
         userId: shouldMask ? null : uid,
-        avatar: shouldMask ? null : typeof profileImg === 'string' ? profileImg : null,
-        name:
-          shouldMask
-            ? 'Anonymous'
-            : typeof fullName === 'string' && fullName.trim()
-              ? fullName.trim()
-              : 'Member',
+        avatar: shouldMask
+          ? null
+          : typeof profileImg === 'string'
+            ? profileImg
+            : null,
+        name: shouldMask
+          ? 'Anonymous'
+          : typeof fullName === 'string' && fullName.trim()
+            ? fullName.trim()
+            : 'Member',
         isAnonymous: shouldMask ? true : undefined,
       });
     }
@@ -284,7 +369,7 @@ export class EventService {
 
     if (dateBucket === 'this-weekend') {
       const day = startOfToday.getDay();
-      let thursday = new Date(startOfToday);
+      const thursday = new Date(startOfToday);
       let friday = new Date(startOfToday);
 
       if (day === 4) {
@@ -296,7 +381,7 @@ export class EventService {
         friday = new Date(thursday);
         friday.setDate(friday.getDate() + 1);
       } else {
-        thursday.setDate(thursday.getDate() + (4 - day + 7) % 7);
+        thursday.setDate(thursday.getDate() + ((4 - day + 7) % 7));
         friday = new Date(thursday);
         friday.setDate(friday.getDate() + 1);
       }
@@ -351,7 +436,8 @@ export class EventService {
 
   private throwPublishBlocked(code: PublishBlockCode) {
     const messages: Record<PublishBlockCode, string> = {
-      VERIFICATION_REQUIRED: 'Complete identity verification before publishing.',
+      VERIFICATION_REQUIRED:
+        'Complete identity verification before publishing.',
       VERIFICATION_PENDING: 'Your verification is under review.',
       VERIFICATION_REJECTED: 'Verification was rejected. Update and resubmit.',
       PAYMENT_REQUIRED: 'Purchase a publish credit to go live.',
@@ -488,8 +574,7 @@ export class EventService {
         if (Array.isArray(parsed)) {
           people = parsed.map((p: { role?: string; fullName?: string }) => ({
             role: typeof p?.role === 'string' ? p.role : 'speaker',
-            fullName:
-              typeof p?.fullName === 'string' ? p.fullName.trim() : '',
+            fullName: typeof p?.fullName === 'string' ? p.fullName.trim() : '',
           }));
         }
       } catch {
@@ -500,10 +585,15 @@ export class EventService {
   }
 
   /** Matches organizer app rules for Panel format only. */
-  private async ensurePeopleRulesForPublish(eventId: number, event: Event): Promise<void> {
+  private async ensurePeopleRulesForPublish(
+    eventId: number,
+    event: Event,
+  ): Promise<void> {
     let rosterRows: EventProgramRoster[] = [];
     try {
-      rosterRows = await this.eventProgramRosterRepo.find({ where: { eventId } });
+      rosterRows = await this.eventProgramRosterRepo.find({
+        where: { eventId },
+      });
     } catch {
       rosterRows = [];
     }
@@ -522,13 +612,12 @@ export class EventService {
       return;
     }
 
-    const people = rosterRows.length > 0
-      ? rosterRows.map((r) => ({ role: r.role, fullName: r.displayName }))
-      : legacyPeople;
+    const people =
+      rosterRows.length > 0
+        ? rosterRows.map((r) => ({ role: r.role, fullName: r.displayName }))
+        : legacyPeople;
 
-    const panelists = people.filter(
-      (p) => p.role === 'panelist' && p.fullName,
-    );
+    const panelists = people.filter((p) => p.role === 'panelist' && p.fullName);
     const moderators = people.filter(
       (p) => p.role === 'moderator' && p.fullName,
     );
@@ -594,6 +683,7 @@ export class EventService {
       organizerId,
       status: 'draft',
       eventFormat: dto.eventFormat ?? null,
+      audienceGender: this.normalizeAudienceGender(dto.audienceGender),
     });
 
     const saved = await this.eventRepo.save(event);
@@ -646,7 +736,7 @@ export class EventService {
 
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
-    
+
     if (event.organizerId !== organizerId) {
       throw new ForbiddenException('You do not own this event');
     }
@@ -655,11 +745,7 @@ export class EventService {
     return { success: true };
   }
 
-  async updateEvent(
-    eventId: number,
-    organizerId: number,
-    dto: UpdateEventDto,
-  ) {
+  async updateEvent(eventId: number, organizerId: number, dto: UpdateEventDto) {
     const user = await this.userRepo.findOne({ where: { id: organizerId } });
 
     if (!user) {
@@ -678,15 +764,6 @@ export class EventService {
       throw new ForbiddenException('You do not own this event');
     }
 
-    if (
-      dto.startDatetime &&
-      dto.endDatetime &&
-      new Date(dto.startDatetime).getTime() >=
-        new Date(dto.endDatetime).getTime()
-    ) {
-      throw new BadRequestException('startDatetime must be before endDatetime');
-    }
-
     const { sponsors, roster, ...rest } = dto as UpdateEventDto & {
       sponsors?: { name: string; logo?: string }[];
       roster?: {
@@ -698,10 +775,26 @@ export class EventService {
       }[];
     };
 
+    if (rest.status === 'published') {
+      throw new BadRequestException('Use the publish endpoint to publish an event');
+    }
+
+    if (
+      dto.startDatetime &&
+      dto.endDatetime &&
+      new Date(dto.startDatetime).getTime() >=
+        new Date(dto.endDatetime).getTime()
+    ) {
+      throw new BadRequestException('startDatetime must be before endDatetime');
+    }
+
     for (const key of Object.keys(rest) as (keyof typeof rest)[]) {
       const v = rest[key];
       if (v !== undefined) {
-        (event as unknown as Record<string, unknown>)[key as string] = v as unknown;
+        (event as unknown as Record<string, unknown>)[key as string] =
+          key === 'audienceGender'
+            ? this.normalizeAudienceGender(String(v))
+            : (v as unknown);
       }
     }
 
@@ -752,13 +845,20 @@ export class EventService {
       .createQueryBuilder('event')
       .where('event.status = :status', { status: 'published' });
 
+    this.applyAudienceVisibilityFilter(qb, userId, currentUserRole);
+
     const now = new Date();
-    if (query.organizerId != null && Number.isFinite(Number(query.organizerId))) {
+    if (
+      query.organizerId != null &&
+      Number.isFinite(Number(query.organizerId))
+    ) {
       qb.andWhere('event.organizerId = :filterOrganizerId', {
         filterOrganizerId: Number(query.organizerId),
       });
       if (query.organizerScope === 'upcoming') {
-        qb.andWhere('event.startDatetime >= :organizerNow', { organizerNow: now });
+        qb.andWhere('event.startDatetime >= :organizerNow', {
+          organizerNow: now,
+        });
       } else if (query.organizerScope === 'past') {
         qb.andWhere('event.startDatetime < :organizerNowPast', {
           organizerNowPast: now,
@@ -932,11 +1032,18 @@ export class EventService {
     };
   }
 
-  private getLocationMatchScoreForEvent(event: Event, userLocation: string): number {
-    const locationText = String(userLocation || '').trim().toLowerCase();
+  private getLocationMatchScoreForEvent(
+    event: Event,
+    userLocation: string,
+  ): number {
+    const locationText = String(userLocation || '')
+      .trim()
+      .toLowerCase();
     if (!locationText) return 0;
 
-    const eventLocation = String(event.locationName || '').trim().toLowerCase();
+    const eventLocation = String(event.locationName || '')
+      .trim()
+      .toLowerCase();
     const locationParts = locationText
       .split(',')
       .map((part) => part.trim())
@@ -950,7 +1057,11 @@ export class EventService {
     ) {
       return 1;
     }
-    if (locationParts.some((part) => part.length > 2 && eventLocation.includes(part))) {
+    if (
+      locationParts.some(
+        (part) => part.length > 2 && eventLocation.includes(part),
+      )
+    ) {
       return 0.65;
     }
     return 0;
@@ -985,6 +1096,9 @@ export class EventService {
 
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
     if (!event || event.status !== 'published') {
+      throw new NotFoundException('Event not found');
+    }
+    if (!(await this.canAccessEventAudience(event, memberId, member.roleId))) {
       throw new NotFoundException('Event not found');
     }
 
@@ -1023,7 +1137,10 @@ export class EventService {
     });
 
     browsingByInterest.forEach((weightedScore, interestId) => {
-      taste.set(interestId, (taste.get(interestId) ?? 0) + weightedScore * 0.12);
+      taste.set(
+        interestId,
+        (taste.get(interestId) ?? 0) + weightedScore * 0.12,
+      );
     });
 
     const max = Math.max(...Array.from(taste.values()), 1);
@@ -1040,15 +1157,14 @@ export class EventService {
     userLocation: string,
   ): number {
     const tasteScore = tasteProfile.get(event.interestId) ?? 0;
-    const locationScore = this.getLocationMatchScoreForEvent(event, userLocation);
+    const locationScore = this.getLocationMatchScoreForEvent(
+      event,
+      userLocation,
+    );
     return tasteScore * 0.85 + locationScore * 0.15;
   }
 
-  async getRecommendedEvents(
-    memberId: number,
-    viewerRole?: number,
-    limit = 8,
-  ) {
+  async getRecommendedEvents(memberId: number, viewerRole?: number, limit = 8) {
     const member = await this.userRepo.findOne({ where: { id: memberId } });
     if (!member) {
       throw new NotFoundException('Member not found');
@@ -1095,7 +1211,10 @@ export class EventService {
     attendanceRows.forEach((row) => {
       const interestId = Number(row.interestId);
       if (!Number.isFinite(interestId) || interestId <= 0) return;
-      attendanceByInterest.set(interestId, parseInt(String(row.count), 10) || 0);
+      attendanceByInterest.set(
+        interestId,
+        parseInt(String(row.count), 10) || 0,
+      );
     });
 
     const savedByInterest = new Map<number, number>();
@@ -1118,7 +1237,11 @@ export class EventService {
       .andWhere('interaction.interest_id IS NOT NULL')
       .groupBy('interaction.interest_id')
       .addGroupBy('interaction.action')
-      .getRawMany<{ interestId: number | string; action: string; count: string }>();
+      .getRawMany<{
+        interestId: number | string;
+        action: string;
+        count: string;
+      }>();
 
     const browsingByInterest = new Map<number, number>();
     browsingRows.forEach((row) => {
@@ -1151,6 +1274,19 @@ export class EventService {
       .createQueryBuilder('event')
       .where('event.status = :status', { status: 'published' })
       .andWhere('event.startDatetime >= :now', { now })
+      .andWhere(
+        `(
+          event.audience_gender IS NULL
+          OR event.audience_gender = 'all'
+          OR EXISTS (
+            SELECT 1
+            FROM member_profiles mp_audience
+            WHERE mp_audience.user_id = :audienceUserId
+              AND LOWER(mp_audience.gender) = event.audience_gender
+          )
+        )`,
+        { audienceUserId: memberId },
+      )
       .andWhere(
         `NOT EXISTS (
           SELECT 1
@@ -1197,7 +1333,9 @@ export class EventService {
         );
       });
 
-    const topEvents = scoredCandidates.slice(0, safeLimit).map((row) => row.event);
+    const topEvents = scoredCandidates
+      .slice(0, safeLimit)
+      .map((row) => row.event);
     const topEventIds = topEvents.map((event) => event.id);
 
     const savedRows = await this.savedEventRepo.find({
@@ -1206,10 +1344,14 @@ export class EventService {
     });
     const savedIds = new Set(savedRows.map((row) => row.eventId));
 
-    const attendeePreviewMap = await this.buildAttendeePreviewMap(topEventIds, 3, {
-      userId: memberId,
-      role: viewerRole,
-    });
+    const attendeePreviewMap = await this.buildAttendeePreviewMap(
+      topEventIds,
+      3,
+      {
+        userId: memberId,
+        role: viewerRole,
+      },
+    );
 
     const likeCountMap = new Map<number, number>();
     let likedEventIdSet = new Set<number>();
@@ -1244,7 +1386,8 @@ export class EventService {
         explicit: explicitInterestSet.has(interestId),
         attended: attendanceByInterest.get(interestId) ?? 0,
         saved: savedByInterest.get(interestId) ?? 0,
-        browsed: Math.round((browsingByInterest.get(interestId) ?? 0) * 10) / 10,
+        browsed:
+          Math.round((browsingByInterest.get(interestId) ?? 0) * 10) / 10,
       }))
       .sort((a, b) => b.score - a.score);
 
@@ -1283,6 +1426,17 @@ export class EventService {
       throw new NotFoundException('Event not found');
     }
 
+    if (
+      event.status === 'published' &&
+      !(await this.canAccessEventAudience(
+        event,
+        currentUserId,
+        currentUserRole,
+      ))
+    ) {
+      throw new NotFoundException('Event not found');
+    }
+
     return this.formatEventDetails(event, currentUserId, currentUserRole);
   }
 
@@ -1309,6 +1463,12 @@ export class EventService {
       throw new BadRequestException('Only published events can be joined');
     }
 
+    if (!(await this.canAccessEventAudience(event, memberId, member.roleId))) {
+      throw new ForbiddenException(
+        'This event is not available for your profile.',
+      );
+    }
+
     const existingRegistration = await this.eventRegistrationRepo.findOne({
       where: { eventId: eventId, memberId: memberId },
     });
@@ -1321,7 +1481,7 @@ export class EventService {
       where: { eventId: eventId },
     });
 
-    if (attendeesCount >= event.capacity) {
+    if (event.capacity > 0 && attendeesCount >= event.capacity) {
       throw new BadRequestException('Event is full');
     }
 
@@ -1334,7 +1494,8 @@ export class EventService {
     });
 
     try {
-      const savedRegistration = await this.eventRegistrationRepo.save(registration);
+      const savedRegistration =
+        await this.eventRegistrationRepo.save(registration);
       void this.recordMemberEventInteraction(
         memberId,
         event.id,
@@ -1343,6 +1504,14 @@ export class EventService {
       ).catch(() => undefined);
       void this.notificationsService
         .notifyEventJoined(memberId, event.id, event.title)
+        .catch(() => undefined);
+      void this.organizerNotificationsService
+        .notifyEventRegistration(
+          event.organizerId,
+          event.id,
+          event.title,
+          savedRegistration.id,
+        )
         .catch(() => undefined);
       return savedRegistration;
     } catch (error) {
@@ -1383,6 +1552,9 @@ export class EventService {
     if (!event || event.status !== 'published') {
       throw new NotFoundException('Event not found');
     }
+    if (!(await this.canAccessEventAudience(event, memberId, member.roleId))) {
+      throw new NotFoundException('Event not found');
+    }
 
     const existing = await this.eventLikeRepo.findOne({
       where: { eventId, memberId },
@@ -1394,7 +1566,9 @@ export class EventService {
         await this.eventLikeRepo.save(row);
       } catch (error) {
         const mysqlCode = (error as { code?: string })?.code;
-        if (!(error instanceof QueryFailedError && mysqlCode === 'ER_DUP_ENTRY')) {
+        if (
+          !(error instanceof QueryFailedError && mysqlCode === 'ER_DUP_ENTRY')
+        ) {
           throw error;
         }
       }
@@ -1430,6 +1604,9 @@ export class EventService {
 
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
     if (!event || event.status !== 'published') {
+      throw new NotFoundException('Event not found');
+    }
+    if (!(await this.canAccessEventAudience(event, memberId, member.roleId))) {
       throw new NotFoundException('Event not found');
     }
 
@@ -1522,10 +1699,14 @@ export class EventService {
     const joinedSet = new Set(joinedRows.map((row) => Number(row.eventId)));
     const savedSet = new Set(savedEventIds);
 
-    const attendeePreviewMap = await this.buildAttendeePreviewMap(savedEventIds, 3, {
-      userId: memberId,
-      role: viewerRole,
-    });
+    const attendeePreviewMap = await this.buildAttendeePreviewMap(
+      savedEventIds,
+      3,
+      {
+        userId: memberId,
+        role: viewerRole,
+      },
+    );
 
     const likeCountMap = new Map<number, number>();
     let likedEventIdSet = new Set<number>();
@@ -1552,22 +1733,32 @@ export class EventService {
       likedEventIdSet = new Set(likedRows.map((row) => Number(row.eventId)));
     }
 
-    return savedRows
-      .map((row) => eventMap.get(row.eventId))
-      .filter((event): event is Event =>
-        Boolean(event && event.status === 'published'),
+    const visibleEvents = (
+      await Promise.all(
+        savedRows
+          .map((row) => eventMap.get(row.eventId))
+          .filter((event): event is Event =>
+            Boolean(event && event.status === 'published'),
+          )
+          .map(async (event) =>
+            (await this.canAccessEventAudience(event, memberId, viewerRole))
+              ? event
+              : null,
+          ),
       )
-      .map((event) =>
-        this.mapEventSummary(
-          event,
-          countMap.get(event.id) ?? 0,
-          joinedSet.has(event.id),
-          savedSet.has(event.id),
-          attendeePreviewMap.get(event.id) ?? [],
-          likeCountMap.get(event.id) ?? 0,
-          likedEventIdSet.has(event.id),
-        ),
-      );
+    ).filter((event): event is Event => Boolean(event));
+
+    return visibleEvents.map((event) =>
+      this.mapEventSummary(
+        event,
+        countMap.get(event.id) ?? 0,
+        joinedSet.has(event.id),
+        savedSet.has(event.id),
+        attendeePreviewMap.get(event.id) ?? [],
+        likeCountMap.get(event.id) ?? 0,
+        likedEventIdSet.has(event.id),
+      ),
+    );
   }
 
   async getEventAttendees(
@@ -1577,6 +1768,11 @@ export class EventService {
   ) {
     const event = await this.eventRepo.findOne({ where: { id: eventId } });
     if (!event || event.status !== 'published') {
+      throw new NotFoundException('Event not found');
+    }
+    if (
+      !(await this.canAccessEventAudience(event, viewer?.userId, viewer?.role))
+    ) {
       throw new NotFoundException('Event not found');
     }
 
@@ -1615,7 +1811,9 @@ export class EventService {
       items: rows.map((row) => {
         const uid = Number(row.userId);
         const isSelf = viewerId != null && viewerId === uid;
-        const profileHidden = Boolean((row as { profileHidden?: unknown }).profileHidden);
+        const profileHidden = Boolean(
+          (row as { profileHidden?: unknown }).profileHidden,
+        );
         const shouldMask = profileHidden && !canRevealHidden && !isSelf;
         return {
           id: shouldMask ? null : uid,
@@ -1731,6 +1929,7 @@ export class EventService {
       locationLatitude: event.locationLatitude ?? null,
       locationLongitude: event.locationLongitude ?? null,
       eventFormat: event.eventFormat ?? null,
+      audienceGender: this.normalizeAudienceGender(event.audienceGender),
       organizer: {
         name: profile?.organizationName || organizer.fullName,
         description: profile?.organizationDescription || '',

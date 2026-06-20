@@ -26,7 +26,12 @@ export class OrganizerPaymentRequest {
   @Column({ name: 'amount_usd', type: 'decimal', precision: 10, scale: 2 })
   amountUsd!: string;
 
-  @Column({ name: 'payment_reference', type: 'varchar', length: 120, nullable: true })
+  @Column({
+    name: 'payment_reference',
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+  })
   paymentReference!: string | null;
 
   @Column({ type: 'text', nullable: true })

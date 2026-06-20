@@ -77,7 +77,9 @@ export function computePublishEligibility(
   };
 }
 
-export function assertCanPublish(profile: OrganizerProfile | null | undefined): PublishBlockCode | null {
+export function assertCanPublish(
+  profile: OrganizerProfile | null | undefined,
+): PublishBlockCode | null {
   const eligibility = computePublishEligibility(profile);
   return eligibility.canPublish ? null : eligibility.blockCode;
 }

@@ -678,6 +678,7 @@ export function mapApiEventToCard(event) {
     hasLocationPin: locationCoordinates.hasCoordinates,
     isOnline,
     eventFormat: resolvedFormat,
+    audienceGender: ['female', 'male'].includes(event.audienceGender) ? event.audienceGender : 'all',
     roster: Array.isArray(event.roster)
       ? event.roster.map((r) => ({
           id: r.id,

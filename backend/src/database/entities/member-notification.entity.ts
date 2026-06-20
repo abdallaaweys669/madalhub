@@ -20,7 +20,12 @@ export class MemberNotification {
   @Column({ name: 'event_id', type: 'int', nullable: true })
   eventId!: number | null;
 
-  @Column({ name: 'action_route', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'action_route',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   actionRoute!: string | null;
 
   @Column({ name: 'dedupe_key', type: 'varchar', length: 128, nullable: true })

@@ -11,6 +11,13 @@ export class AdminController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(3)
+  @Get('stats')
+  getStats() {
+    return this.adminService.getStats();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
   @Get('organizers/pending')
   getPending() {
     return this.adminService.getPendingOrganizers();
@@ -47,7 +54,10 @@ export class AdminController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(3)
   @Patch('payment-requests/:id/reject')
-  rejectPayment(@Param('id') id: number, @Body() body: RejectPaymentRequestDto) {
+  rejectPayment(
+    @Param('id') id: number,
+    @Body() body: RejectPaymentRequestDto,
+  ) {
     return this.adminService.rejectPaymentRequest(id, body?.adminNote);
   }
 }
