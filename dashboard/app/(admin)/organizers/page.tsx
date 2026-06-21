@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { toast } from "sonner";
+import { useCallback, useState } from "react";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -11,165 +9,138 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import RejectDialog from "@/components/RejectDialog";
-import {
-  getPendingOrganizers,
-  approveOrganizer,
-  rejectOrganizer,
-  type OrganizerRow,
-} from "@/lib/api";
-import { CheckCircle, XCircle, ExternalLink, RefreshCw } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { ListPagination, ListToolbar } from "@/components/admin/list-toolbar";
+import { AdminTableCard, ADMIN_TH, ADMIN_ACTIONS_TH, AdminActionsCell, AdminManageButton } from "@/components/admin/admin-table-card";
+import { OrganizerDetailDialog } from "@/components/admin/admin-record-dialogs";
+import { listOrganizers, type OrganizerListRow } from "@/lib/api";
+import { useAdminList } from "@/hooks/useAdminList";
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "All statuses" },
+  { value: "unverified", label: "Unverified" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+];
 
 export default function OrganizersPage() {
-  const [rows, setRows] = useState<OrganizerRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionId, setActionId] = useState<number | null>(null);
-  const [rejectTarget, setRejectTarget] = useState<OrganizerRow | null>(null);
+  const fetcher = useCallback((params: Parameters<typeof listOrganizers>[0]) => listOrganizers(params), []);
+  const { searchInput, onSearchChange, status, onStatusChange, setPage, data, loading, reload } =
+    useAdminList<OrganizerListRow>(fetcher);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    getPendingOrganizers()
-      .then(setRows)
-      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function handleApprove(org: OrganizerRow) {
-    setActionId(org.id);
-    try {
-      await approveOrganizer(org.id);
-      toast.success(`${org.profile.organizationName} approved`);
-      setRows((prev) => prev.filter((r) => r.id !== org.id));
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setActionId(null);
-    }
-  }
-
-  async function handleReject(reason: string) {
-    if (!rejectTarget) return;
-    await rejectOrganizer(rejectTarget.id, reason);
-    toast.success(`${rejectTarget.profile.organizationName} rejected`);
-    setRows((prev) => prev.filter((r) => r.id !== rejectTarget.id));
+  function openOrganizer(id: number) {
+    setSelectedId(id);
+    setDialogOpen(true);
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Organizer Verifications</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {loading ? "Loading…" : `${rows.length} pending`}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={load} className="gap-2">
-          <RefreshCw size={14} />
-          Refresh
-        </Button>
-      </div>
+    <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
+      <PageHeader
+        title="Organizers"
+        description="Use Manage on a row to grant credits, review verification, suspend, and see events."
+      />
 
-      <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50/60">
-              <TableHead className="font-semibold text-gray-600">Organization</TableHead>
-              <TableHead className="font-semibold text-gray-600">Name / Email</TableHead>
-              <TableHead className="font-semibold text-gray-600">Status</TableHead>
-              <TableHead className="font-semibold text-gray-600">Document</TableHead>
-              <TableHead className="text-right font-semibold text-gray-600">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}>
-                  {Array.from({ length: 5 }).map((_, j) => (
-                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-16 text-gray-400">
-                  No pending organizer verifications
-                </TableCell>
+      <ListToolbar
+        search={searchInput}
+        onSearchChange={onSearchChange}
+        searchPlaceholder="Search org name, email…"
+        status={status}
+        onStatusChange={onStatusChange}
+        statusOptions={STATUS_OPTIONS}
+        statusLabel="Verification"
+      />
+
+      <AdminTableCard
+        footer={
+          data ? (
+            <div className="px-4 pb-4">
+              <ListPagination
+                page={data.page}
+                totalPages={data.totalPages}
+                total={data.total}
+                onPageChange={setPage}
+              />
+            </div>
+          ) : undefined
+        }
+      >
+        <TableHeader>
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead className={`${ADMIN_TH} w-[24%]`}>Organization</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[26%]`}>Contact</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[18%]`}>Verification</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[12%]`}>Credits</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[10%]`}>Events</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[14%]`}>Joined</TableHead>
+            <TableHead className={ADMIN_ACTIONS_TH}>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                {Array.from({ length: 7 }).map((_, j) => (
+                  <TableCell key={j} className="px-3">
+                    <Skeleton className="h-4 w-full" />
+                  </TableCell>
+                ))}
               </TableRow>
-            ) : (
-              rows.map((org) => (
-                <TableRow key={org.id} className="hover:bg-orange-50/30 transition-colors">
-                  <TableCell>
-                    <p className="font-medium text-gray-900">{org.profile.organizationName}</p>
-                    {org.profile.website && (
-                      <p className="text-xs text-gray-400 mt-0.5">{org.profile.website}</p>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <p className="text-sm text-gray-800">{org.fullName}</p>
-                    <p className="text-xs text-gray-400">{org.email}</p>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-0">
-                      {org.verificationStatus}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {org.document ? (
-                      <div className="space-y-0.5">
-                        <p className="text-xs text-gray-500 capitalize">{org.document.documentType}</p>
-                        <a
-                          href={`http://localhost:3000/${org.document.documentPath}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                        >
-                          View doc <ExternalLink size={10} />
-                        </a>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 text-sm">No document</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        className="gap-1.5 text-white"
-                        style={{ background: "linear-gradient(135deg,#FF7B3F,#FF5A1F)" }}
-                        disabled={actionId === org.id}
-                        onClick={() => handleApprove(org)}
-                      >
-                        <CheckCircle size={14} />
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
-                        disabled={actionId === org.id}
-                        onClick={() => setRejectTarget(org)}
-                      >
-                        <XCircle size={14} />
-                        Reject
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+            ))
+          ) : !data?.items.length ? (
+            <TableRow>
+              <TableCell colSpan={7} className="text-center py-16 text-muted-foreground">
+                No organizers found
+              </TableCell>
+            </TableRow>
+          ) : (
+            data.items.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="max-w-0 px-3">
+                  <p className="font-medium truncate" title={row.organizationName}>
+                    {row.organizationName}
+                  </p>
+                  {row.website && (
+                    <p className="text-xs text-muted-foreground truncate" title={row.website}>
+                      {row.website}
+                    </p>
+                  )}
+                </TableCell>
+                <TableCell className="max-w-0 px-3">
+                  <p className="text-sm truncate" title={row.fullName}>
+                    {row.fullName}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate" title={row.email}>
+                    {row.email}
+                  </p>
+                </TableCell>
+                <TableCell className="px-3">
+                  <Badge variant="secondary" className="capitalize bg-primary/10 text-primary border-0">
+                    {row.verificationStatus}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm tabular-nums px-3">{row.paidPublishCredits}</TableCell>
+                <TableCell className="text-sm tabular-nums px-3">{row.eventCount ?? 0}</TableCell>
+                <TableCell className="text-sm text-muted-foreground whitespace-nowrap px-3">
+                  {new Date(row.createdAt).toLocaleDateString()}
+                </TableCell>
+                <AdminActionsCell>
+                  <AdminManageButton onClick={() => openOrganizer(row.id)} />
+                </AdminActionsCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </AdminTableCard>
 
-      <RejectDialog
-        open={!!rejectTarget}
-        title={`Reject ${rejectTarget?.profile.organizationName ?? ""}`}
-        onClose={() => setRejectTarget(null)}
-        onConfirm={handleReject}
+      <OrganizerDetailDialog
+        organizerId={selectedId}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onUpdated={() => void reload()}
       />
     </div>
   );

@@ -16,6 +16,7 @@ import { EventRegistration } from 'src/database/entities/event-registration.enti
 import { OrganizerFollow } from 'src/database/entities/organizer-follow.entity';
 import { OrganizerReview } from 'src/database/entities/organizer-review.entity';
 import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
+import { OrganizerCreditRequest } from 'src/database/entities/organizer-credit-request.entity';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -23,6 +24,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { randomUUID } from 'crypto';
 import { computePublishEligibility } from '../helpers/publish-eligibility.helper';
 import { CreateOrganizerPaymentRequestDto } from '../dto/create-payment-request.dto';
+import { CreateOrganizerCreditRequestDto } from '../dto/create-organizer-credit-request.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateReviewDto } from '../dto/create-review.dto';
 import { UpdateReviewDto } from '../dto/update-review.dto';
@@ -50,6 +52,8 @@ export class OrganizerService {
     private organizerReviewRepository: Repository<OrganizerReview>,
     @InjectRepository(OrganizerPaymentRequest)
     private paymentRequestRepository: Repository<OrganizerPaymentRequest>,
+    @InjectRepository(OrganizerCreditRequest)
+    private creditRequestRepository: Repository<OrganizerCreditRequest>,
     private configService: ConfigService,
     private jwtService: JwtService,
     private notificationsService: NotificationsService,
@@ -925,11 +929,53 @@ export class OrganizerService {
     const profile = await this.organizerProfileRepository.findOne({
       where: { userId },
     });
-    const pendingPayment = await this.paymentRequestRepository.findOne({
+    const pendingCreditRequest = await this.creditRequestRepository.findOne({
       where: { organizerId: userId, status: 'pending' },
       order: { id: 'DESC' },
     });
-    return computePublishEligibility(profile, !!pendingPayment);
+    return computePublishEligibility(profile, !!pendingCreditRequest);
+  }
+
+  async requestPublishCredits(
+    userId: number,
+    dto: CreateOrganizerCreditRequestDto,
+  ) {
+    const profile = await this.organizerProfileRepository.findOne({
+      where: { userId },
+    });
+    if (!profile || profile.verificationStatus !== 'approved') {
+      throw new BadRequestException(
+        'Verify your organizer account before requesting publish credits.',
+      );
+    }
+
+    const existingPending = await this.creditRequestRepository.findOne({
+      where: { organizerId: userId, status: 'pending' },
+    });
+    if (existingPending) {
+      return {
+        id: existingPending.id,
+        status: existingPending.status,
+        alreadyPending: true,
+        message: 'You already have a credit request awaiting admin review.',
+      };
+    }
+
+    const request = this.creditRequestRepository.create({
+      organizerId: userId,
+      eventId: dto.eventId ?? null,
+      eventTitle: dto.eventTitle?.trim() || null,
+      status: 'pending',
+      creditsGranted: 0,
+    });
+
+    const saved = await this.creditRequestRepository.save(request);
+    return {
+      id: saved.id,
+      status: saved.status,
+      alreadyPending: false,
+      message: 'Credit request submitted. An admin will review it shortly.',
+    };
   }
 
   getPaymentConfig() {

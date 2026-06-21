@@ -190,9 +190,13 @@ export default function OrganizerEventsScreen() {
                       <Pressable
                         onPress={async () => {
                           try {
-                            const published = await attemptOrganizerPublish(router, async () => {
-                              await organizerApi.publishEvent(event.id);
-                            });
+                            const published = await attemptOrganizerPublish(
+                              router,
+                              async () => {
+                                await organizerApi.publishEvent(event.id);
+                              },
+                              { eventId: event.id, eventTitle: event.title },
+                            );
                             if (published) await refresh();
                           } catch (error) {
                             Alert.alert('Publish failed', error?.message || 'Could not publish event');

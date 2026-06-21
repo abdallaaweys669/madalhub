@@ -1,4 +1,6 @@
 type JwtPayload = {
+  sub?: number | string;
+  email?: string;
   role?: number | string;
   roleId?: number | string;
   exp?: number | string;

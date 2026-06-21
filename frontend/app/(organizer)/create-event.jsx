@@ -475,7 +475,10 @@ export default function CreateEventScreen() {
     }
     try {
       const eligibility = await getPublishEligibility();
-      const canProceed = await resolveOrganizerPublishGate(router, eligibility);
+      const canProceed = await resolveOrganizerPublishGate(router, eligibility, {
+        eventId: effectiveEventId,
+        eventTitle: values.title,
+      });
       if (!canProceed) return;
       setPublishConfirmOpen(true);
     } catch (e) {

@@ -181,14 +181,12 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
       organizerProfileRepo.findOne.mockResolvedValue({
         userId: 1,
         verificationStatus: 'approved',
-        freePublishUsed: false,
-        paidPublishCredits: 0,
+        paidPublishCredits: 1,
       } as OrganizerProfile);
 
       organizerProfileRepo.save.mockResolvedValue({
         userId: 1,
         verificationStatus: 'approved',
-        freePublishUsed: true,
         paidPublishCredits: 0,
       } as OrganizerProfile);
 
@@ -213,7 +211,7 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
 
       expect(result.status).toBe('published');
       expect(organizerProfileRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ freePublishUsed: true }),
+        expect.objectContaining({ paidPublishCredits: 0 }),
       );
     });
 

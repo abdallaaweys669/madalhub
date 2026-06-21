@@ -4,6 +4,7 @@ import useGuardedRouter from '@/hooks/useGuardedRouter';
 import { Feather } from '@expo/vector-icons';
 
 import useAuth from '@/auth/useAuth';
+import SignOutButton from '@/components/auth/SignOutButton';
 import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 import {
   OrganizerAvatar,
@@ -84,7 +85,7 @@ export default function OrganizerOrganizationScreen() {
     <OrganizerTabScaffold title="Profile" orgName={displayName} showFab={false}>
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-        contentContainerStyle={{ padding: 14, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 14, paddingBottom: 48 }}
       >
         <View style={{ alignItems: 'center', marginBottom: 16 }}>
           <OrganizerAvatar uri={avatarUri} name={displayName} />
@@ -116,6 +117,10 @@ export default function OrganizerOrganizationScreen() {
         {user?.id ? (
           <MenuRow icon="eye" label="View public page" onPress={() => router.push(`/organizer/${user.id}`)} />
         ) : null}
+
+        <View style={{ marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+          <SignOutButton redirectTo="/(auth)/welcome" />
+        </View>
       </ScrollView>
     </OrganizerTabScaffold>
   );

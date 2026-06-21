@@ -11,6 +11,7 @@ import { EventRegistration } from 'src/database/entities/event-registration.enti
 import { OrganizerFollow } from 'src/database/entities/organizer-follow.entity';
 import { OrganizerReview } from 'src/database/entities/organizer-review.entity';
 import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
+import { OrganizerCreditRequest } from 'src/database/entities/organizer-credit-request.entity';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 
@@ -27,6 +28,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
       OrganizerFollow,
       OrganizerReview,
       OrganizerPaymentRequest,
+      OrganizerCreditRequest,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

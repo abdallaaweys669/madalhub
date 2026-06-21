@@ -128,9 +128,8 @@ Organizers get **immediate dashboard access** after signup (`verificationStatus 
 | --- | --- | --- |
 | `unverified` | Dashboard, drafts | Publish live events |
 | `pending` | Same + see “under review” banner | Publish |
-| `approved`, free unused | Publish **1 event free** | 2nd publish without payment/credits |
-| `approved`, no credits | Drafts, submit payment request | Publish |
-| Payment approved | Publish (uses 1 credit) | Publish when credits = 0 |
+| `approved`, has credits | Publish live instantly (uses 1 credit) | Publish when credits = 0 |
+| `approved`, no credits | Drafts, request credits from admin | Publish |
 
 **Frontend routing:** `getOrganizerEntryHref()` in `src/navigation/organizerGate.js` returns
 `/(organizer)/(tabs)` (Home tab). Splash and login use this — do not redirect new organizers to
@@ -141,19 +140,19 @@ Organizers get **immediate dashboard access** after signup (`verificationStatus 
 (`src/features/organizer/components/`): hamburger drawer, header bell (unread badge), and FAB (+) for create event.
 
 **Organizer drawer:** Does **not** duplicate tab destinations. Menu: Attendees, Identity verification,
-Billing & publish credits, Analytics, Settings. Header shows org avatar/name + publish credit summary.
+Publish credits, Analytics, Settings. Header shows org avatar/name + publish credit summary.
 Help center, Terms, and Privacy live under **Settings**. Sign out sits at the **bottom of the drawer**.
 Coming soon in drawer: Team & co-hosts.
 
 **Organizer stack screens** (above tabs in `(organizer)/_layout.jsx`, hide tab bar): `create-event`, `edit-event`,
-`pay-to-publish`, `edit-profile`, `attendees`, `followers`, `reviews`, `analytics`, `settings`.
+`pay-to-publish` (publish credits info), `edit-profile`, `attendees`, `followers`, `reviews`, `analytics`, `settings`.
 
 **Organizer account APIs:** `GET /organizer/attendees` (paginated registrations across organizer events),
 `GET /organizer/analytics` (event/audience overview), existing `GET /organizer/followers` and
 `GET /organizer/reviews/:organizerId` power Followers and Reviews screens from Profile stat tiles.
 
 **Organizer notifications:** `GET /organizer/notifications` (+ unread-count, mark read). Emitted when
-admin approves/rejects verification or payment, and when a member registers for an organizer event.
+admin approves/rejects verification, grants publish credits, and when a member registers for an organizer event.
 Inbox tab: `(organizer)/(tabs)/inbox`.
 
 **Legacy redirects:** `/(organizer)/dashboard`, `profile`, `my-events` redirect into tabs.
@@ -166,22 +165,22 @@ Capacity `0` means unlimited.
 
 **Publish flow:** Before publish, call `GET /organizer/publish-eligibility` and branch via
 `resolveOrganizerPublishGate()` in `src/utils/organizerPublish.js` (verification wizard,
-pending screen, or `/(organizer)/pay-to-publish`). Save draft never checks eligibility.
+pending screen, or `POST /organizer/credit-requests` + alert when `CREDITS_REQUIRED`). Save draft never checks eligibility.
 
-**Pricing (env):** `ORGANIZER_PAYMENT_PHONE`, `PUBLISH_PRICE_SINGLE=5`, `PUBLISH_PRICE_BUNDLE=20`,
-`PUBLISH_BUNDLE_CREDITS=5`. Admin approves payment requests via `(admin)/payments` (role `3` JWT).
+**Admin credit queue:** Dashboard `/payments` (Credit requests) — admin grants N credits via
+`PATCH /admin/credit-requests/:id/grant`. Direct grant: `PATCH /admin/organizers/:id/credits`.
 
-**Admin dashboard:** Expo route group `(admin)/` — login with role-3 account (`backend/scripts/create-admin.md`).
-Screens: pending organizer verification + pending payment approvals.
+**Admin dashboard (Next.js, port 3001):** Credit requests queue + organizer verification. Mobile `(admin)/` group
+is legacy; prefer the Next.js dashboard for admin work.
 
 **Backend publish errors:** Structured `ForbiddenException` body with `code`:
-`VERIFICATION_REQUIRED`, `VERIFICATION_PENDING`, `VERIFICATION_REJECTED`, `PAYMENT_REQUIRED`.
+`VERIFICATION_REQUIRED`, `VERIFICATION_PENDING`, `VERIFICATION_REJECTED`, `CREDITS_REQUIRED`.
 
 **Manual QA checklist:**
 1. Organizer signup → lands on Home tab → create draft (no publish).
 2. Bottom tabs navigate Home / Events / Inbox / Profile; drawer shows secondary items only; FAB creates event.
-3. Tap Publish → verification wizard → admin approves identity → first event goes live free; Inbox shows notification.
-4. Second publish → pay-to-publish screen → submit payment → admin approves → second event live.
+3. Tap Publish → verification wizard → admin approves identity → admin grants credits → event goes live.
+4. No credits → tap Publish → credit request appears in admin queue → admin grants credits → organizer publishes.
 5. Member registers for event → organizer Inbox shows registration notification.
 
 ## Working agreements for agents

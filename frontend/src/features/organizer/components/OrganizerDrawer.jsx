@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
 import useAuth from '@/auth/useAuth';
-import SignOutButton from '@/components/auth/SignOutButton';
 import { getPublishEligibility } from '@/api/organizer';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 import { COLORS } from '@/theme/colors';
@@ -15,7 +14,7 @@ const DRAWER_WIDTH = Math.min(Dimensions.get('window').width * 0.82, 320);
 const MENU_ITEMS = [
   { key: 'attendees', label: 'Attendees', href: '/(organizer)/attendees', icon: 'users' },
   { key: 'verify', label: 'Identity verification', href: '/(organizer-status)/resubmit-verification', icon: 'shield' },
-  { key: 'billing', label: 'Billing & publish credits', href: '/(organizer)/pay-to-publish', icon: 'credit-card' },
+  { key: 'billing', label: 'Credits', href: '/(organizer)/pay-to-publish', icon: 'credit-card' },
   { key: 'analytics', label: 'Analytics', href: '/(organizer)/analytics', icon: 'bar-chart-2' },
   { key: 'settings', label: 'Settings', href: '/(organizer)/settings', icon: 'settings' },
 ];
@@ -24,10 +23,10 @@ const COMING_SOON = [{ label: 'Team & co-hosts' }];
 
 function creditsSummary(eligibility) {
   if (!eligibility) return null;
-  if (eligibility.freePublishAvailable) return '1 free publish available';
   const credits = Number(eligibility.paidPublishCredits ?? 0);
-  if (credits > 0) return `${credits} publish credit${credits === 1 ? '' : 's'}`;
-  return 'No publish credits';
+  if (credits > 0) return `${credits} credit${credits === 1 ? '' : 's'}`;
+  if (eligibility.hasPendingCreditRequest) return 'Credit request pending';
+  return 'No credits';
 }
 
 export default function OrganizerDrawer({ visible, onClose, orgName }) {
@@ -181,10 +180,6 @@ export default function OrganizerDrawer({ visible, onClose, orgName }) {
               </View>
             ))}
           </ScrollView>
-
-          <View style={{ paddingHorizontal: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border }}>
-            <SignOutButton redirectTo="/(auth)/welcome" />
-          </View>
         </Animated.View>
       </View>
     </Modal>

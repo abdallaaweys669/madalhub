@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -13,41 +12,86 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import RejectDialog from "@/components/RejectDialog";
+import { AdminTableCard, ADMIN_TH, TruncateCell } from "@/components/admin/admin-table-card";
+import { PageHeader } from "@/components/page-header";
 import {
-  getPendingPayments,
-  approvePayment,
-  rejectPayment,
-  type PaymentRow,
+  dismissCreditRequest,
+  getPendingCreditRequests,
+  grantCreditRequest,
+  type CreditRequestRow,
 } from "@/lib/api";
-import { CheckCircle, XCircle, RefreshCw } from "lucide-react";
+import { CheckCircle, RefreshCw, XCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-const PLAN_LABELS: Record<string, string> = {
-  single: "Single publish ($5)",
-  bundle: "Bundle 5x ($20)",
-};
-
-export default function PaymentsPage() {
-  const [rows, setRows] = useState<PaymentRow[]>([]);
+export default function CreditRequestsPage() {
+  const [rows, setRows] = useState<CreditRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<number | null>(null);
-  const [rejectTarget, setRejectTarget] = useState<PaymentRow | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [grantTarget, setGrantTarget] = useState<CreditRequestRow | null>(null);
+  const [grantCredits, setGrantCredits] = useState("1");
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     setLoading(true);
-    getPendingPayments()
-      .then(setRows)
-      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Failed to load"))
-      .finally(() => setLoading(false));
+    try {
+      setRows(await getPendingCreditRequests());
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  async function handleApprove(row: PaymentRow) {
+  const filtered = rows.filter((row) => {
+    const q = searchInput.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      row.organizerName.toLowerCase().includes(q) ||
+      (row.organizerEmail?.toLowerCase().includes(q) ?? false) ||
+      (row.eventTitle?.toLowerCase().includes(q) ?? false) ||
+      String(row.id).includes(q)
+    );
+  });
+
+  async function handleGrant() {
+    if (!grantTarget) return;
+    const credits = Number(grantCredits);
+    if (!Number.isInteger(credits) || credits < 1) {
+      toast.error("Enter a valid credit amount (1 or more)");
+      return;
+    }
+
+    setActionId(grantTarget.id);
+    try {
+      await grantCreditRequest(grantTarget.id, credits);
+      toast.success(`Granted ${credits} credit${credits === 1 ? "" : "s"} to ${grantTarget.organizerName}`);
+      setRows((prev) => prev.filter((r) => r.id !== grantTarget.id));
+      setGrantTarget(null);
+      setGrantCredits("1");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleDismiss(row: CreditRequestRow) {
     setActionId(row.id);
     try {
-      await approvePayment(row.id);
-      toast.success(`Payment #${row.id} approved — credits granted`);
+      await dismissCreditRequest(row.id);
+      toast.success(`Request #${row.id} dismissed`);
       setRows((prev) => prev.filter((r) => r.id !== row.id));
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed");
@@ -56,121 +100,133 @@ export default function PaymentsPage() {
     }
   }
 
-  async function handleReject(reason: string) {
-    if (!rejectTarget) return;
-    await rejectPayment(rejectTarget.id, reason);
-    toast.success(`Payment #${rejectTarget.id} rejected`);
-    setRows((prev) => prev.filter((r) => r.id !== rejectTarget.id));
-  }
-
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Payment Requests</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {loading ? "Loading…" : `${rows.length} pending`}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={load} className="gap-2">
+    <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
+      <PageHeader
+        title="Credit requests"
+        description="Review organizer publish credit requests and grant credits manually."
+      />
+
+      <div className="flex items-center gap-2">
+        <input
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Search organizer, email, event…"
+          className="flex h-8 max-w-md flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+        <Button variant="outline" size="sm" onClick={() => { void load(); }} className="gap-2 shrink-0">
           <RefreshCw size={14} />
           Refresh
         </Button>
       </div>
 
-      <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50/60">
-              <TableHead className="font-semibold text-gray-600">#</TableHead>
-              <TableHead className="font-semibold text-gray-600">Organizer</TableHead>
-              <TableHead className="font-semibold text-gray-600">Plan</TableHead>
-              <TableHead className="font-semibold text-gray-600">Amount</TableHead>
-              <TableHead className="font-semibold text-gray-600">Reference / Note</TableHead>
-              <TableHead className="font-semibold text-gray-600">Submitted</TableHead>
-              <TableHead className="text-right font-semibold text-gray-600">Actions</TableHead>
+      <AdminTableCard>
+        <TableHeader>
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead className={`${ADMIN_TH} w-[6%]`}>#</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[22%]`}>Organizer</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[24%]`}>Event</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[10%]`}>Balance</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[14%]`}>Requested</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[24%] text-right`}>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <TableRow key={i}>
+                {Array.from({ length: 6 }).map((_, j) => (
+                  <TableCell key={j} className="px-3"><Skeleton className="h-4 w-full" /></TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : filtered.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-16 text-muted-foreground">
+                No pending credit requests
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}>
-                  {Array.from({ length: 7 }).map((_, j) => (
-                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-16 text-gray-400">
-                  No pending payment requests
+          ) : (
+            filtered.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="text-muted-foreground text-sm px-3">#{row.id}</TableCell>
+                <TableCell className="max-w-0 px-3">
+                  <p className="font-medium truncate" title={row.organizerName}>{row.organizerName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{row.organizerEmail ?? "—"}</p>
+                </TableCell>
+                <TruncateCell className="px-3 text-sm">
+                  {row.eventTitle ? (
+                    <span title={row.eventTitle}>{row.eventTitle}</span>
+                  ) : (
+                    <span className="text-muted-foreground">General request</span>
+                  )}
+                </TruncateCell>
+                <TableCell className="px-3">
+                  <Badge variant="secondary">{row.currentCredits}</Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground text-sm whitespace-nowrap px-3">
+                  {new Date(row.createdAt).toLocaleDateString()}
+                </TableCell>
+                <TableCell className="text-right px-3">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <Button
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1"
+                      disabled={actionId === row.id}
+                      onClick={() => {
+                        setGrantTarget(row);
+                        setGrantCredits("1");
+                      }}
+                    >
+                      <CheckCircle size={12} /> Grant credits
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-xs gap-1 text-destructive"
+                      disabled={actionId === row.id}
+                      onClick={() => handleDismiss(row)}
+                    >
+                      <XCircle size={12} /> Dismiss
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
-            ) : (
-              rows.map((row) => (
-                <TableRow key={row.id} className="hover:bg-orange-50/30 transition-colors">
-                  <TableCell className="text-gray-400 text-sm">#{row.id}</TableCell>
-                  <TableCell>
-                    <p className="font-medium text-gray-900">{row.organizerName}</p>
-                    <p className="text-xs text-gray-400">{row.organizerEmail ?? "—"}</p>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="bg-violet-100 text-violet-700 border-0 capitalize">
-                      {PLAN_LABELS[row.plan] ?? row.plan}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-semibold text-gray-900">
-                    ${row.amountUsd}
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-600 max-w-[180px]">
-                    {row.paymentReference && (
-                      <p className="font-mono text-xs bg-gray-50 px-2 py-1 rounded mb-1 truncate">
-                        {row.paymentReference}
-                      </p>
-                    )}
-                    {row.note && <p className="text-gray-400 text-xs truncate">{row.note}</p>}
-                    {!row.paymentReference && !row.note && <span className="text-gray-300">—</span>}
-                  </TableCell>
-                  <TableCell className="text-gray-500 text-sm">
-                    {new Date(row.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        className="gap-1.5 text-white"
-                        style={{ background: "linear-gradient(135deg,#FF7B3F,#FF5A1F)" }}
-                        disabled={actionId === row.id}
-                        onClick={() => handleApprove(row)}
-                      >
-                        <CheckCircle size={14} />
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
-                        disabled={actionId === row.id}
-                        onClick={() => setRejectTarget(row)}
-                      >
-                        <XCircle size={14} />
-                        Reject
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+            ))
+          )}
+        </TableBody>
+      </AdminTableCard>
 
-      <RejectDialog
-        open={!!rejectTarget}
-        title={`Reject payment from ${rejectTarget?.organizerName ?? ""}`}
-        onClose={() => setRejectTarget(null)}
-        onConfirm={handleReject}
-      />
+      <Dialog open={!!grantTarget} onOpenChange={(open) => !open && setGrantTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Grant publish credits</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Grant credits to <span className="font-medium text-foreground">{grantTarget?.organizerName}</span>
+            {grantTarget?.eventTitle ? (
+              <> for event &ldquo;{grantTarget.eventTitle}&rdquo;</>
+            ) : null}
+            .
+          </p>
+          <div className="grid gap-2">
+            <Label htmlFor="credits">Number of credits</Label>
+            <Input
+              id="credits"
+              type="number"
+              min={1}
+              value={grantCredits}
+              onChange={(e) => setGrantCredits(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGrantTarget(null)}>Cancel</Button>
+            <Button disabled={actionId === grantTarget?.id} onClick={() => { void handleGrant(); }}>
+              Grant credits
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

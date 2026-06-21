@@ -94,6 +94,22 @@ export const getPublishEligibility = async () => {
   }
 };
 
+export const requestPublishCredits = async ({ eventId, eventTitle } = {}) => {
+  try {
+    const response = await apiClient.post('/organizer/credit-requests', {
+      eventId,
+      eventTitle,
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to request publish credits';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
 export const getPaymentConfig = async () => {
   try {
     const response = await apiClient.get('/organizer/payment-config');
@@ -477,6 +493,7 @@ export default {
   organizerLogin,
   organizerSocialLogin,
   getPublishEligibility,
+  requestPublishCredits,
   getPaymentConfig,
   createPaymentRequest,
   getMyPaymentRequests,

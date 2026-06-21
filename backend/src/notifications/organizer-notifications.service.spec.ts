@@ -52,19 +52,19 @@ describe('OrganizerNotificationsService', () => {
     expect(result.unreadCount).toBe(1);
   });
 
-  it('creates payment approved notification', async () => {
+  it('creates credits granted notification', async () => {
     repo.findOne.mockResolvedValue(null);
     repo.create.mockImplementation((input) => input as OrganizerNotification);
     repo.save.mockImplementation(
       async (input) => ({ id: 5, ...input }) as OrganizerNotification,
     );
 
-    await service.notifyPaymentApproved(2, 1);
+    await service.notifyCreditsGranted(2, 1);
 
     expect(repo.save).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 2,
-        type: 'payment_approved',
+        type: 'credits_granted',
       }),
     );
   });

@@ -1,14 +1,22 @@
-import Sidebar from "@/components/Sidebar";
-import TopNavbar from "@/components/TopNavbar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "#F8FAFC" }}>
-      <Sidebar />
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <TopNavbar />
-        <main className="flex-1 overflow-y-auto">{children}</main>
-      </div>
-    </div>
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "16rem",
+          "--header-height": "3.5rem",
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar variant="inset" />
+      <SidebarInset className="min-w-0">
+        <SiteHeader />
+        <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

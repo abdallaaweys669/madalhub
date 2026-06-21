@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { saveToken } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -41,83 +45,53 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center"
-      style={{ background: "#F8FAFC" }}
-    >
-      <div className="w-full max-w-[380px] px-4">
-        <div className="text-center mb-8">
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center">
           <div
-            className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4"
+            className="mx-auto mb-2 flex size-12 items-center justify-center rounded-xl text-white font-bold text-xl"
             style={{ background: "linear-gradient(135deg,#FF7B3F,#FF5A1F)" }}
           >
-            <span className="text-white font-bold text-xl">M</span>
+            M
           </div>
-          <h1 className="text-2xl font-bold" style={{ color: "#0F172A" }}>
-            MadalHub Admin
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "#A1A1A1" }}>
-            Sign in to your admin account
-          </p>
-        </div>
-
-        <div
-          className="rounded-2xl p-8"
-          style={{ background: "#FFFFFF", border: "1px solid #E5E5E5" }}
-        >
+          <CardTitle>MadalHub Admin</CardTitle>
+          <CardDescription>Sign in with your administrator account</CardDescription>
+        </CardHeader>
+        <CardContent>
           {error && (
-            <div
-              className="mb-5 px-4 py-3 rounded-xl text-sm font-medium"
-              style={{ background: "#FEE2E2", color: "#991B1B", border: "1px solid #FECACA" }}
-            >
+            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}
-
           <form className="space-y-4" onSubmit={onSubmit}>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium mb-1.5" style={{ color: "#0F172A" }}>
-                Email
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
                 id="email"
                 type="email"
                 autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl text-sm outline-none"
-                style={{ border: "1px solid #E5E5E5", background: "#FAFAFA", color: "#0F172A" }}
               />
             </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-1.5" style={{ color: "#0F172A" }}>
-                Password
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
                 id="password"
                 type="password"
                 autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl text-sm outline-none"
-                style={{ border: "1px solid #E5E5E5", background: "#FAFAFA", color: "#0F172A" }}
               />
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white mt-2 cursor-pointer disabled:opacity-70"
-              style={{ background: "linear-gradient(135deg,#FF7B3F,#FF5A1F)" }}
-            >
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Signing in…" : "Sign in"}
-            </button>
+            </Button>
           </form>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

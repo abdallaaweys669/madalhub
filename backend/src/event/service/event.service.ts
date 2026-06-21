@@ -440,7 +440,7 @@ export class EventService {
         'Complete identity verification before publishing.',
       VERIFICATION_PENDING: 'Your verification is under review.',
       VERIFICATION_REJECTED: 'Verification was rejected. Update and resubmit.',
-      PAYMENT_REQUIRED: 'Purchase a publish credit to go live.',
+      CREDITS_REQUIRED: 'You need publish credits to go live.',
     };
     throw new ForbiddenException({
       message: messages[code],
@@ -461,19 +461,13 @@ export class EventService {
       this.throwPublishBlocked(blockCode);
     }
 
-    if (!profile!.freePublishUsed) {
-      profile!.freePublishUsed = true;
-      await this.organizerProfileRepo.save(profile!);
-      return;
-    }
-
     if (profile!.paidPublishCredits > 0) {
       profile!.paidPublishCredits -= 1;
       await this.organizerProfileRepo.save(profile!);
       return;
     }
 
-    this.throwPublishBlocked('PAYMENT_REQUIRED');
+    this.throwPublishBlocked('CREDITS_REQUIRED');
   }
 
   /** @deprecated Use ensureOrganizerCanManageDrafts for drafts or consumePublishCredit for publish. */

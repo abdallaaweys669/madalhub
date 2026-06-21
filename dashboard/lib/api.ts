@@ -1,4 +1,7 @@
 import { getToken } from "./auth";
+import { buildListQuery, type ListParams, type Paginated } from "./list-query";
+
+export type { ListParams, Paginated };
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -59,7 +62,7 @@ export interface AdminStats {
     events: number;
     registrations: number;
   };
-  pending: { verifications: number; payments: number };
+  pending: { verifications: number; creditRequests: number };
   thisMonth: {
     members: number;
     organizers: number;
@@ -79,15 +82,24 @@ export interface AdminStats {
     registrations: number[];
   };
   trendMonths: string[];
-  monthlyRevenue: { month: string; revenue: number }[];
+  eventStatusBreakdown: {
+    draft: number;
+    published: number;
+    cancelled: number;
+  };
+  verificationBreakdown: {
+    unverified: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+  };
   recentActivity: {
-    type: "verification" | "payment";
+    type: "verification" | "credit_request";
     id: number;
     name: string;
     email: string | null;
     status?: string;
-    amount?: number;
-    plan?: string;
+    eventTitle?: string | null;
     createdAt: string;
   }[];
 }
@@ -100,17 +112,17 @@ export function getAdminStats() {
 
 export interface PendingCounts {
   pendingOrganizers: number;
-  pendingPayments: number;
+  pendingCreditRequests: number;
 }
 
 export async function getPendingCounts(): Promise<PendingCounts> {
-  const [organizers, payments] = await Promise.all([
+  const [organizers, creditRequests] = await Promise.all([
     request<OrganizerRow[]>("GET", "/admin/organizers/pending"),
-    request<PaymentRow[]>("GET", "/admin/payment-requests/pending"),
+    request<CreditRequestRow[]>("GET", "/admin/credit-requests/pending"),
   ]);
   return {
     pendingOrganizers: organizers.length,
-    pendingPayments: payments.length,
+    pendingCreditRequests: creditRequests.length,
   };
 }
 
@@ -147,7 +159,130 @@ export function rejectOrganizer(organizerId: number, reason: string) {
   return request("PATCH", `/admin/organizers/reject/${organizerId}`, { reason });
 }
 
-// ─── Payments ────────────────────────────────────────────────────────────────
+// ─── Credit requests ─────────────────────────────────────────────────────────
+
+export interface CreditRequestRow {
+  id: number;
+  organizerId: number;
+  organizerName: string;
+  organizerEmail: string | null;
+  eventId: number | null;
+  eventTitle: string | null;
+  currentCredits: number;
+  createdAt: string;
+}
+
+export function getPendingCreditRequests() {
+  return request<CreditRequestRow[]>("GET", "/admin/credit-requests/pending");
+}
+
+export function grantCreditRequest(requestId: number, credits: number) {
+  return request("PATCH", `/admin/credit-requests/${requestId}/grant`, { credits });
+}
+
+export function dismissCreditRequest(requestId: number) {
+  return request("PATCH", `/admin/credit-requests/${requestId}/dismiss`);
+}
+
+export function grantOrganizerCredits(organizerId: number, credits: number) {
+  return request("PATCH", `/admin/organizers/${organizerId}/credits`, { credits });
+}
+
+export interface MemberDetail {
+  id: number;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  location: string | null;
+  status: string;
+  emailVerified: boolean;
+  createdAt: string;
+  registrationCount: number;
+  registrations: {
+    id: number;
+    eventId: number;
+    eventTitle: string;
+    status: string;
+    createdAt: string;
+  }[];
+}
+
+export interface OrganizerDetail {
+  id: number;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  userStatus: string;
+  verificationStatus: string;
+  organizationName: string;
+  organizationDescription: string | null;
+  website: string | null;
+  paidPublishCredits: number;
+  rejectionReason: string | null;
+  createdAt: string;
+  eventCount: number;
+  document: {
+    documentType: string;
+    documentPath: string;
+    status: string;
+  } | null;
+  events: {
+    id: number;
+    title: string;
+    status: string;
+    startDatetime: string;
+    createdAt: string;
+  }[];
+}
+
+export interface EventDetail {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  organizerId: number;
+  organizerName: string;
+  organizerEmail: string;
+  locationName: string | null;
+  locationAddress: string | null;
+  capacity: number;
+  audienceGender: string;
+  startDatetime: string;
+  endDatetime: string;
+  createdAt: string;
+  registrationCount: number;
+}
+
+export function getPublicEventApiUrl(eventId: number) {
+  const base = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  return `${base}/events/${eventId}`;
+}
+
+export function getMemberDetail(id: number) {
+  return request<MemberDetail>("GET", `/admin/members/${id}`);
+}
+
+export function updateMemberStatus(id: number, status: string) {
+  return request<{ id: number; status: string }>("PATCH", `/admin/members/${id}/status`, { status });
+}
+
+export function getOrganizerDetail(id: number) {
+  return request<OrganizerDetail>("GET", `/admin/organizers/${id}`);
+}
+
+export function updateOrganizerStatus(id: number, status: string) {
+  return request<{ id: number; status: string }>("PATCH", `/admin/organizers/${id}/status`, { status });
+}
+
+export function getEventDetail(id: number) {
+  return request<EventDetail>("GET", `/admin/events/${id}`);
+}
+
+export function updateEventStatus(id: number, status: string) {
+  return request<{ id: number; status: string }>("PATCH", `/admin/events/${id}/status`, { status });
+}
+
+// ─── Payments (legacy) ───────────────────────────────────────────────────────
 
 export interface PaymentRow {
   id: number;
@@ -171,6 +306,162 @@ export function approvePayment(requestId: number) {
 
 export function rejectPayment(requestId: number, reason: string) {
   return request("PATCH", `/admin/payment-requests/${requestId}/reject`, {
-    reason,
+    adminNote: reason,
   });
+}
+
+// ─── List endpoints ─────────────────────────────────────────────────────────
+
+export interface MemberRow {
+  id: number;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  location: string | null;
+  status: string;
+  emailVerified: boolean;
+  createdAt: string;
+}
+
+export interface OrganizerListRow {
+  id: number;
+  fullName: string;
+  email: string;
+  userStatus: string;
+  verificationStatus: string;
+  organizationName: string;
+  website: string | null;
+  paidPublishCredits: number;
+  freePublishUsed: boolean;
+  eventCount: number;
+  createdAt: string;
+}
+
+export interface EventListRow {
+  id: number;
+  title: string;
+  organizerId: number;
+  organizerName: string;
+  status: string;
+  audienceGender: string;
+  capacity: number;
+  registrationCount: number;
+  startDatetime: string;
+  locationName: string | null;
+  createdAt: string;
+}
+
+export interface RegistrationListRow {
+  id: number;
+  eventId: number;
+  eventTitle: string;
+  memberId: number;
+  memberName: string;
+  memberEmail: string;
+  status: string;
+  createdAt: string;
+  organizerId: number | null;
+  organizerName: string | null;
+  organizerEmail: string | null;
+}
+
+export interface PaymentListRow extends PaymentRow {
+  status: string;
+  creditsGranted?: number;
+}
+
+export interface AdminUserRow {
+  id: number;
+  fullName: string;
+  email: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface AdminAnalytics {
+  overview: AdminStats["totals"];
+  pending: AdminStats["pending"];
+  thisMonth: AdminStats["thisMonth"];
+  lastMonth: AdminStats["lastMonth"];
+  trends: AdminStats["trends"];
+  trendMonths: string[];
+  eventStatusBreakdown: AdminStats["eventStatusBreakdown"];
+  verificationBreakdown: AdminStats["verificationBreakdown"];
+  funnel: {
+    members: number;
+    activeMembers: number;
+    organizers: number;
+    verifiedOrganizers: number;
+    events: number;
+    publishedEvents: number;
+    registrations: number;
+  };
+}
+
+export type ReportType = "members" | "organizers" | "events" | "registrations" | "revenue";
+
+export interface ReportSummary {
+  type: string;
+  from: string;
+  to: string;
+  kpis: { key: string; label: string; value: number | string }[];
+  trendMonths: string[];
+  trendValues: number[];
+  breakdown: { label: string; value: number }[];
+  rows: Record<string, unknown>[];
+  topCreators?: Record<string, unknown>[];
+  exportType: ReportType | null;
+}
+
+export function getReportSummary(type: string, from?: string, to?: string) {
+  const q = new URLSearchParams({ type });
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  return request<ReportSummary>("GET", `/admin/reports/summary?${q.toString()}`);
+}
+
+export function getAdminAnalytics() {
+  return request<AdminAnalytics>("GET", "/admin/analytics");
+}
+
+export function listMembers(params: ListParams = {}) {
+  return request<Paginated<MemberRow>>("GET", `/admin/members${buildListQuery(params)}`);
+}
+
+export function listOrganizers(params: ListParams = {}) {
+  return request<Paginated<OrganizerListRow>>("GET", `/admin/organizers${buildListQuery(params)}`);
+}
+
+export function listEvents(params: ListParams = {}) {
+  return request<Paginated<EventListRow>>("GET", `/admin/events${buildListQuery(params)}`);
+}
+
+export function listRegistrations(params: ListParams = {}) {
+  return request<Paginated<RegistrationListRow>>("GET", `/admin/registrations${buildListQuery(params)}`);
+}
+
+export function listPaymentHistory(params: ListParams = {}) {
+  return request<Paginated<PaymentListRow>>("GET", `/admin/payment-requests${buildListQuery(params)}`);
+}
+
+export function listAdmins(params: ListParams = {}) {
+  return request<Paginated<AdminUserRow>>("GET", `/admin/admins${buildListQuery(params)}`);
+}
+
+export function createAdmin(body: { fullName: string; email: string; password: string }) {
+  return request<AdminUserRow>("POST", "/admin/admins", body);
+}
+
+export function updateAdmin(id: number, body: { fullName?: string; status?: string }) {
+  return request<AdminUserRow>("PATCH", `/admin/admins/${id}`, body);
+}
+
+export function getAdminReport(type: ReportType, from?: string, to?: string) {
+  const q = new URLSearchParams({ type });
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  return request<{ type: string; total: number; totalUsd?: number; rows: Record<string, unknown>[] }>(
+    "GET",
+    `/admin/reports?${q.toString()}`,
+  );
 }

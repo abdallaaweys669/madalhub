@@ -4,23 +4,21 @@ export type PublishBlockCode =
   | 'VERIFICATION_REQUIRED'
   | 'VERIFICATION_PENDING'
   | 'VERIFICATION_REJECTED'
-  | 'PAYMENT_REQUIRED';
+  | 'CREDITS_REQUIRED';
 
 export type PublishEligibility = {
   canPublish: boolean;
   blockCode: PublishBlockCode | null;
   verificationStatus: string;
-  freePublishAvailable: boolean;
   paidPublishCredits: number;
-  hasPendingPaymentRequest: boolean;
+  hasPendingCreditRequest: boolean;
 };
 
 export function computePublishEligibility(
   profile: OrganizerProfile | null | undefined,
-  hasPendingPaymentRequest = false,
+  hasPendingCreditRequest = false,
 ): PublishEligibility {
   const verificationStatus = profile?.verificationStatus ?? 'unverified';
-  const freePublishAvailable = profile ? !profile.freePublishUsed : false;
   const paidPublishCredits = profile?.paidPublishCredits ?? 0;
 
   if (verificationStatus === 'unverified') {
@@ -28,9 +26,8 @@ export function computePublishEligibility(
       canPublish: false,
       blockCode: 'VERIFICATION_REQUIRED',
       verificationStatus,
-      freePublishAvailable,
       paidPublishCredits,
-      hasPendingPaymentRequest,
+      hasPendingCreditRequest,
     };
   }
 
@@ -39,9 +36,8 @@ export function computePublishEligibility(
       canPublish: false,
       blockCode: 'VERIFICATION_PENDING',
       verificationStatus,
-      freePublishAvailable,
       paidPublishCredits,
-      hasPendingPaymentRequest,
+      hasPendingCreditRequest,
     };
   }
 
@@ -50,30 +46,27 @@ export function computePublishEligibility(
       canPublish: false,
       blockCode: 'VERIFICATION_REJECTED',
       verificationStatus,
-      freePublishAvailable,
       paidPublishCredits,
-      hasPendingPaymentRequest,
+      hasPendingCreditRequest,
     };
   }
 
-  if (freePublishAvailable || paidPublishCredits > 0) {
+  if (paidPublishCredits > 0) {
     return {
       canPublish: true,
       blockCode: null,
       verificationStatus,
-      freePublishAvailable,
       paidPublishCredits,
-      hasPendingPaymentRequest,
+      hasPendingCreditRequest,
     };
   }
 
   return {
     canPublish: false,
-    blockCode: 'PAYMENT_REQUIRED',
+    blockCode: 'CREDITS_REQUIRED',
     verificationStatus,
-    freePublishAvailable: false,
     paidPublishCredits: 0,
-    hasPendingPaymentRequest,
+    hasPendingCreditRequest,
   };
 }
 

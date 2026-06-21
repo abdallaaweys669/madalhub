@@ -23,9 +23,9 @@ export default function SignOutButton({ redirectTo = '/(auth)/welcome', style })
     setLoading(true);
 
     try {
-      await logout();
       resetNavigationGuard();
       router.replace(redirectTo);
+      await logout();
     } catch (error) {
       Alert.alert(
         'Sign out failed',

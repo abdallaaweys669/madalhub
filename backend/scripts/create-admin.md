@@ -26,3 +26,21 @@ VALUES (
 ```
 
 Log in from the admin dashboard using **member login** (`POST /auth/login`) with that email and password. JWT role must be `3`.
+
+## Reactivate deactivated admins
+
+If an admin was deactivated (status `rejected`) before the dashboard blocked self-deactivation, they disappear when the Status filter is **Active**. Use **All statuses** or **Rejected** in the Admin users table and click **Activate**.
+
+If the list is still empty, reactivate directly in MySQL:
+
+```sql
+UPDATE users SET status = 'active', updated_at = NOW() WHERE role_id = 3;
+```
+
+Or for one account:
+
+```sql
+UPDATE users SET status = 'active', updated_at = NOW() WHERE email = 'admin@gmail.com' AND role_id = 3;
+```
+
+The account `admin@gmail.com` is the **primary admin** — the dashboard and API will not allow deactivating it. Other admins can deactivate each other; the primary admin can deactivate others too.

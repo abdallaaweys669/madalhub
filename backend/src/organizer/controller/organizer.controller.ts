@@ -25,6 +25,7 @@ import { FollowOrganizerDto } from '../dto/follow-organizer.dto';
 import { UpdateMemberDto } from '../dto/update-member.dto';
 import { SocialLoginDto } from '../dto/social-login.dto';
 import { CreateOrganizerPaymentRequestDto } from '../dto/create-payment-request.dto';
+import { CreateOrganizerCreditRequestDto } from '../dto/create-organizer-credit-request.dto';
 import { OrganizerNotificationsService } from 'src/notifications/organizer-notifications.service';
 import {
   CheckInEventAttendeeDto,
@@ -186,6 +187,16 @@ export class OrganizerController {
   @Get('publish-eligibility')
   getPublishEligibility(@CurrentUser() user: any) {
     return this.service.getPublishEligibility(user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Post('credit-requests')
+  requestPublishCredits(
+    @CurrentUser() user: any,
+    @Body() dto: CreateOrganizerCreditRequestDto,
+  ) {
+    return this.service.requestPublishCredits(user.userId, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

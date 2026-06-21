@@ -1,12 +1,14 @@
-import { getPublishEligibility } from '@/api/organizer';
+import { Alert } from 'react-native';
+import { getPublishEligibility, requestPublishCredits } from '@/api/organizer';
 
 /**
  * Maps publish-eligibility API block codes to user-facing actions.
  * @param {import('@/hooks/useGuardedRouter').default} router
- * @param {{ canPublish?: boolean, blockCode?: string | null } | null | undefined} eligibility
+ * @param {{ canPublish?: boolean, blockCode?: string | null, hasPendingCreditRequest?: boolean } | null | undefined} eligibility
+ * @param {{ eventId?: number | string, eventTitle?: string }} [options]
  * @returns {Promise<boolean>} true when publish can proceed
  */
-export async function resolveOrganizerPublishGate(router, eligibility) {
+export async function resolveOrganizerPublishGate(router, eligibility, options = {}) {
   if (eligibility?.canPublish) return true;
 
   const code = eligibility?.blockCode;
@@ -18,8 +20,27 @@ export async function resolveOrganizerPublishGate(router, eligibility) {
     router.push('/(organizer-status)/pending-verification');
     return false;
   }
-  if (code === 'PAYMENT_REQUIRED') {
-    router.push('/(organizer)/pay-to-publish');
+  if (code === 'CREDITS_REQUIRED') {
+    if (eligibility.hasPendingCreditRequest) {
+      Alert.alert(
+        'Credits requested',
+        'Your publish credit request is pending admin review. You will be notified when credits are added.',
+      );
+      return false;
+    }
+
+    try {
+      await requestPublishCredits({
+        eventId: options.eventId != null ? Number(options.eventId) : undefined,
+        eventTitle: options.eventTitle?.trim() || undefined,
+      });
+      Alert.alert(
+        'Request sent',
+        'An admin has been notified. Once credits are added to your account, tap Publish again.',
+      );
+    } catch (error) {
+      Alert.alert('Request failed', error?.message || 'Could not request publish credits.');
+    }
     return false;
   }
 
@@ -45,21 +66,6 @@ export function getOrganizerDashboardBanner(eligibility, verificationStatus) {
   if (eligibility.blockCode === 'VERIFICATION_REJECTED' || verificationStatus === 'rejected') {
     return { text: 'Verification rejected — update and resubmit', tone: 'danger' };
   }
-  if (eligibility.freePublishAvailable) {
-    return { text: 'You have 1 free publish available', tone: 'success' };
-  }
-  if (eligibility.paidPublishCredits > 0) {
-    return {
-      text: `${eligibility.paidPublishCredits} publish credit${eligibility.paidPublishCredits === 1 ? '' : 's'} left`,
-      tone: 'success',
-    };
-  }
-  if (eligibility.hasPendingPaymentRequest) {
-    return { text: 'Payment submitted — awaiting approval', tone: 'pending' };
-  }
-  if (eligibility.blockCode === 'PAYMENT_REQUIRED') {
-    return { text: 'Pay to publish more events', tone: 'action' };
-  }
   return null;
 }
 
@@ -76,9 +82,16 @@ export function getOrganizerBannerStyles(tone) {
 
 export function getOrganizerBannerPressHref(eligibility, verificationStatus) {
   const code = eligibility?.blockCode;
-  if (code === 'PAYMENT_REQUIRED') return '/(organizer)/pay-to-publish';
   if (code === 'VERIFICATION_PENDING' || verificationStatus === 'pending') {
     return '/(organizer-status)/pending-verification';
+  }
+  if (
+    code === 'VERIFICATION_REQUIRED' ||
+    code === 'VERIFICATION_REJECTED' ||
+    verificationStatus === 'unverified' ||
+    verificationStatus === 'rejected'
+  ) {
+    return '/(organizer-status)/resubmit-verification';
   }
   return '/(organizer-status)/resubmit-verification';
 }
@@ -87,10 +100,11 @@ export function getOrganizerBannerPressHref(eligibility, verificationStatus) {
  * Checks publish eligibility and runs publishFn when allowed.
  * @param {import('@/hooks/useGuardedRouter').default} router
  * @param {() => Promise<void>} publishFn
+ * @param {{ eventId?: number | string, eventTitle?: string }} [options]
  */
-export async function attemptOrganizerPublish(router, publishFn) {
+export async function attemptOrganizerPublish(router, publishFn, options = {}) {
   const eligibility = await getPublishEligibility();
-  const canProceed = await resolveOrganizerPublishGate(router, eligibility);
+  const canProceed = await resolveOrganizerPublishGate(router, eligibility, options);
   if (!canProceed) return false;
   await publishFn();
   return true;

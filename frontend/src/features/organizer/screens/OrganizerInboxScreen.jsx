@@ -50,7 +50,7 @@ export default function OrganizerInboxScreen() {
   const router = useGuardedRouter();
   const colors = useThemeColors();
   const { organizationName, headerFullName } = useOrganizerDashboardData();
-  const { refreshUnreadCount } = useOrganizerNotificationBadge();
+  const { refreshUnreadCount, adjustUnreadCount, setUnreadCount } = useOrganizerNotificationBadge();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -95,8 +95,14 @@ export default function OrganizerInboxScreen() {
     try {
       if (!item.readAt) {
         await markOrganizerNotificationRead(item.id);
+        setItems((prev) =>
+          prev.map((row) =>
+            row.id === item.id ? { ...row, readAt: new Date().toISOString() } : row,
+          ),
+        );
+        adjustUnreadCount(-1);
+        void refreshUnreadCount();
       }
-      await load();
       if (item.actionRoute) router.push(item.actionRoute);
     } catch {
       if (item.actionRoute) router.push(item.actionRoute);
@@ -104,8 +110,15 @@ export default function OrganizerInboxScreen() {
   };
 
   const onMarkAllRead = async () => {
-    await markAllOrganizerNotificationsRead();
-    await load();
+    try {
+      await markAllOrganizerNotificationsRead();
+      const now = new Date().toISOString();
+      setItems((prev) => prev.map((row) => ({ ...row, readAt: row.readAt || now })));
+      setUnreadCount(0);
+      void refreshUnreadCount();
+    } catch {
+      await load();
+    }
   };
 
   const groups = groupNotifications(items);

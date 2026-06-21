@@ -14,6 +14,7 @@ export type OrganizerNotificationType =
   | 'verification_rejected'
   | 'payment_approved'
   | 'payment_rejected'
+  | 'credits_granted'
   | 'event_registration';
 
 export type OrganizerNotificationDto = {
@@ -121,7 +122,7 @@ export class OrganizerNotificationsService {
       dedupeKey: 'verification_approved',
       type: 'verification_approved',
       title: 'Identity verified',
-      body: 'Your organizer account is approved. You can publish your first event for free.',
+      body: 'Your organizer account is approved. Request publish credits from an admin to go live.',
       actionRoute: '/(organizer)/(tabs)/organization',
     });
   }
@@ -139,15 +140,19 @@ export class OrganizerNotificationsService {
     });
   }
 
-  async notifyPaymentApproved(userId: number, creditsGranted: number) {
+  async notifyCreditsGranted(userId: number, creditsGranted: number) {
     return this.upsertByDedupeKey({
       userId,
-      dedupeKey: `payment_approved_${Date.now()}`,
-      type: 'payment_approved',
-      title: 'Payment approved',
-      body: `${creditsGranted} publish credit${creditsGranted === 1 ? '' : 's'} added to your account.`,
-      actionRoute: '/(organizer)/(tabs)/organization',
+      dedupeKey: `credits_granted_${Date.now()}`,
+      type: 'credits_granted',
+      title: 'Publish credits added',
+      body: `${creditsGranted} publish credit${creditsGranted === 1 ? '' : 's'} added to your account. You can publish events now.`,
+      actionRoute: '/(organizer)/(tabs)/events',
     });
+  }
+
+  async notifyPaymentApproved(userId: number, creditsGranted: number) {
+    return this.notifyCreditsGranted(userId, creditsGranted);
   }
 
   async notifyPaymentRejected(userId: number, adminNote?: string | null) {
@@ -158,8 +163,8 @@ export class OrganizerNotificationsService {
       title: 'Payment request declined',
       body:
         adminNote?.trim() ||
-        'Your payment request was not approved. You can submit again.',
-      actionRoute: '/(organizer)/pay-to-publish',
+        'Your payment request was not approved. Contact support if you need help.',
+      actionRoute: '/(organizer)/(tabs)/organization',
     });
   }
 

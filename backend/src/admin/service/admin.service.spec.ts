@@ -7,6 +7,9 @@ import { User } from 'src/database/entities/user.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
 import { OrganizerVerificationDocument } from 'src/database/entities/organizer-verification-document.entity';
 import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
+import { OrganizerCreditRequest } from 'src/database/entities/organizer-credit-request.entity';
+import { Event } from 'src/database/entities/event.entity';
+import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { ConfigService } from '@nestjs/config';
 import { OrganizerNotificationsService } from 'src/notifications/organizer-notifications.service';
 
@@ -42,6 +45,12 @@ describe('AdminService', () => {
           useFactory: mockRepo,
         },
         {
+          provide: getRepositoryToken(OrganizerCreditRequest),
+          useFactory: mockRepo,
+        },
+        { provide: getRepositoryToken(Event), useFactory: mockRepo },
+        { provide: getRepositoryToken(EventRegistration), useFactory: mockRepo },
+        {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string) => {
@@ -57,6 +66,7 @@ describe('AdminService', () => {
             notifyVerificationRejected: jest.fn().mockResolvedValue(undefined),
             notifyPaymentApproved: jest.fn().mockResolvedValue(undefined),
             notifyPaymentRejected: jest.fn().mockResolvedValue(undefined),
+            notifyCreditsGranted: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

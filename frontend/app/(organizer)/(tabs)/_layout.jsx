@@ -1,23 +1,16 @@
 import React from 'react';
-import { Redirect, Tabs } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import useAuth from '@/auth/useAuth';
 import { useThemeColors } from '@/theme';
 import useOrganizerNotificationBadge from '@/features/organizer/hooks/useOrganizerNotificationBadge';
-
-const ROLE_ORGANIZER = 2;
 
 export default function OrganizerTabsLayout() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { isHydrated, userRole } = useAuth();
   const { unreadCount } = useOrganizerNotificationBadge();
   const inboxBadge = unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined;
-
-  if (!isHydrated) return null;
-  if (userRole !== ROLE_ORGANIZER) return <Redirect href="/(tabs)" />;
 
   return (
     <Tabs
