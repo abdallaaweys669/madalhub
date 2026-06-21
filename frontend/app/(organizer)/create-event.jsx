@@ -32,7 +32,7 @@ import WysiwygHeader from '@/components/createEvent/WysiwygHeader';
 import WysiwygInfoCard from '@/components/createEvent/WysiwygInfoCard';
 import WysiwygLocation from '@/components/createEvent/WysiwygLocation';
 import CategoryFormatSheet from '@/components/createEvent/CategoryFormatSheet';
-import VenueOnlineModal from '@/components/createEvent/VenueOnlineModal';
+import VenueOnlineModal, { LOCATION_TBD_LABEL } from '@/components/createEvent/VenueOnlineModal';
 import WysiwygRoster from '@/components/createEvent/WysiwygRoster';
 import SpeakerEditModal from '@/components/createEvent/SpeakerEditModal';
 import WysiwygSponsors from '@/components/createEvent/WysiwygSponsors';
@@ -79,7 +79,7 @@ function getPublishValidationIssues({
   values,
   startDate,
   endDate,
-  isInPerson,
+  locationMode,
   onlineLink,
   ticketPaid,
 }) {
@@ -103,10 +103,10 @@ function getPublishValidationIssues({
     }
   }
 
-  if (isInPerson && !values.locationName.trim()) {
-    issues.push('Choose the event venue or map location.');
+  if (locationMode === 'venue' && !values.locationName.trim()) {
+    issues.push('Add a venue name or choose Location TBD.');
   }
-  if (!isInPerson && !onlineLink.trim()) {
+  if (locationMode === 'online' && !onlineLink.trim()) {
     issues.push('Add the online event link.');
   }
   if (ticketPaid && (Number(values.totalPrice) || 0) <= 0) {
@@ -137,7 +137,22 @@ export default function CreateEventScreen() {
   });
   const [template, setTemplate] = useState('meetup');
   const [eduSubtype, setEduSubtype] = useState(null);
-  const [isInPerson, setIsInPerson] = useState(true);
+  const [locationMode, setLocationMode] = useState('venue');
+  const handleLocationModeChange = (mode) => {
+    setLocationMode(mode);
+    if (mode === 'tbd') {
+      setLocationPin(null);
+      setValues((p) => ({
+        ...p,
+        locationName: LOCATION_TBD_LABEL,
+        locationAddress: '',
+      }));
+    } else if (mode === 'online') {
+      setLocationPin(null);
+    } else if (mode === 'venue' && values.locationName === LOCATION_TBD_LABEL) {
+      setValues((p) => ({ ...p, locationName: '', locationAddress: '' }));
+    }
+  };
   const [onlineLink, setOnlineLink] = useState('');
   const [locationPin, setLocationPin] = useState(null);
   const [ticketPaid, setTicketPaid] = useState(false);
@@ -199,11 +214,11 @@ export default function CreateEventScreen() {
         values,
         startDate,
         endDate,
-        isInPerson,
+        locationMode,
         onlineLink,
         ticketPaid,
       }),
-    [values, startDate, endDate, isInPerson, onlineLink, ticketPaid],
+    [values, startDate, endDate, locationMode, onlineLink, ticketPaid],
   );
 
   const canPublish = publishValidationIssues.length === 0;
@@ -252,15 +267,22 @@ export default function CreateEventScreen() {
                 : 'meetup',
         );
         setEduSubtype(['seminar', 'workshop', 'talk', 'bootcamp'].includes(data.eventFormat) ? data.eventFormat : null);
-        setIsInPerson(!(data.isOnline === true && data.isHybrid !== true));
-        setOnlineLink(data.onlineLink || '');
         const latitude = Number(data.location?.latitude ?? data.locationLatitude);
         const longitude = Number(data.location?.longitude ?? data.locationLongitude);
-        setLocationPin(
-          Number.isFinite(latitude) && Number.isFinite(longitude)
-            ? { latitude, longitude }
-            : null,
-        );
+        const hasPin = Number.isFinite(latitude) && Number.isFinite(longitude);
+        const locationLabel = String(data.location?.name || '').trim();
+        const isTbdLocation = ['to be announced', 'venue tbd'].includes(locationLabel.toLowerCase());
+
+        if (data.isOnline === true && data.isHybrid !== true) {
+          setLocationMode('online');
+        } else if (isTbdLocation && !hasPin) {
+          setLocationMode('tbd');
+        } else {
+          setLocationMode('venue');
+        }
+
+        setOnlineLink(data.onlineLink || '');
+        setLocationPin(hasPin ? { latitude, longitude } : null);
         setCoverImagePath(data.image || data.coverImage || null);
         setAudienceGender(['all', 'female', 'male'].includes(data.audienceGender) ? data.audienceGender : 'all');
         setRemoteStatus(data.status ?? null);
@@ -283,22 +305,27 @@ export default function CreateEventScreen() {
     startDatetime: startDate.toISOString(),
     endDatetime: endDate.toISOString(),
     coverImage: coverImagePath || null,
-    locationName: isInPerson ? values.locationName.trim() || 'Venue TBD' : 'Online',
-    locationAddress: values.locationAddress || '',
-    locationLatitude: isInPerson ? locationPin?.latitude ?? null : null,
-    locationLongitude: isInPerson ? locationPin?.longitude ?? null : null,
+    locationName:
+      locationMode === 'online'
+        ? 'Online'
+        : locationMode === 'tbd'
+          ? LOCATION_TBD_LABEL
+          : values.locationName.trim() || 'Venue TBD',
+    locationAddress: locationMode === 'venue' ? values.locationAddress.trim() : '',
+    locationLatitude: locationMode === 'venue' ? locationPin?.latitude ?? null : null,
+    locationLongitude: locationMode === 'venue' ? locationPin?.longitude ?? null : null,
     capacity: Number(values.capacity) || 0,
     totalPrice: ticketPaid ? Number(values.totalPrice) || 0 : 0,
     interestId: draft ? Number(values.interestId) || 1 : Number(values.interestId),
-    isPhysical: isInPerson,
+    isPhysical: locationMode !== 'online',
     eventFormat: resolveEventFormat(template, eduSubtype),
-    isOnline: !isInPerson,
+    isOnline: locationMode === 'online',
     isHybrid: false,
-    onlineLink: !isInPerson ? onlineLink.trim() : undefined,
+    onlineLink: locationMode === 'online' ? onlineLink.trim() : undefined,
     audienceGender,
     sponsors: sponsorRows.filter((s) => s.name.trim()).map((s) => ({ name: s.name.trim(), ...(s.logoPath ? { logo: s.logoPath } : {}) })),
     roster: people.filter((p) => p.fullName.trim()).map((p, idx) => ({ role: p.role, displayName: p.fullName.trim(), title: p.title.trim() || null, sortOrder: idx, photoUrl: p.photoPath || null })),
-  }), [values, startDate, endDate, coverImagePath, isInPerson, locationPin, ticketPaid, onlineLink, audienceGender, template, eduSubtype, sponsorRows, people]);
+  }), [values, startDate, endDate, coverImagePath, locationMode, locationPin, ticketPaid, onlineLink, audienceGender, template, eduSubtype, sponsorRows, people]);
 
   const saveDraft = async () => {
     if (effectiveEventId) await patchOrganizerEvent(effectiveEventId, buildPayload(true));
@@ -324,7 +351,12 @@ export default function CreateEventScreen() {
   const onPickCover = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.85 });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      quality: 0.85,
+      allowsEditing: true,
+      aspect: [16, 9],
+    });
     if (result.canceled || !result.assets?.[0]) return;
     setCoverUploading(true);
     try {
@@ -554,7 +586,7 @@ export default function CreateEventScreen() {
               dateSecondary={`${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`}
               categoryLabel={categoryLabel}
               formatLabel={resolveEventFormat(template, eduSubtype)}
-              deliveryMode={isInPerson ? 'in-person' : 'online'}
+              deliveryMode={locationMode === 'online' ? 'online' : 'in-person'}
               onChangeTitle={(v) => setValues((p) => ({ ...p, title: v }))}
               onChangeDescription={(v) => setValues((p) => ({ ...p, description: v }))}
               onPressEditDate={() => setScheduleModalOpen(true)}
@@ -570,9 +602,21 @@ export default function CreateEventScreen() {
             />
 
             <WysiwygLocation
-              locationPrimary={isInPerson ? values.locationName : 'Online event'}
-              locationSecondary={isInPerson ? values.locationAddress : onlineLink}
-              hasMapPin={Boolean(locationPin)}
+              locationPrimary={
+                locationMode === 'online'
+                  ? 'Online event'
+                  : locationMode === 'tbd'
+                    ? LOCATION_TBD_LABEL
+                    : values.locationName || 'Tap to set venue'
+              }
+              locationSecondary={
+                locationMode === 'online'
+                  ? onlineLink || 'Add meeting link'
+                  : locationMode === 'tbd'
+                    ? 'Organizer will share location before the event'
+                    : values.locationAddress || (locationPin ? 'Map pin saved for directions' : 'Type venue or add map pin (optional)')
+              }
+              hasMapPin={locationMode === 'venue' && Boolean(locationPin)}
               onPress={() => setLocationModalOpen(true)}
             />
 
@@ -769,10 +813,12 @@ export default function CreateEventScreen() {
       <VenueOnlineModal
         visible={locationModalOpen}
         onClose={() => setLocationModalOpen(false)}
-        isInPerson={isInPerson}
-        onChangeIsInPerson={setIsInPerson}
+        locationMode={locationMode}
+        onChangeLocationMode={handleLocationModeChange}
         locationName={values.locationName}
         locationAddress={values.locationAddress}
+        onChangeLocationName={(text) => setValues((p) => ({ ...p, locationName: text }))}
+        onChangeLocationAddress={(text) => setValues((p) => ({ ...p, locationAddress: text }))}
         locationPin={locationPin}
         onlineLink={onlineLink}
         onChangeOnlineLink={setOnlineLink}
@@ -782,8 +828,8 @@ export default function CreateEventScreen() {
         onSelectLocation={(loc) => {
           setValues((p) => ({
             ...p,
-            locationName: loc.locationName || p.locationName,
-            locationAddress: loc.locationAddress || p.locationAddress,
+            locationName: loc.locationName || loc.name || p.locationName,
+            locationAddress: loc.locationAddress || loc.address || p.locationAddress,
           }));
           if (Number.isFinite(Number(loc.latitude)) && Number.isFinite(Number(loc.longitude))) {
             setLocationPin({ latitude: Number(loc.latitude), longitude: Number(loc.longitude) });

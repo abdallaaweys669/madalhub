@@ -49,7 +49,7 @@ export default function WysiwygHeader({
                   <Feather name="upload" size={22} color="#EA580C" />
                 </View>
                 <Text style={styles.uploadTitle}>Upload cover</Text>
-                <Text style={styles.uploadSubtitle}>Tap to choose a photo from your gallery</Text>
+                <Text style={styles.uploadSubtitle}>Tap to choose a photo, then crop to 16:9</Text>
                 <View style={styles.uploadMetaPill}>
                   <Feather name="crop" size={13} color="#64748B" />
                   <Text style={styles.uploadMetaText}>16:9 (1200 x 675) recommended</Text>

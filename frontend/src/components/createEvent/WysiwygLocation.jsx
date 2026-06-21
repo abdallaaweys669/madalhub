@@ -10,8 +10,8 @@ export default function WysiwygLocation({ locationPrimary, locationSecondary, ha
         <Feather name="map-pin" size={18} color="#FF7A00" />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={eventStyles.infoText}>{locationPrimary || 'Tap to set venue or online link'}</Text>
-        <Text style={eventStyles.infoSubText}>{locationSecondary || 'Select map location or paste meeting URL'}</Text>
+        <Text style={eventStyles.infoText}>{locationPrimary || 'Tap to set venue, online link, or TBD'}</Text>
+        <Text style={eventStyles.infoSubText}>{locationSecondary || 'Type a venue, go online, or mark location TBD'}</Text>
         {hasMapPin ? (
           <Text style={[eventStyles.infoSubText, { color: '#16A34A', fontWeight: '700' }]}>
             Exact map pin saved
