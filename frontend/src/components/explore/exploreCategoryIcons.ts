@@ -77,3 +77,15 @@ export function resolveExploreCategoryIcon(
 
   return FALLBACK_ICONS[fallbackIndex % FALLBACK_ICONS.length];
 }
+
+/** Prefer admin-assigned icon from API; fall back to name heuristics. */
+export function resolveInterestIcon(
+  interest: { name?: string | null; icon?: string | null },
+  fallbackIndex = 0,
+): ExploreCategoryIconName {
+  const stored = String(interest?.icon || '').trim().toLowerCase();
+  if (stored) {
+    return stored as ExploreCategoryIconName;
+  }
+  return resolveExploreCategoryIcon(String(interest?.name || ''), fallbackIndex);
+}

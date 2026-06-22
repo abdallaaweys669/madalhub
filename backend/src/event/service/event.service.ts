@@ -12,6 +12,7 @@ import { EventRegistration } from 'src/database/entities/event-registration.enti
 import { Interest } from 'src/database/entities/interest.entity';
 import { SavedEvent } from 'src/database/entities/saved-event.entity';
 import { EventProgramRoster } from 'src/database/entities/event-program-roster.entity';
+import { EventSession } from 'src/database/entities/event-session.entity';
 import { EventCohost } from 'src/database/entities/event-cohost.entity';
 import { EventLike } from 'src/database/entities/event-like.entity';
 import { MemberInterest } from 'src/database/entities/member-interest.entity';
@@ -66,6 +67,8 @@ export class EventService {
     private savedEventRepo: Repository<SavedEvent>,
     @InjectRepository(EventProgramRoster)
     private eventProgramRosterRepo: Repository<EventProgramRoster>,
+    @InjectRepository(EventSession)
+    private eventSessionRepo: Repository<EventSession>,
     @InjectRepository(EventCohost)
     private eventCohostRepo: Repository<EventCohost>,
     @InjectRepository(EventLike)
@@ -522,6 +525,72 @@ export class EventService {
     }
   }
 
+  private async syncEventSessions(
+    eventId: number,
+    sessions: {
+      title: string;
+      sessionFormat: string;
+      startDatetime: Date | string;
+      endDatetime: Date | string;
+      description?: string | null;
+      speakerNames?: string | null;
+      sortOrder?: number;
+    }[],
+  ) {
+    await this.eventSessionRepo.delete({ eventId });
+    const rows = sessions
+      .filter((s) => s?.title?.trim() && s?.sessionFormat?.trim())
+      .map((s, idx) => {
+        const start = new Date(s.startDatetime);
+        const end = new Date(s.endDatetime);
+        if (
+          !Number.isFinite(start.getTime()) ||
+          !Number.isFinite(end.getTime()) ||
+          end.getTime() <= start.getTime()
+        ) {
+          throw new BadRequestException(
+            'Each agenda session needs a valid start and end time.',
+          );
+        }
+        return this.eventSessionRepo.create({
+          eventId,
+          title: s.title.trim(),
+          sessionFormat: s.sessionFormat.trim().toLowerCase(),
+          startDatetime: start,
+          endDatetime: end,
+          description: s.description?.trim() || null,
+          speakerNames: s.speakerNames?.trim() || null,
+          sortOrder: s.sortOrder ?? idx,
+        });
+      });
+    if (rows.length > 0) {
+      await this.eventSessionRepo.save(rows);
+    }
+  }
+
+  private async getEventSessionsForResponse(eventId: number) {
+    try {
+      const rows = await this.eventSessionRepo.find({
+        where: { eventId },
+        order: { sortOrder: 'ASC', startDatetime: 'ASC' },
+      });
+      return rows.map((s) => ({
+        id: s.id,
+        title: s.title,
+        sessionFormat: s.sessionFormat,
+        startsAt: s.startDatetime,
+        endsAt: s.endDatetime,
+        startDatetime: s.startDatetime,
+        endDatetime: s.endDatetime,
+        description: s.description,
+        speakerNames: s.speakerNames,
+        sortOrder: s.sortOrder,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   private readonly descriptionMetaSeparator = '\n---\n[KULAN_EVENT_META]\n';
   private readonly descriptionMetaEnd = '\n[/KULAN_EVENT_META]';
 
@@ -661,7 +730,7 @@ export class EventService {
       throw new BadRequestException('startDatetime must be before endDatetime');
     }
 
-    const { sponsors, roster, ...rest } = dto as CreateEventDto & {
+    const { sponsors, roster, sessions, ...rest } = dto as CreateEventDto & {
       sponsors?: { name: string; logo?: string }[];
       roster?: {
         role: string;
@@ -669,6 +738,15 @@ export class EventService {
         title?: string | null;
         sortOrder?: number;
         photoUrl?: string | null;
+      }[];
+      sessions?: {
+        title: string;
+        sessionFormat: string;
+        startDatetime: Date | string;
+        endDatetime: Date | string;
+        description?: string | null;
+        speakerNames?: string | null;
+        sortOrder?: number;
       }[];
     };
 
@@ -688,6 +766,10 @@ export class EventService {
 
     if (roster !== undefined) {
       await this.syncEventRoster(saved.id, roster);
+    }
+
+    if (sessions !== undefined) {
+      await this.syncEventSessions(saved.id, sessions);
     }
 
     return saved;
@@ -758,7 +840,7 @@ export class EventService {
       throw new ForbiddenException('You do not own this event');
     }
 
-    const { sponsors, roster, ...rest } = dto as UpdateEventDto & {
+    const { sponsors, roster, sessions, ...rest } = dto as UpdateEventDto & {
       sponsors?: { name: string; logo?: string }[];
       roster?: {
         role: string;
@@ -766,6 +848,15 @@ export class EventService {
         title?: string | null;
         sortOrder?: number;
         photoUrl?: string | null;
+      }[];
+      sessions?: {
+        title: string;
+        sessionFormat: string;
+        startDatetime: Date | string;
+        endDatetime: Date | string;
+        description?: string | null;
+        speakerNames?: string | null;
+        sortOrder?: number;
       }[];
     };
 
@@ -802,12 +893,16 @@ export class EventService {
       await this.syncEventRoster(event.id, roster);
     }
 
+    if (sessions !== undefined) {
+      await this.syncEventSessions(event.id, sessions);
+    }
+
     return event;
   }
 
   async getInterests() {
     const interests = await this.interestRepo.find({
-      select: ['id', 'name'],
+      select: ['id', 'name', 'icon'],
       order: { name: 'ASC' },
     });
     return { interests };
@@ -1830,6 +1925,10 @@ export class EventService {
     currentUserId?: number,
     currentUserRole?: number,
   ) {
+    const canViewRunSheet =
+      currentUserId != null &&
+      (currentUserId === event.organizerId || currentUserRole === ROLE_ADMIN);
+
     const userRegistrationPromise =
       currentUserId != null
         ? this.eventRegistrationRepo
@@ -1861,6 +1960,7 @@ export class EventService {
       rosterRows,
       likeCount,
       userLikeRow,
+      sessionRows,
     ] = await Promise.all([
       this.userRepo.findOne({ where: { id: event.organizerId } }),
       this.organizerProfileRepo.findOne({
@@ -1885,6 +1985,14 @@ export class EventService {
             select: ['id'],
           })
         : Promise.resolve(null),
+      canViewRunSheet
+        ? this.eventSessionRepo
+            .find({
+              where: { eventId: event.id },
+              order: { sortOrder: 'ASC', startDatetime: 'ASC' },
+            })
+            .catch(() => [] as EventSession[])
+        : Promise.resolve([] as EventSession[]),
     ]);
 
     if (!organizer) {
@@ -1958,6 +2066,20 @@ export class EventService {
           photoUrl: r.photoUrl,
           sortOrder: r.sortOrder,
         })) ?? [],
+      sessions: canViewRunSheet
+        ? sessionRows?.map((s) => ({
+            id: s.id,
+            title: s.title,
+            sessionFormat: s.sessionFormat,
+            startsAt: s.startDatetime,
+            endsAt: s.endDatetime,
+            startDatetime: s.startDatetime,
+            endDatetime: s.endDatetime,
+            description: s.description,
+            speakerNames: s.speakerNames,
+            sortOrder: s.sortOrder,
+          })) ?? []
+        : [],
     };
   }
 }

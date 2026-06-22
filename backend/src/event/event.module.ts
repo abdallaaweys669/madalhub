@@ -10,6 +10,7 @@ import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity
 import { Interest } from 'src/database/entities/interest.entity';
 import { SavedEvent } from 'src/database/entities/saved-event.entity';
 import { EventProgramRoster } from 'src/database/entities/event-program-roster.entity';
+import { EventSession } from 'src/database/entities/event-session.entity';
 import { EventCohost } from 'src/database/entities/event-cohost.entity';
 import { EventLike } from 'src/database/entities/event-like.entity';
 import { MemberInterest } from 'src/database/entities/member-interest.entity';
@@ -29,6 +30,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
       Interest,
       SavedEvent,
       EventProgramRoster,
+      EventSession,
       EventCohost,
       EventLike,
       MemberInterest,

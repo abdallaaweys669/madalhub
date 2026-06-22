@@ -17,6 +17,7 @@ import useGuardedRouter from '@/hooks/useGuardedRouter';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import apiClient from '@/api/client';
@@ -26,6 +27,8 @@ import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 import useAuth from '@/auth/useAuth';
 import { getPublishEligibility } from '@/api/organizer';
 import { resolveOrganizerPublishGate } from '@/utils/organizerPublish';
+import { formatEventDateLabel, formatEventTimeLabel } from '@/utils/formatEventSchedule';
+import { EVENT_FORMAT_OPTIONS } from '@/constants/eventFormats';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
 import WysiwygHeader from '@/components/createEvent/WysiwygHeader';
@@ -41,30 +44,23 @@ import CreateEventSkeleton from '@/components/skeletons/CreateEventSkeleton';
 import AppPopup from '@/components/common/AppPopup';
 import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 
-const EDU_SUBTYPES = [
-  { key: 'seminar', label: 'Seminar' },
-  { key: 'workshop', label: 'Workshop' },
-  { key: 'talk', label: 'Talk' },
-  { key: 'bootcamp', label: 'Bootcamp' },
-];
-
-const COMPACT_TEMPLATES = [
-  { key: 'meetup', label: 'Meetup', icon: 'people-outline' },
-  { key: 'education', label: 'Seminar / Talk', icon: 'school-outline' },
-  { key: 'panel', label: 'Panel', icon: 'mic-outline' },
-];
-
 import AudienceDropdown from '@/components/createEvent/AudienceDropdown';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-function resolveEventFormat(template, eduSubtype) {
-  if (template === 'panel') return 'panel';
-  if (template === 'meetup') return 'meetup';
-  if (template === 'education') return eduSubtype || 'talk';
-  return null;
+async function normalizePickedCoverUri(uri) {
+  if (!uri || typeof uri !== 'string') return null;
+  const trimmed = uri.trim();
+  if (!trimmed) return null;
+  if (/^file:\/\//i.test(trimmed)) return trimmed;
+  if (/^content:\/\//i.test(trimmed) && FileSystem.cacheDirectory) {
+    const dest = `${FileSystem.cacheDirectory}event-cover-${Date.now()}.jpg`;
+    await FileSystem.copyAsync({ from: trimmed, to: dest });
+    return dest;
+  }
+  return trimmed;
 }
 
 function formatRelativeSaveTime(date) {
@@ -75,6 +71,28 @@ function formatRelativeSaveTime(date) {
   return `Saved ${mins} minutes ago`;
 }
 
+function getDefaultSchedule() {
+  const start = new Date();
+  start.setMinutes(0, 0, 0);
+  start.setHours(start.getHours() + 1);
+  const end = new Date(start);
+  end.setHours(end.getHours() + 1);
+  return { start, end };
+}
+
+function formatScheduleDateTime(date) {
+  if (!(date instanceof Date) || !Number.isFinite(date.getTime())) return null;
+  const day = date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return `${day} · ${time}`;
+}
+
+function addHours(date, hours) {
+  const next = new Date(date);
+  next.setHours(next.getHours() + hours);
+  return next;
+}
+
 function getPublishValidationIssues({
   values,
   startDate,
@@ -82,6 +100,8 @@ function getPublishValidationIssues({
   locationMode,
   onlineLink,
   ticketPaid,
+  eventFormat,
+  people,
 }) {
   const issues = [];
   const startTime = startDate?.getTime?.();
@@ -92,7 +112,7 @@ function getPublishValidationIssues({
   if (!values.interestId) issues.push('Choose the event category.');
 
   if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) {
-    issues.push('Choose a valid start date and end date.');
+    issues.push('Choose when your event starts and ends.');
   } else {
     const oneMinuteAgo = Date.now() - 60 * 1000;
     if (startTime < oneMinuteAgo) {
@@ -111,6 +131,13 @@ function getPublishValidationIssues({
   }
   if (ticketPaid && (Number(values.totalPrice) || 0) <= 0) {
     issues.push('Add a ticket price greater than 0 for paid events.');
+  }
+
+  if (eventFormat === 'panel') {
+    const panelists = people.filter((p) => p.role === 'panelist' && p.fullName?.trim());
+    const moderators = people.filter((p) => p.role === 'moderator' && p.fullName?.trim());
+    if (panelists.length < 2) issues.push('Panel events need at least 2 panelists.');
+    if (moderators.length < 1) issues.push('Panel events need at least 1 moderator.');
   }
 
   return issues;
@@ -135,8 +162,7 @@ export default function CreateEventScreen() {
     totalPrice: '0',
     interestId: '',
   });
-  const [template, setTemplate] = useState('meetup');
-  const [eduSubtype, setEduSubtype] = useState(null);
+  const [eventFormat, setEventFormat] = useState('meetup');
   const [locationMode, setLocationMode] = useState('venue');
   const handleLocationModeChange = (mode) => {
     setLocationMode(mode);
@@ -159,21 +185,14 @@ export default function CreateEventScreen() {
   const [audienceGender, setAudienceGender] = useState('all');
   const [enableWaitlist, setEnableWaitlist] = useState(false);
 
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setHours(d.getHours() + 1, 0, 0, 0);
-    return d;
-  });
-  const [endDate, setEndDate] = useState(() => {
-    const d = new Date();
-    d.setHours(d.getHours() + 2, 0, 0, 0);
-    return d;
-  });
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
 
   const [interests, setInterests] = useState([]);
   const [people, setPeople] = useState([]);
   const [sponsorRows, setSponsorRows] = useState([]);
   const [coverImagePath, setCoverImagePath] = useState(null);
+  const [coverPreviewUri, setCoverPreviewUri] = useState(null);
   const [coverUploading, setCoverUploading] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -199,7 +218,8 @@ export default function CreateEventScreen() {
   const [publishSuccessKind, setPublishSuccessKind] = useState('published');
   const [sponsorNamePrompt, setSponsorNamePrompt] = useState(null);
   const [sponsorDraftName, setSponsorDraftName] = useState('');
-  const [activeDatePicker, setActiveDatePicker] = useState(null);
+  const [activeScheduleField, setActiveScheduleField] = useState(null);
+  const [androidPickerStep, setAndroidPickerStep] = useState(null);
 
   const categoryLabel = useMemo(() => interests.find((x) => String(x.id) === String(values.interestId))?.name || null, [interests, values.interestId]);
   const filteredCategories = useMemo(() => {
@@ -217,8 +237,10 @@ export default function CreateEventScreen() {
         locationMode,
         onlineLink,
         ticketPaid,
+        eventFormat,
+        people,
       }),
-    [values, startDate, endDate, locationMode, onlineLink, ticketPaid],
+    [values, startDate, endDate, locationMode, onlineLink, ticketPaid, eventFormat, people],
   );
 
   const canPublish = publishValidationIssues.length === 0;
@@ -257,16 +279,7 @@ export default function CreateEventScreen() {
           totalPrice: String(data.price ?? data.totalPrice ?? 0),
           interestId: String(data.interestId || ''),
         });
-        setTemplate(
-          data.eventFormat === 'panel'
-            ? 'panel'
-            : data.eventFormat === 'meetup'
-              ? 'meetup'
-              : data.eventFormat
-                ? 'education'
-                : 'meetup',
-        );
-        setEduSubtype(['seminar', 'workshop', 'talk', 'bootcamp'].includes(data.eventFormat) ? data.eventFormat : null);
+        setEventFormat(String(data.eventFormat || 'meetup').toLowerCase());
         const latitude = Number(data.location?.latitude ?? data.locationLatitude);
         const longitude = Number(data.location?.longitude ?? data.locationLongitude);
         const hasPin = Number.isFinite(latitude) && Number.isFinite(longitude);
@@ -284,6 +297,7 @@ export default function CreateEventScreen() {
         setOnlineLink(data.onlineLink || '');
         setLocationPin(hasPin ? { latitude, longitude } : null);
         setCoverImagePath(data.image || data.coverImage || null);
+        setCoverPreviewUri(null);
         setAudienceGender(['all', 'female', 'male'].includes(data.audienceGender) ? data.audienceGender : 'all');
         setRemoteStatus(data.status ?? null);
         setTicketPaid(Number(data.price ?? data.totalPrice ?? 0) > 0);
@@ -299,11 +313,17 @@ export default function CreateEventScreen() {
     })();
   }, [routeEventId]);
 
-  const buildPayload = useCallback((draft = false) => ({
+  const buildPayload = useCallback((draft = false) => {
+    const schedule =
+      startDate && endDate
+        ? { start: startDate, end: endDate }
+        : getDefaultSchedule();
+
+    return {
     title: draft ? values.title.trim() || 'Untitled draft' : values.title.trim(),
     description: values.description.trim(),
-    startDatetime: startDate.toISOString(),
-    endDatetime: endDate.toISOString(),
+    startDatetime: schedule.start.toISOString(),
+    endDatetime: schedule.end.toISOString(),
     coverImage: coverImagePath || null,
     locationName:
       locationMode === 'online'
@@ -318,14 +338,15 @@ export default function CreateEventScreen() {
     totalPrice: ticketPaid ? Number(values.totalPrice) || 0 : 0,
     interestId: draft ? Number(values.interestId) || 1 : Number(values.interestId),
     isPhysical: locationMode !== 'online',
-    eventFormat: resolveEventFormat(template, eduSubtype),
+    eventFormat,
     isOnline: locationMode === 'online',
     isHybrid: false,
     onlineLink: locationMode === 'online' ? onlineLink.trim() : undefined,
     audienceGender,
     sponsors: sponsorRows.filter((s) => s.name.trim()).map((s) => ({ name: s.name.trim(), ...(s.logoPath ? { logo: s.logoPath } : {}) })),
     roster: people.filter((p) => p.fullName.trim()).map((p, idx) => ({ role: p.role, displayName: p.fullName.trim(), title: p.title.trim() || null, sortOrder: idx, photoUrl: p.photoPath || null })),
-  }), [values, startDate, endDate, coverImagePath, locationMode, locationPin, ticketPaid, onlineLink, audienceGender, template, eduSubtype, sponsorRows, people]);
+  };
+  }, [values, startDate, endDate, coverImagePath, locationMode, locationPin, ticketPaid, onlineLink, audienceGender, eventFormat, sponsorRows, people]);
 
   const saveDraft = async () => {
     if (effectiveEventId) await patchOrganizerEvent(effectiveEventId, buildPayload(true));
@@ -358,11 +379,22 @@ export default function CreateEventScreen() {
       aspect: [16, 9],
     });
     if (result.canceled || !result.assets?.[0]) return;
+
+    const picked = result.assets[0];
+    let previewUri = picked.uri;
+    try {
+      previewUri = (await normalizePickedCoverUri(picked.uri)) || picked.uri;
+    } catch {
+      previewUri = picked.uri;
+    }
+    setCoverPreviewUri(previewUri);
     setCoverUploading(true);
     try {
-      const path = await uploadEventCoverImage(result.assets[0]);
+      const path = await uploadEventCoverImage(picked);
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setCoverImagePath(path);
+    } catch (error) {
+      Alert.alert('Upload failed', error?.message || 'Could not upload cover image. Your preview is kept — try again or save draft later.');
     } finally {
       setCoverUploading(false);
     }
@@ -371,7 +403,7 @@ export default function CreateEventScreen() {
   const openAddPerson = () => {
     setEditingPersonKey(null);
     setDraftPhotoPick(null);
-    setDraftPerson({ fullName: '', role: template === 'panel' ? 'panelist' : 'speaker', title: '', photoPath: null });
+    setDraftPerson({ fullName: '', role: eventFormat === 'panel' ? 'panelist' : 'speaker', title: '', photoPath: null });
     setPersonModalVisible(true);
   };
 
@@ -518,37 +550,78 @@ export default function CreateEventScreen() {
     }
   };
 
-  const applyDatePart = (base, picked) => {
-    const d = new Date(base);
+  const applyDatePart = (base, picked, role = 'start') => {
+    const fallback = role === 'end' ? getDefaultSchedule().end : getDefaultSchedule().start;
+    const d = base ? new Date(base) : new Date(fallback);
     d.setFullYear(picked.getFullYear(), picked.getMonth(), picked.getDate());
     return d;
   };
 
-  const applyTimePart = (base, picked) => {
-    const d = new Date(base);
+  const applyTimePart = (base, picked, role = 'start') => {
+    const fallback = role === 'end' ? getDefaultSchedule().end : getDefaultSchedule().start;
+    const d = base ? new Date(base) : new Date(fallback);
     d.setHours(picked.getHours(), picked.getMinutes(), 0, 0);
     return d;
   };
 
+  const closeSchedulePicker = () => {
+    setActiveScheduleField(null);
+    setAndroidPickerStep(null);
+  };
+
+  const openSchedulePicker = (field) => {
+    setActiveScheduleField(field);
+    if (Platform.OS === 'android') setAndroidPickerStep('date');
+  };
+
   const handleScheduleChange = (event, selectedDate) => {
-    if (!activeDatePicker) return;
+    if (!activeScheduleField) return;
     if (Platform.OS === 'android' && event?.type !== 'set') {
-      setActiveDatePicker(null);
+      closeSchedulePicker();
       return;
     }
     if (!selectedDate) return;
 
-    if (activeDatePicker === 'startDate') {
-      setStartDate((prev) => applyDatePart(prev, selectedDate));
-    } else if (activeDatePicker === 'startTime') {
-      setStartDate((prev) => applyTimePart(prev, selectedDate));
-    } else if (activeDatePicker === 'endDate') {
-      setEndDate((prev) => applyDatePart(prev, selectedDate));
-    } else if (activeDatePicker === 'endTime') {
-      setEndDate((prev) => applyTimePart(prev, selectedDate));
+    if (Platform.OS === 'ios') {
+      if (activeScheduleField === 'start') {
+        setStartDate(selectedDate);
+        setEndDate((prev) => {
+          if (!prev || prev.getTime() <= selectedDate.getTime()) {
+            return addHours(selectedDate, 1);
+          }
+          return prev;
+        });
+      } else {
+        setEndDate(selectedDate);
+      }
+      return;
     }
 
-    if (Platform.OS === 'android') setActiveDatePicker(null);
+    if (androidPickerStep === 'date') {
+      if (activeScheduleField === 'start') {
+        setStartDate((prev) => applyDatePart(prev, selectedDate, 'start'));
+      } else {
+        setEndDate((prev) => applyDatePart(prev, selectedDate, 'end'));
+      }
+      setAndroidPickerStep('time');
+      return;
+    }
+
+    if (activeScheduleField === 'start') {
+      setStartDate((prev) => {
+        const nextStart = applyTimePart(prev, selectedDate, 'start');
+        setEndDate((endPrev) => {
+          if (!endPrev || endPrev.getTime() <= nextStart.getTime()) {
+            return addHours(nextStart, 1);
+          }
+          return endPrev;
+        });
+        return nextStart;
+      });
+    } else {
+      setEndDate((prev) => applyTimePart(prev, selectedDate, 'end'));
+    }
+    closeSchedulePicker();
   };
 
   if (fetchLoading) {
@@ -573,7 +646,7 @@ export default function CreateEventScreen() {
         >
           <WysiwygHeader
             coverPath={coverImagePath}
-            title={values.title}
+            coverPreviewUri={coverPreviewUri}
             onBack={() => router.back()}
             onPickCover={onPickCover}
             coverUploading={coverUploading}
@@ -582,10 +655,18 @@ export default function CreateEventScreen() {
             <WysiwygInfoCard
               title={values.title}
               description={values.description}
-              datePrimary={startDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-              dateSecondary={`${startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} - ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`}
+              datePrimary={
+                startDate
+                  ? formatEventDateLabel(startDate, endDate)
+                  : 'Tap to set date'
+              }
+              dateSecondary={
+                startDate && endDate
+                  ? formatEventTimeLabel(startDate, endDate)
+                  : 'Choose start and end time'
+              }
               categoryLabel={categoryLabel}
-              formatLabel={resolveEventFormat(template, eduSubtype)}
+              formatLabel={eventFormat}
               deliveryMode={locationMode === 'online' ? 'online' : 'in-person'}
               onChangeTitle={(v) => setValues((p) => ({ ...p, title: v }))}
               onChangeDescription={(v) => setValues((p) => ({ ...p, description: v }))}
@@ -634,7 +715,7 @@ export default function CreateEventScreen() {
               </View>
             </View>
 
-            <WysiwygRoster roster={rosterForCard} template={template} onPressAdd={openAddPerson} onPressPerson={openEditPerson} />
+            <WysiwygRoster roster={rosterForCard} eventFormat={eventFormat} onPressAdd={openAddPerson} onPressPerson={openEditPerson} />
             <WysiwygSponsors
               sponsors={sponsorRows.map((s) => ({ id: s.key, image: s.logoPath ? { uri: resolveApiAssetUrl(s.logoPath) } : null, name: s.name }))}
               onPressAddSponsor={addSponsor}
@@ -760,33 +841,86 @@ export default function CreateEventScreen() {
         bottomInset={insets.bottom}
       />
 
-      <Modal visible={scheduleModalOpen} transparent animationType="slide" onRequestClose={() => setScheduleModalOpen(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.42)' }} onPress={() => setScheduleModalOpen(false)}>
-          <Pressable onPress={(e) => e.stopPropagation()} style={{ marginTop: 'auto', backgroundColor: '#fff', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16 }}>
-            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12 }}>Schedule</Text>
-            <Text style={{ fontWeight: '600', color: '#374151', marginBottom: 6 }}>Start</Text>
-            <Pressable onPress={() => setActiveDatePicker('startDate')} style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, padding: 10, marginBottom: 8 }}>
-              <Text>{startDate.toLocaleDateString()}</Text>
-            </Pressable>
-            <Pressable onPress={() => setActiveDatePicker('startTime')} style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, padding: 10 }}>
-              <Text>{startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</Text>
-            </Pressable>
-            <Text style={{ fontWeight: '600', color: '#374151', marginTop: 10, marginBottom: 6 }}>End</Text>
-            <Pressable onPress={() => setActiveDatePicker('endDate')} style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, padding: 10, marginBottom: 8 }}>
-              <Text>{endDate.toLocaleDateString()}</Text>
-            </Pressable>
-            <Pressable onPress={() => setActiveDatePicker('endTime')} style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, padding: 10 }}>
-              <Text>{endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</Text>
+      <Modal
+        visible={scheduleModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          closeSchedulePicker();
+          setScheduleModalOpen(false);
+        }}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.42)' }}
+          onPress={() => {
+            closeSchedulePicker();
+            setScheduleModalOpen(false);
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              marginTop: 'auto',
+              backgroundColor: '#fff',
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              padding: 16,
+              paddingBottom: insets.bottom + 16,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 4 }}>Schedule</Text>
+            <Text style={{ color: '#6B7280', marginBottom: 16 }}>
+              Set when your event starts and ends.
+            </Text>
+
+            <Text style={{ fontWeight: '600', color: '#374151', marginBottom: 6 }}>Starts</Text>
+            <Pressable
+              onPress={() => openSchedulePicker('start')}
+              style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, padding: 12, marginBottom: 14 }}
+            >
+              <Text style={{ color: startDate ? '#111827' : '#9CA3AF' }}>
+                {formatScheduleDateTime(startDate) || 'Tap to set start'}
+              </Text>
             </Pressable>
 
-            {activeDatePicker ? (
+            <Text style={{ fontWeight: '600', color: '#374151', marginBottom: 6 }}>Ends</Text>
+            <Pressable
+              onPress={() => openSchedulePicker('end')}
+              style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, padding: 12, marginBottom: 14 }}
+            >
+              <Text style={{ color: endDate ? '#111827' : '#9CA3AF' }}>
+                {formatScheduleDateTime(endDate) || 'Tap to set end'}
+              </Text>
+            </Pressable>
+
+            {activeScheduleField ? (
               <DateTimePicker
-                value={activeDatePicker.startsWith('start') ? startDate : endDate}
-                mode={activeDatePicker.toLowerCase().includes('date') ? 'date' : 'time'}
+                value={
+                  activeScheduleField === 'start'
+                    ? startDate || getDefaultSchedule().start
+                    : endDate || startDate || getDefaultSchedule().end
+                }
+                mode={Platform.OS === 'ios' ? 'datetime' : androidPickerStep || 'date'}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={handleScheduleChange}
               />
             ) : null}
+
+            <Pressable
+              onPress={() => {
+                closeSchedulePicker();
+                setScheduleModalOpen(false);
+              }}
+              style={{
+                marginTop: 8,
+                backgroundColor: '#FF7A00',
+                borderRadius: 12,
+                paddingVertical: 14,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Done</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -800,12 +934,9 @@ export default function CreateEventScreen() {
         onChangeCategorySearch={setCategorySearch}
         selectedCategoryId={values.interestId}
         onSelectCategory={(item) => setValues((p) => ({ ...p, interestId: String(item.id) }))}
-        templates={COMPACT_TEMPLATES}
-        selectedTemplate={template}
-        onSelectTemplate={(next) => { setTemplate(next); if (next !== 'education') setEduSubtype(null); }}
-        eduSubtypes={EDU_SUBTYPES}
-        selectedEduSubtype={eduSubtype}
-        onSelectEduSubtype={setEduSubtype}
+        eventFormats={EVENT_FORMAT_OPTIONS}
+        selectedEventFormat={eventFormat}
+        onSelectEventFormat={setEventFormat}
         primary="#FF7A00"
         primarySoft="#FFF7ED"
       />

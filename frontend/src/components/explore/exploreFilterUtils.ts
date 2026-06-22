@@ -1,4 +1,5 @@
 import type { ExploreFilters } from '@/components/filters/FilterModal';
+import { formatKeyToDisplayLabel } from '@/constants/eventFormatLabels';
 
 const DEFAULT_MODAL_FILTER_KEYS = {
   quickPick: null,
@@ -16,7 +17,7 @@ export type ExploreActiveFilterChip = {
 
 function formatFormatLabel(format: ExploreFilters['format']) {
   if (format === 'Any') return '';
-  return format.charAt(0).toUpperCase() + format.slice(1);
+  return formatKeyToDisplayLabel(format);
 }
 
 /** Modal filters only — date/time pills are separate on Explore. */

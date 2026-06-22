@@ -7,4 +7,7 @@ export class Interest {
 
   @Column()
   name!: string;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  icon!: string | null;
 }

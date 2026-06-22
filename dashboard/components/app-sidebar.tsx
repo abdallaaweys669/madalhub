@@ -15,6 +15,7 @@ import {
   UserCog,
   Building2,
   FileText,
+  Tags,
   ChevronDown,
 } from "lucide-react";
 import { removeToken } from "@/lib/auth";
@@ -43,6 +44,7 @@ const NAV_ITEMS = [
   { href: "/organizers", label: "Organizers", icon: Building2 },
   { href: "/events", label: "Events", icon: CalendarDays },
   { href: "/members", label: "Members", icon: Users },
+  { href: "/categories", label: "Categories", icon: Tags },
   { href: "/admins", label: "Admin users", icon: UserCog },
 ] as const;
 

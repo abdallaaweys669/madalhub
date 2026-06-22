@@ -456,6 +456,31 @@ export function updateAdmin(id: number, body: { fullName?: string; status?: stri
   return request<AdminUserRow>("PATCH", `/admin/admins/${id}`, body);
 }
 
+// ─── Categories / interests ─────────────────────────────────────────────────
+
+export interface InterestRow {
+  id: number;
+  name: string;
+  icon: string | null;
+  eventCount: number;
+}
+
+export function listInterests() {
+  return request<{ items: InterestRow[] }>("GET", "/admin/interests");
+}
+
+export function createInterest(body: { name: string; icon?: string | null }) {
+  return request<InterestRow>("POST", "/admin/interests", body);
+}
+
+export function updateInterest(id: number, body: { name?: string; icon?: string | null }) {
+  return request<InterestRow>("PATCH", `/admin/interests/${id}`, body);
+}
+
+export function deleteInterest(id: number) {
+  return request<{ ok: boolean }>("DELETE", `/admin/interests/${id}`);
+}
+
 export function getAdminReport(type: ReportType, from?: string, to?: string) {
   const q = new URLSearchParams({ type });
   if (from) q.set("from", from);

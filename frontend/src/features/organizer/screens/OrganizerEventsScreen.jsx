@@ -28,12 +28,12 @@ import { useThemeColors } from '@/theme';
 import OrganizerDashboardSkeleton from '@/components/skeletons/OrganizerDashboardSkeleton';
 import NoEventsIllustration from '@/assets/no events.svg';
 
-const FILTER_TABS = ['All', 'Drafts', 'Published', 'Past'];
+const FILTER_TABS = ['Published', 'Drafts', 'Past'];
 
 export default function OrganizerEventsScreen() {
   const router = useGuardedRouter();
   const colors = useThemeColors();
-  const [activeTab, setActiveTab] = useState('All');
+  const [activeTab, setActiveTab] = useState('Published');
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -23,6 +24,8 @@ import { UpdateEventStatusDto } from '../dto/update-event-status.dto';
 import { AdminReportSummaryQueryDto } from '../dto/admin-report-summary-query.dto';
 import { AdminReportsService } from '../service/admin-reports.service';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { CreateInterestDto } from '../dto/create-interest.dto';
+import { UpdateInterestDto } from '../dto/update-interest.dto';
 
 @Controller('admin')
 export class AdminController {
@@ -247,5 +250,33 @@ export class AdminController {
     @CurrentUser() user: { userId: number },
   ) {
     return this.adminService.updateAdmin(id, dto, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Get('interests')
+  listInterests() {
+    return this.adminService.listInterests();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Post('interests')
+  createInterest(@Body() dto: CreateInterestDto) {
+    return this.adminService.createInterest(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Patch('interests/:id')
+  updateInterest(@Param('id') id: number, @Body() dto: UpdateInterestDto) {
+    return this.adminService.updateInterest(id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Delete('interests/:id')
+  deleteInterest(@Param('id') id: number) {
+    return this.adminService.deleteInterest(id);
   }
 }

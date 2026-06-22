@@ -11,6 +11,7 @@ export const PROTECTED_PATHS = [
   "/registrations",
   "/analytics",
   "/admins",
+  "/categories",
   "/reports",
   "/profile",
   "/settings",

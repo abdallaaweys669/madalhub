@@ -15,13 +15,24 @@ import {
   DEFAULT_EXPLORE_DATE_FILTER,
   type ExploreDateFilter,
 } from '@/components/explore/exploreDateFilters';
+import { formatKeyToDisplayLabel } from '@/constants/eventFormatLabels';
 import { clearExploreModalFilters, countExploreModalFilters } from '@/components/explore/exploreFilterUtils';
 
 export type ExploreFilters = {
   quickPick: 'Trending now' | 'Starting soon' | null;
   date: ExploreDateFilter;
   type: 'Any' | 'Online' | 'In-person';
-  format: 'Any' | 'meetup' | 'panel' | 'seminar' | 'workshop' | 'talk' | 'bootcamp';
+  format:
+    | 'Any'
+    | 'meetup'
+    | 'talk'
+    | 'seminar'
+    | 'workshop'
+    | 'panel'
+    | 'bootcamp'
+    | 'conference'
+    | 'summit'
+    | 'hackathon';
   price: 'Any' | 'Free' | 'Paid';
   location: 'Near me' | 'In my city' | 'Anywhere';
   quickPickRule: 'sortByAttendees' | 'withinTwoHours' | null;
@@ -76,10 +87,13 @@ const FORMAT_OPTIONS: ChipOption<ExploreFilters['format']>[] = [
   { value: 'Any', label: 'Any format' },
   { value: 'meetup', label: 'Meetup' },
   { value: 'talk', label: 'Talk' },
-  { value: 'workshop', label: 'Workshop' },
   { value: 'seminar', label: 'Seminar' },
+  { value: 'workshop', label: 'Workshop' },
   { value: 'panel', label: 'Panel' },
   { value: 'bootcamp', label: 'Bootcamp' },
+  { value: 'conference', label: 'Conference' },
+  { value: 'summit', label: 'Summit' },
+  { value: 'hackathon', label: 'Hackathon' },
 ];
 
 const QUICK_OPTIONS: ChipOption<NonNullable<ExploreFilters['quickPick']>>[] = [

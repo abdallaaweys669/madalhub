@@ -11,6 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { EventSponsorInputDto } from './event-sponsor-input.dto';
+import { EventSessionInputDto } from './event-session-input.dto';
 
 export class EventRosterEntryDto {
   @IsNotEmpty()
@@ -93,6 +94,12 @@ export class CreateEventDto {
   @ValidateNested({ each: true })
   @Type(() => EventRosterEntryDto)
   roster?: EventRosterEntryDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EventSessionInputDto)
+  sessions?: EventSessionInputDto[];
 
   @IsOptional()
   @IsBoolean()

@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import FeaturedSpeakersCarousel from '@/components/eventDetail/FeaturedSpeakersCarousel';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
-export default function WysiwygRoster({ roster, template, onPressAdd, onPressPerson }) {
+export default function WysiwygRoster({ roster, eventFormat, onPressAdd, onPressPerson }) {
   const addCard = (
     <Pressable onPress={onPressAdd} style={styles.addCard} accessibilityRole="button" accessibilityLabel="Add speaker">
       <View style={styles.addIconWrap}>
@@ -22,7 +22,7 @@ export default function WysiwygRoster({ roster, template, onPressAdd, onPressPer
       <Text style={styles.helper}>
         Add speakers, panelists, moderators, or hosts — same cards attendees see on the event page.
       </Text>
-      {template === 'panel' ? (
+      {eventFormat === 'panel' ? (
         <Text style={styles.helper}>Panels work best with at least two panelists and one moderator.</Text>
       ) : null}
 

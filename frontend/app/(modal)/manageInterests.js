@@ -12,8 +12,8 @@ import useGuardedRouter from '@/hooks/useGuardedRouter';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Chip from '@/features/onboarding/components/Chip';
-import { INTEREST_ICON_MAP } from '@/features/onboarding/data/interestIconMap';
 import onboardingApi from '@/api/onboarding';
+import { resolveInterestIcon } from '@/components/explore/exploreCategoryIcons';
 
 const BRAND = '#FF7A00';
 
@@ -98,7 +98,7 @@ export default function ManageInterestsScreen() {
                 <Chip
                   key={id}
                   label={item.name}
-                  iconSpec={INTEREST_ICON_MAP[item.name]}
+                  ionicon={resolveInterestIcon(item)}
                   selected={selected}
                   onPress={() => toggle(id)}
                 />

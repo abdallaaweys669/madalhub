@@ -214,6 +214,10 @@ export function OrganizerDetailDialog({
 
   async function handleGrant() {
     if (!data) return;
+    if (data.verificationStatus !== "approved") {
+      toast.error("Approve identity verification before granting publish credits.");
+      return;
+    }
     const amount = Number(credits);
     if (!Number.isInteger(amount) || amount < 1) {
       toast.error("Enter a valid credit amount");
@@ -298,21 +302,28 @@ export function OrganizerDetailDialog({
 
             <div className="rounded-lg border p-3 space-y-3">
               <p className="text-sm font-semibold">Grant publish credits</p>
-              <div className="flex gap-2 items-end">
-                <div className="flex-1 grid gap-1.5">
-                  <Label htmlFor="org-credits">Credits</Label>
-                  <Input
-                    id="org-credits"
-                    type="number"
-                    min={1}
-                    value={credits}
-                    onChange={(e) => setCredits(e.target.value)}
-                  />
+              {data.verificationStatus !== "approved" ? (
+                <p className="text-sm text-muted-foreground">
+                  This organizer is <span className="font-medium capitalize">{data.verificationStatus}</span>.
+                  Approve identity verification first — credits cannot be used to publish until then.
+                </p>
+              ) : (
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1 grid gap-1.5">
+                    <Label htmlFor="org-credits">Credits</Label>
+                    <Input
+                      id="org-credits"
+                      type="number"
+                      min={1}
+                      value={credits}
+                      onChange={(e) => setCredits(e.target.value)}
+                    />
+                  </div>
+                  <Button disabled={granting} onClick={() => void handleGrant()}>
+                    {granting ? <Loader2 className="size-4 animate-spin" /> : "Grant"}
+                  </Button>
                 </div>
-                <Button disabled={granting} onClick={() => void handleGrant()}>
-                  {granting ? <Loader2 className="size-4 animate-spin" /> : "Grant"}
-                </Button>
-              </div>
+              )}
             </div>
 
             {data.document ? (

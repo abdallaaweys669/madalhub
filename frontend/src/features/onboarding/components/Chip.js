@@ -6,6 +6,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '@/features/onboarding/tokens/colors';
+import { resolveInterestIcon } from '@/components/explore/exploreCategoryIcons';
 import { INTEREST_ICON_MAP } from '@/features/onboarding/data/interestIconMap';
 
 function renderVectorIcon(iconSpec, color) {
@@ -29,8 +30,12 @@ function renderVectorIcon(iconSpec, color) {
   }
 }
 
-function ChipBase({ label, icon, iconSpec, selected, onPress }) {
-  const resolvedIconSpec = iconSpec || INTEREST_ICON_MAP[label];
+function ChipBase({ label, icon, iconSpec, ionicon, selected, onPress }) {
+  const resolvedIconSpec =
+    iconSpec ||
+    (ionicon ? { pack: 'Ionicons', name: ionicon } : null) ||
+    (label ? { pack: 'Ionicons', name: resolveInterestIcon({ name: label }) } : null) ||
+    INTEREST_ICON_MAP[label];
 
   return (
     <Pressable

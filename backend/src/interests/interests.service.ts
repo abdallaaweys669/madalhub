@@ -12,7 +12,8 @@ export class InterestsService {
 
   async getAll() {
     const interests = await this.interestRepo.find({
-      select: ['id', 'name'],
+      select: ['id', 'name', 'icon'],
+      order: { name: 'ASC' },
     });
 
     return { interests };

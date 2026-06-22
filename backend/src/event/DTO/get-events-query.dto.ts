@@ -41,7 +41,18 @@ export class GetEventsQueryDto {
 
   @IsOptional()
   @Transform(({ value }) => String(value).toLowerCase())
-  @IsIn(['any', 'meetup', 'panel', 'seminar', 'workshop', 'talk', 'bootcamp'])
+  @IsIn([
+    'any',
+    'meetup',
+    'panel',
+    'seminar',
+    'workshop',
+    'talk',
+    'bootcamp',
+    'conference',
+    'summit',
+    'hackathon',
+  ])
   eventFormat?:
     | 'any'
     | 'meetup'
@@ -49,7 +60,10 @@ export class GetEventsQueryDto {
     | 'seminar'
     | 'workshop'
     | 'talk'
-    | 'bootcamp';
+    | 'bootcamp'
+    | 'conference'
+    | 'summit'
+    | 'hackathon';
 
   @IsOptional()
   @IsString()

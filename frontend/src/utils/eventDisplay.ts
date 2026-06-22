@@ -1,11 +1,5 @@
 import { formatEventLocationDisplay } from '@/utils/eventLocation';
-
-function formatTimeLabel(iso?: string | null) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return null;
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-}
+import { formatEventDateLabel, formatEventTimeLabel } from '@/utils/formatEventSchedule';
 
 export type EventScheduleLocationInput = {
   startsAt?: string | null;
@@ -38,17 +32,9 @@ export function formatEventDetailDateTime(startsAt?: string | null, endsAt?: str
     return { datePrimary: '', dateSecondary: '' };
   }
 
-  const datePrimary = start.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
-  const startTime = formatTimeLabel(startsAt);
-  const endTime = formatTimeLabel(endsAt);
-  const dateSecondary =
-    startTime && endTime && startTime !== endTime ? `${startTime} – ${endTime}` : startTime || endTime || '';
+  const end = endsAt ? new Date(endsAt) : null;
+  const datePrimary = formatEventDateLabel(start, end);
+  const dateSecondary = formatEventTimeLabel(start, end);
 
   return { datePrimary, dateSecondary };
 }

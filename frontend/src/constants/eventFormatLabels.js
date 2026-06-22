@@ -6,6 +6,9 @@ export const EVENT_FORMAT_LABELS = {
   workshop: 'Workshop',
   talk: 'Talk',
   bootcamp: 'Bootcamp',
+  conference: 'Conference',
+  summit: 'Summit',
+  hackathon: 'Hackathon',
 };
 
 /**

@@ -36,6 +36,7 @@ export const config = {
     "/registrations",
     "/analytics",
     "/admins",
+    "/categories",
     "/reports/:path*",
     "/profile",
     "/settings",

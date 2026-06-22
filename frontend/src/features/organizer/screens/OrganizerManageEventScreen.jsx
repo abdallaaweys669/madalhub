@@ -331,7 +331,15 @@ export default function OrganizerManageEventScreen() {
             <StatTile label="Views" value={stats.views} />
           </View>
 
-          <Text style={{ fontSize: 13, fontWeight: '800', color: '#64748B', marginBottom: 8 }}>DOOR & ATTENDEES</Text>
+          <Text style={{ fontSize: 13, fontWeight: '800', color: '#64748B', marginBottom: 8 }}>RUN SHEET</Text>
+          <ActionRow
+            icon="list"
+            title="Manage run sheet"
+            subtitle="Private MC agenda — timings, sessions, and stage flow (organizer only)"
+            onPress={() => router.push({ pathname: '/(organizer)/manage-agenda', params: { eventId } })}
+          />
+
+          <Text style={{ fontSize: 13, fontWeight: '800', color: '#64748B', marginTop: 8, marginBottom: 8 }}>DOOR & ATTENDEES</Text>
           <ActionRow
             icon="smartphone"
             title="Check-in / QR scan"

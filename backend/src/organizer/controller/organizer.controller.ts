@@ -155,6 +155,16 @@ export class OrganizerController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Get('reports/:type')
+  getOrganizerReport(
+    @CurrentUser() user: any,
+    @Param('type') type: string,
+  ) {
+    return this.service.getOrganizerReport(user.userId, type);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(1)
   @Post('review')
   createReview(@CurrentUser() user: any, @Body() dto: CreateReviewDto) {

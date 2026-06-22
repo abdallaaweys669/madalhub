@@ -28,12 +28,14 @@ export default function OrganizerLayout() {
         <Stack.Screen name="create-event" options={{ presentation: 'card' }} />
         <Stack.Screen name="edit-event" />
         <Stack.Screen name="manage-event" />
+        <Stack.Screen name="manage-agenda" />
         <Stack.Screen name="pay-to-publish" />
         <Stack.Screen name="edit-profile" />
         <Stack.Screen name="attendees" />
         <Stack.Screen name="followers" />
         <Stack.Screen name="reviews" />
         <Stack.Screen name="analytics" />
+        <Stack.Screen name="reports/[type]" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="dashboard" />
         <Stack.Screen name="my-events" />

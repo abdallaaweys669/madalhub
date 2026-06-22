@@ -12,6 +12,7 @@ import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment
 import { OrganizerCreditRequest } from 'src/database/entities/organizer-credit-request.entity';
 import { Event } from 'src/database/entities/event.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
+import { Interest } from 'src/database/entities/interest.entity';
 import { Repository } from 'typeorm';
 import { isProfileComplete } from 'src/onboarding/helpers/organizer-profile.helper';
 import { ConfigService } from '@nestjs/config';
@@ -22,6 +23,8 @@ import { CreateAdminDto } from '../dto/create-admin.dto';
 import { UpdateAdminDto } from '../dto/update-admin.dto';
 import { AdminReportQueryDto } from '../dto/admin-report-query.dto';
 import { GrantOrganizerCreditsDto } from '../dto/grant-organizer-credits.dto';
+import { CreateInterestDto } from '../dto/create-interest.dto';
+import { UpdateInterestDto } from '../dto/update-interest.dto';
 
 const ADMIN_ROLE_ID = 3;
 const PRIMARY_ADMIN_EMAIL = 'admin@gmail.com';
@@ -53,6 +56,8 @@ export class AdminService {
     private eventRepository: Repository<Event>,
     @InjectRepository(EventRegistration)
     private registrationRepository: Repository<EventRegistration>,
+    @InjectRepository(Interest)
+    private interestRepository: Repository<Interest>,
     private configService: ConfigService,
     private organizerNotificationsService: OrganizerNotificationsService,
   ) {}
@@ -216,6 +221,11 @@ export class AdminService {
     if (!profile) {
       throw new BadRequestException('Organizer profile not found');
     }
+    if (profile.verificationStatus !== 'approved') {
+      throw new BadRequestException(
+        'Organizer must be identity-verified before publish credits can be granted.',
+      );
+    }
 
     profile.paidPublishCredits += credits;
     await this.organizerProfileRepository.save(profile);
@@ -269,6 +279,11 @@ export class AdminService {
     });
     if (!profile) {
       throw new BadRequestException('Organizer profile not found');
+    }
+    if (profile.verificationStatus !== 'approved') {
+      throw new BadRequestException(
+        'Organizer must be identity-verified before publish credits can be granted.',
+      );
     }
 
     profile.paidPublishCredits += dto.credits;
@@ -1315,5 +1330,110 @@ export class AdminService {
       default:
         throw new BadRequestException('Unknown report type');
     }
+  }
+
+  async listInterests() {
+    const rows = await this.interestRepository.find({
+      order: { name: 'ASC' },
+    });
+
+    const counts = await this.eventRepository
+      .createQueryBuilder('e')
+      .select('e.interestId', 'interestId')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('e.interestId')
+      .getRawMany<{ interestId: string; count: string }>();
+
+    const countById = counts.reduce<Record<number, number>>((acc, row) => {
+      const id = Number(row.interestId);
+      if (Number.isFinite(id)) acc[id] = Number(row.count) || 0;
+      return acc;
+    }, {});
+
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        icon: row.icon,
+        eventCount: countById[row.id] ?? 0,
+      })),
+    };
+  }
+
+  async createInterest(dto: CreateInterestDto) {
+    const name = dto.name.trim();
+    const existing = await this.interestRepository.findOne({ where: { name } });
+    if (existing) {
+      throw new ConflictException('A category with this name already exists');
+    }
+
+    const saved = await this.interestRepository.save(
+      this.interestRepository.create({
+        name,
+        icon: dto.icon?.trim() || null,
+      }),
+    );
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      icon: saved.icon,
+      eventCount: 0,
+    };
+  }
+
+  async updateInterest(id: number, dto: UpdateInterestDto) {
+    const interest = await this.interestRepository.findOne({ where: { id } });
+    if (!interest) {
+      throw new NotFoundException('Category not found');
+    }
+
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      const duplicate = await this.interestRepository.findOne({ where: { name } });
+      if (duplicate && duplicate.id !== id) {
+        throw new ConflictException('A category with this name already exists');
+      }
+      interest.name = name;
+    }
+
+    if (dto.icon !== undefined) {
+      interest.icon = dto.icon?.trim() || null;
+    }
+
+    const saved = await this.interestRepository.save(interest);
+    const eventCount = await this.eventRepository.count({
+      where: { interestId: saved.id },
+    });
+
+    return {
+      id: saved.id,
+      name: saved.name,
+      icon: saved.icon,
+      eventCount,
+    };
+  }
+
+  async deleteInterest(id: number) {
+    const interest = await this.interestRepository.findOne({ where: { id } });
+    if (!interest) {
+      throw new NotFoundException('Category not found');
+    }
+
+    const eventCount = await this.eventRepository.count({
+      where: { interestId: id },
+    });
+    if (eventCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete a category used by ${eventCount} event(s). Rename it or reassign those events first.`,
+      );
+    }
+
+    await this.interestRepository.query(
+      'DELETE FROM member_interests WHERE interest_id = ?',
+      [id],
+    );
+    await this.interestRepository.delete(id);
+    return { ok: true };
   }
 }

@@ -26,7 +26,7 @@ import {
   mapExploreDateToApiBucket,
   type ExploreDateFilter,
 } from '@/components/explore/exploreDateFilters';
-import { resolveExploreCategoryIcon } from '@/components/explore/exploreCategoryIcons';
+import { resolveExploreCategoryIcon, resolveInterestIcon } from '@/components/explore/exploreCategoryIcons';
 import { ExploreActiveFilterChips } from '@/components/explore/ExploreActiveFilterChips';
 import {
   clearExploreModalFilters,
@@ -52,6 +52,7 @@ import {
   peekEventsListCache,
 } from '@/api/events';
 import { spacing } from '@/theme';
+import { formatKeyToDisplayLabel } from '@/constants/eventFormatLabels';
 import { formatEventScheduleLabels } from '@/utils/formatEventSchedule';
 
 const SECTION_GAP = 16;
@@ -182,7 +183,7 @@ function applyClientFilters(
 
 function formatEventFormatLabel(format?: string | null) {
   if (!format || format === 'Any') return null;
-  return format.charAt(0).toUpperCase() + format.slice(1);
+  return formatKeyToDisplayLabel(format);
 }
 
 function buildEventChips(
@@ -414,9 +415,9 @@ export default function ExploreScreen() {
       try {
         const interests = await getEventInterests();
         if (!mounted) return;
-        const mapped = interests.map((interest: { id: number; name: string }, idx: number) => ({
+        const mapped = interests.map((interest: { id: number; name: string; icon?: string | null }, idx: number) => ({
           id: interest.name,
-          icon: resolveExploreCategoryIcon(interest.name, idx),
+          icon: resolveInterestIcon(interest, idx),
         }));
         setCategories([DEFAULT_EXPLORE_CATEGORIES[0], ...mapped]);
         setInterestIdByName(

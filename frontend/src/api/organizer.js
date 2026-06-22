@@ -433,6 +433,19 @@ export const getOrganizerAnalytics = async () => {
   }
 };
 
+export const getOrganizerReport = async (type) => {
+  try {
+    const response = await apiClient.get(`/organizer/reports/${encodeURIComponent(type)}`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Failed to load report';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
 export const createOrganizerReview = async (organizerId, rating, comment) => {
   try {
     const response = await apiClient.post('/organizer/review', { organizerId, rating, comment });
@@ -516,6 +529,7 @@ export default {
   getOrganizerFollowers,
   getOrganizerAttendees,
   getOrganizerAnalytics,
+  getOrganizerReport,
   createOrganizerReview,
   updateOrganizerReview,
   deleteOrganizerReview,

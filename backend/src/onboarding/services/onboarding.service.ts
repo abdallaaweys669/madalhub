@@ -223,7 +223,7 @@ export class OnboardingService {
 
   async getInterests() {
     const interests = await this.interestRepository.query(
-      'SELECT id, name FROM interests ORDER BY id ASC',
+      'SELECT id, name, icon FROM interests ORDER BY name ASC',
     );
 
     return { interests };
@@ -232,11 +232,11 @@ export class OnboardingService {
   /** Current member's selected interests (from DB), for profile / settings. */
   async getMyInterests(userId: number) {
     const interests = await this.interestRepository.query(
-      `SELECT i.id, i.name
+      `SELECT i.id, i.name, i.icon
        FROM member_interests mi
        INNER JOIN interests i ON i.id = mi.interest_id
        WHERE mi.member_id = ?
-       ORDER BY i.id ASC`,
+       ORDER BY i.name ASC`,
       [userId],
     );
 

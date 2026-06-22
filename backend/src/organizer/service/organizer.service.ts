@@ -883,6 +883,332 @@ export class OrganizerService {
     };
   }
 
+  private classifyOrganizerEventBucket(
+    event: Pick<Event, 'status' | 'startDatetime' | 'endDatetime'>,
+    nowMs: number,
+  ): string {
+    if (event.status === 'draft') return 'draft';
+    if (event.status !== 'published') return event.status;
+
+    const startMs = event.startDatetime
+      ? new Date(event.startDatetime).getTime()
+      : null;
+    const endMs = event.endDatetime
+      ? new Date(event.endDatetime).getTime()
+      : null;
+
+    const isPast =
+      (endMs != null && nowMs > endMs) ||
+      (endMs == null && startMs != null && nowMs > startMs + 86400000);
+
+    if (isPast) return 'past';
+    if (startMs != null && startMs > nowMs) return 'upcoming';
+    return 'live';
+  }
+
+  async getOrganizerReport(userId: number, type: string) {
+    const normalized = String(type || '').trim().toLowerCase();
+    const allowed = new Set([
+      'overview',
+      'events',
+      'registrations',
+      'attendance',
+      'top-events',
+    ]);
+    if (!allowed.has(normalized)) {
+      throw new BadRequestException(
+        'Invalid report type. Use overview, events, registrations, attendance, or top-events.',
+      );
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || user.roleId !== 2) {
+      throw new NotFoundException('Organizer not found');
+    }
+
+    const generatedAt = new Date().toISOString();
+    const nowMs = Date.now();
+
+    if (normalized === 'overview') {
+      const analytics = await this.getOrganizerAnalytics(userId);
+      const summary = {
+        eventsTotal: analytics.eventsTotal,
+        drafts: analytics.drafts,
+        upcoming: analytics.upcoming,
+        publishedActive: analytics.publishedActive,
+        past: analytics.past,
+        totalAttendees: analytics.totalAttendees,
+      };
+      return {
+        type: normalized,
+        title: 'Overview',
+        generatedAt,
+        summary,
+        columns: [
+          { key: 'metric', label: 'Metric' },
+          { key: 'value', label: 'Value' },
+        ],
+        rows: [
+          { metric: 'Total events', value: analytics.eventsTotal },
+          { metric: 'Drafts', value: analytics.drafts },
+          { metric: 'Upcoming', value: analytics.upcoming },
+          { metric: 'Live / active', value: analytics.publishedActive },
+          { metric: 'Past events', value: analytics.past },
+          { metric: 'Total attendees', value: analytics.totalAttendees },
+        ],
+      };
+    }
+
+    if (normalized === 'events') {
+      const events = await this.eventRepository.find({
+        where: { organizerId: userId },
+        order: { createdAt: 'DESC' },
+      });
+
+      const registrationCountByEventId = new Map<number, number>();
+      if (events.length > 0) {
+        const ids = events.map((e) => e.id);
+        const regRows = await this.eventRegistrationRepository
+          .createQueryBuilder('reg')
+          .select('reg.eventId', 'eventId')
+          .addSelect('COUNT(reg.id)', 'cnt')
+          .where('reg.eventId IN (:...ids)', { ids })
+          .andWhere("reg.status != 'cancelled'")
+          .groupBy('reg.eventId')
+          .getRawMany<{ eventId: number; cnt: string }>();
+        for (const row of regRows) {
+          registrationCountByEventId.set(Number(row.eventId), Number(row.cnt));
+        }
+      }
+
+      const rows = events.map((event) => {
+        const bucket = this.classifyOrganizerEventBucket(event, nowMs);
+        const capacity = Number(event.capacity ?? 0);
+        const price = Number(event.totalPrice ?? 0);
+        return {
+          eventId: event.id,
+          title: event.title ?? 'Untitled event',
+          status: event.status,
+          bucket,
+          startDate: event.startDatetime
+            ? new Date(event.startDatetime).toISOString()
+            : null,
+          endDate: event.endDatetime
+            ? new Date(event.endDatetime).toISOString()
+            : null,
+          location: event.locationName ?? (event.isPhysical ? 'In-person' : 'Online'),
+          registrations: registrationCountByEventId.get(event.id) ?? 0,
+          capacity: capacity > 0 ? capacity : 'Unlimited',
+          price: price > 0 ? price : 'Free',
+        };
+      });
+
+      return {
+        type: normalized,
+        title: 'Events',
+        generatedAt,
+        summary: {
+          total: rows.length,
+          drafts: rows.filter((r) => r.bucket === 'draft').length,
+          upcoming: rows.filter((r) => r.bucket === 'upcoming').length,
+          live: rows.filter((r) => r.bucket === 'live').length,
+          past: rows.filter((r) => r.bucket === 'past').length,
+        },
+        columns: [
+          { key: 'title', label: 'Event' },
+          { key: 'status', label: 'Status' },
+          { key: 'bucket', label: 'Schedule' },
+          { key: 'startDate', label: 'Start' },
+          { key: 'endDate', label: 'End' },
+          { key: 'location', label: 'Location' },
+          { key: 'registrations', label: 'Registrations' },
+          { key: 'capacity', label: 'Capacity' },
+          { key: 'price', label: 'Price' },
+        ],
+        rows,
+      };
+    }
+
+    if (normalized === 'registrations') {
+      const regRows = await this.eventRegistrationRepository
+        .createQueryBuilder('reg')
+        .innerJoin(Event, 'event', 'event.id = reg.eventId')
+        .innerJoin(User, 'member', 'member.id = reg.memberId')
+        .where('event.organizerId = :organizerId', { organizerId: userId })
+        .andWhere("reg.status != 'cancelled'")
+        .select('reg.id', 'registrationId')
+        .addSelect('reg.status', 'status')
+        .addSelect('reg.createdAt', 'joinedAt')
+        .addSelect('member.full_name', 'fullName')
+        .addSelect('member.email', 'email')
+        .addSelect('member.phone', 'phone')
+        .addSelect('event.id', 'eventId')
+        .addSelect('event.title', 'eventTitle')
+        .orderBy('reg.createdAt', 'DESC')
+        .getRawMany<{
+          registrationId: number | string;
+          status: string;
+          joinedAt: Date | string;
+          fullName: string;
+          email: string | null;
+          phone: string | null;
+          eventId: number | string;
+          eventTitle: string;
+        }>();
+
+      const rows = regRows.map((row) => ({
+        registrationId: Number(row.registrationId),
+        eventId: Number(row.eventId),
+        eventTitle: row.eventTitle ?? 'Untitled event',
+        memberName: row.fullName ?? 'Member',
+        email: row.email ?? '',
+        phone: row.phone ?? '',
+        joinedAt: row.joinedAt ? new Date(row.joinedAt).toISOString() : null,
+        status: row.status,
+      }));
+
+      return {
+        type: normalized,
+        title: 'Registrations',
+        generatedAt,
+        summary: {
+          total: rows.length,
+          events: new Set(rows.map((r) => r.eventId)).size,
+        },
+        columns: [
+          { key: 'eventTitle', label: 'Event' },
+          { key: 'memberName', label: 'Member' },
+          { key: 'email', label: 'Email' },
+          { key: 'phone', label: 'Phone' },
+          { key: 'joinedAt', label: 'Joined at' },
+          { key: 'status', label: 'Status' },
+        ],
+        rows,
+      };
+    }
+
+    if (normalized === 'attendance') {
+      const statsRows = await this.eventRegistrationRepository
+        .createQueryBuilder('reg')
+        .innerJoin(Event, 'event', 'event.id = reg.eventId')
+        .where('event.organizerId = :organizerId', { organizerId: userId })
+        .andWhere("reg.status != 'cancelled'")
+        .select('event.id', 'eventId')
+        .addSelect('event.title', 'eventTitle')
+        .addSelect('event.status', 'eventStatus')
+        .addSelect('COUNT(reg.id)', 'registered')
+        .addSelect(
+          "SUM(CASE WHEN reg.status IN ('checked_in', 'attended') THEN 1 ELSE 0 END)",
+          'checkedIn',
+        )
+        .groupBy('event.id')
+        .addGroupBy('event.title')
+        .addGroupBy('event.status')
+        .orderBy('registered', 'DESC')
+        .getRawMany<{
+          eventId: number | string;
+          eventTitle: string;
+          eventStatus: string;
+          registered: string;
+          checkedIn: string;
+        }>();
+
+      const rows = statsRows.map((row) => {
+        const registered = Number(row.registered ?? 0);
+        const checkedIn = Number(row.checkedIn ?? 0);
+        const rate =
+          registered > 0 ? `${Math.round((checkedIn / registered) * 100)}%` : '0%';
+        return {
+          eventId: Number(row.eventId),
+          eventTitle: row.eventTitle ?? 'Untitled event',
+          eventStatus: row.eventStatus ?? 'draft',
+          registered,
+          checkedIn,
+          attendanceRate: rate,
+        };
+      });
+
+      const totalRegistered = rows.reduce((sum, r) => sum + r.registered, 0);
+      const totalCheckedIn = rows.reduce((sum, r) => sum + r.checkedIn, 0);
+
+      return {
+        type: normalized,
+        title: 'Attendance',
+        generatedAt,
+        summary: {
+          events: rows.length,
+          registered: totalRegistered,
+          checkedIn: totalCheckedIn,
+          overallRate:
+            totalRegistered > 0
+              ? `${Math.round((totalCheckedIn / totalRegistered) * 100)}%`
+              : '0%',
+        },
+        columns: [
+          { key: 'eventTitle', label: 'Event' },
+          { key: 'eventStatus', label: 'Status' },
+          { key: 'registered', label: 'Registered' },
+          { key: 'checkedIn', label: 'Checked in' },
+          { key: 'attendanceRate', label: 'Attendance rate' },
+        ],
+        rows,
+      };
+    }
+
+    const topRows = await this.eventRegistrationRepository
+      .createQueryBuilder('reg')
+      .innerJoin(Event, 'event', 'event.id = reg.eventId')
+      .where('event.organizerId = :organizerId', { organizerId: userId })
+      .andWhere("reg.status != 'cancelled'")
+      .select('event.id', 'eventId')
+      .addSelect('event.title', 'title')
+      .addSelect('event.status', 'status')
+      .addSelect('event.start_datetime', 'startDatetime')
+      .addSelect('COUNT(reg.id)', 'registrationCount')
+      .groupBy('event.id')
+      .addGroupBy('event.title')
+      .addGroupBy('event.status')
+      .addGroupBy('event.start_datetime')
+      .orderBy('registrationCount', 'DESC')
+      .limit(25)
+      .getRawMany<{
+        eventId: number | string;
+        title: string;
+        status: string;
+        startDatetime: Date | string | null;
+        registrationCount: string;
+      }>();
+
+    const rows = topRows.map((row, index) => ({
+      rank: index + 1,
+      eventId: Number(row.eventId),
+      title: row.title ?? 'Untitled event',
+      status: row.status ?? 'draft',
+      registrations: Number(row.registrationCount ?? 0),
+      startDate: row.startDatetime
+        ? new Date(row.startDatetime).toISOString()
+        : null,
+    }));
+
+    return {
+      type: normalized,
+      title: 'Top events',
+      generatedAt,
+      summary: {
+        listed: rows.length,
+        topRegistrations: rows[0]?.registrations ?? 0,
+      },
+      columns: [
+        { key: 'rank', label: 'Rank' },
+        { key: 'title', label: 'Event' },
+        { key: 'status', label: 'Status' },
+        { key: 'registrations', label: 'Registrations' },
+        { key: 'startDate', label: 'Start' },
+      ],
+      rows,
+    };
+  }
+
   async getOrganizerReviews(organizerId: number) {
     const rows = await this.organizerReviewRepository
       .createQueryBuilder('rev')

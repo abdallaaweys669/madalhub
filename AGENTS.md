@@ -139,23 +139,35 @@ Organizers get **immediate dashboard access** after signup (`verificationStatus 
 (tab route file remains `organization.jsx`). Shared chrome lives in `OrganizerTabScaffold`
 (`src/features/organizer/components/`): hamburger drawer, header bell (unread badge), and FAB (+) for create event.
 
-**Organizer drawer:** Does **not** duplicate tab destinations. Menu: Attendees, Identity verification,
-Publish credits, Analytics, Settings. Header shows org avatar/name + publish credit summary.
-Help center, Terms, and Privacy live under **Settings**. Sign out sits at the **bottom of the drawer**.
-Coming soon in drawer: Team & co-hosts.
+**Organizer drawer:** Sidebar — Attendees, Credits, expandable **Reports** (Overview, Events,
+Registrations, Attendance, Top events); footer: Settings, Sign out. Does not duplicate bottom tabs.
+Verification lives under Settings / profile.
+
+**Organizer Events tab:** Filter chips are **Published · Drafts · Past** only (no “All”). Default tab is Published.
 
 **Organizer stack screens** (above tabs in `(organizer)/_layout.jsx`, hide tab bar): `create-event`, `edit-event`,
-`pay-to-publish` (publish credits info), `edit-profile`, `attendees`, `followers`, `reviews`, `analytics`, `settings`.
+`pay-to-publish` (publish credits info), `edit-profile`, `attendees`, `followers`, `reviews`, `reports/[type]`,
+`analytics` (redirects to overview report), `settings`.
 
 **Organizer account APIs:** `GET /organizer/attendees` (paginated registrations across organizer events),
-`GET /organizer/analytics` (event/audience overview), existing `GET /organizer/followers` and
-`GET /organizer/reviews/:organizerId` power Followers and Reviews screens from Profile stat tiles.
+`GET /organizer/analytics` (event/audience overview), `GET /organizer/reports/:type` (overview | events |
+registrations | attendance | top-events — tabular data for in-app reports + CSV export on device),
+existing `GET /organizer/followers` and `GET /organizer/reviews/:organizerId` remain available for legacy stack
+screens; Profile tab stat tiles are **Events · Attendees · Upcoming** (not followers/rating). Profile links to
+`edit-profile` for org name, bio, website, and photo.
 
 **Organizer notifications:** `GET /organizer/notifications` (+ unread-count, mark read). Emitted when
 admin approves/rejects verification, grants publish credits, and when a member registers for an organizer event.
 Inbox tab: `(organizer)/(tabs)/inbox`.
 
 **Legacy redirects:** `/(organizer)/dashboard`, `profile`, `my-events` redirect into tabs.
+
+**Event type vs category vs run sheet:** **Category** = interest/topic (`interestId`, admin CRUD).
+**Event type** = `event_format` (`frontend/src/constants/eventFormats.js`): meetup, talk, seminar,
+workshop, panel, bootcamp, conference, summit, hackathon. **Run sheet** (`event_sessions`) is a
+**private organizer-only MC agenda** — built from **Manage event → Manage run sheet** (Events tab →
+Manage). Not shown on the public event page; API returns sessions only when
+`currentUserId === event.organizerId` (admin too). Panel publish still requires 2+ panelists + 1 moderator.
 
 **Create event audience targeting:** Organizer create/edit includes an **Audience** card with
 `all`, `female`, or `male` saved as `events.audience_gender`. Restricted events are hidden from
@@ -182,6 +194,13 @@ is legacy; prefer the Next.js dashboard for admin work.
 3. Tap Publish → verification wizard → admin approves identity → admin grants credits → event goes live.
 4. No credits → tap Publish → credit request appears in admin queue → admin grants credits → organizer publishes.
 5. Member registers for event → organizer Inbox shows registration notification.
+
+## Admin event categories
+
+- Categories live in the `interests` table (`name`, optional `icon` Ionicons slug).
+- **Admin dashboard** → **Categories** (`/categories`): create, edit icon, delete (blocked if events use the category).
+- Mobile reads icons from API (`GET /events/interests`, `/interests`); falls back to name-based heuristics when `icon` is null.
+- After pulling backend changes, run migrations so `interests.icon` exists (`1748700000000-AddInterestIconColumn`).
 
 ## Working agreements for agents
 - Keep changes consistent with the patterns above; prefer reusing the shared auth

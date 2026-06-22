@@ -16,6 +16,7 @@ import WelcomeAnimatedBackground from "@/features/auth/components/welcome/Welcom
 import useOnboardingAnimation from "@/features/onboarding/hooks/useOnboardingAnimation";
 import Chip from "@/features/onboarding/components/Chip";
 import onboardingApi from "@/api/onboarding";
+import { resolveInterestIcon } from "@/components/explore/exploreCategoryIcons";
 import { logApiError } from "@/api/logApiError";
 import InterestSvg from "@/assets/interest img.svg";
 
@@ -110,6 +111,7 @@ export default function Interests() {
                 <Chip
                   key={item.id}
                   label={item.name}
+                  ionicon={resolveInterestIcon(item)}
                   selected={selectedIds.includes(item.id)}
                   onPress={() => toggle(item.id)}
                 />
