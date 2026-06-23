@@ -17,13 +17,13 @@ import useGuardedRouter from '@/hooks/useGuardedRouter';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import apiClient from '@/api/client';
 import { createOrganizerEvent, getEventInterests, patchOrganizerEvent, publishOrganizerEvent } from '@/api/events';
 import { uploadEventCoverImage } from '@/api/eventAssets';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
+import { normalizeLocalImageUri, buildPickerPreviewUri } from '@/utils/localImageUri';
 import useAuth from '@/auth/useAuth';
 import { getPublishEligibility } from '@/api/organizer';
 import { resolveOrganizerPublishGate } from '@/utils/organizerPublish';
@@ -48,19 +48,6 @@ import AudienceDropdown from '@/components/createEvent/AudienceDropdown';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-async function normalizePickedCoverUri(uri) {
-  if (!uri || typeof uri !== 'string') return null;
-  const trimmed = uri.trim();
-  if (!trimmed) return null;
-  if (/^file:\/\//i.test(trimmed)) return trimmed;
-  if (/^content:\/\//i.test(trimmed) && FileSystem.cacheDirectory) {
-    const dest = `${FileSystem.cacheDirectory}event-cover-${Date.now()}.jpg`;
-    await FileSystem.copyAsync({ from: trimmed, to: dest });
-    return dest;
-  }
-  return trimmed;
 }
 
 function formatRelativeSaveTime(date) {
@@ -377,18 +364,24 @@ export default function CreateEventScreen() {
       quality: 0.85,
       allowsEditing: true,
       aspect: [16, 9],
+      base64: true,
     });
     if (result.canceled || !result.assets?.[0]) return;
 
     const picked = result.assets[0];
-    let previewUri = picked.uri;
-    try {
-      previewUri = (await normalizePickedCoverUri(picked.uri)) || picked.uri;
-    } catch {
-      previewUri = picked.uri;
-    }
-    setCoverPreviewUri(previewUri);
+    const instantPreview = buildPickerPreviewUri(picked);
+    setCoverPreviewUri(instantPreview || picked.uri);
     setCoverUploading(true);
+
+    if (!instantPreview) {
+      try {
+        const normalized = (await normalizeLocalImageUri(picked.uri)) || picked.uri;
+        setCoverPreviewUri(normalized);
+      } catch {
+        setCoverPreviewUri(picked.uri);
+      }
+    }
+
     try {
       const path = await uploadEventCoverImage(picked);
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -630,6 +623,13 @@ export default function CreateEventScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      <WysiwygHeader
+        coverPath={coverImagePath}
+        coverPreviewUri={coverPreviewUri}
+        onBack={() => router.back()}
+        onPickCover={onPickCover}
+        coverUploading={coverUploading}
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -644,13 +644,6 @@ export default function CreateEventScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + 150 }}
           bounces={false}
         >
-          <WysiwygHeader
-            coverPath={coverImagePath}
-            coverPreviewUri={coverPreviewUri}
-            onBack={() => router.back()}
-            onPickCover={onPickCover}
-            coverUploading={coverUploading}
-          />
           <View style={eventStyles.contentContainer}>
             <WysiwygInfoCard
               title={values.title}

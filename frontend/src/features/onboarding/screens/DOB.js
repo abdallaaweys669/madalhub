@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,15 @@ import onboardingApi from "@/api/onboarding";
 import useAuth from "@/auth/useAuth";
 import { mergeAuthenticatedUserFromMe } from "@/auth/mergeAuthenticatedUserFromMe";
 import { logApiError } from "@/api/logApiError";
+import {
+  formatDateOnly,
+  formatDobDisplay,
+  getMaxBirthDateForMinimumAge,
+  getMinBirthDate,
+  getMinimumAgeError,
+  isAtLeastAge,
+  MIN_MEMBER_AGE,
+} from "@/utils/memberAge";
 import CalendarSvg from "@/assets/DOB.svg";
 
 export default function DOB() {
@@ -27,10 +36,14 @@ export default function DOB() {
   const insets = useSafeAreaInsets();
   const { setUser } = useAuth();
 
+  const maxBirthDate = useMemo(() => getMaxBirthDateForMinimumAge(MIN_MEMBER_AGE), []);
+  const minBirthDate = useMemo(() => getMinBirthDate(120), []);
+
   const [dob, setDob] = useState(null);
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState("");
+  const [dobError, setDobError] = useState("");
 
   const { fade, slideUp, heroFloat } = useOnboardingAnimation();
 
@@ -42,52 +55,62 @@ export default function DOB() {
     router.replace("/onboarding/WelcomeIntro");
   };
 
+  const validateDob = (selectedDate) => {
+    if (!(selectedDate instanceof Date) || Number.isNaN(selectedDate.getTime())) {
+      return "Select your date of birth";
+    }
+    if (!isAtLeastAge(selectedDate, MIN_MEMBER_AGE)) {
+      return getMinimumAgeError(MIN_MEMBER_AGE);
+    }
+    return "";
+  };
+
   const handleDateChange = (event, selectedDate) => {
-    if (Platform.OS === "android") setOpen(false);
+    if (Platform.OS === "android") {
+      setOpen(false);
+    }
+    if (event?.type === "dismissed") {
+      return;
+    }
     if (!selectedDate || !(selectedDate instanceof Date)) {
       return;
     }
 
     setDob(selectedDate);
-  };
-
-  const getDobDisplayText = () => {
-    if (!(dob instanceof Date) || Number.isNaN(dob.getTime())) {
-      return "Select your date of birth";
-    }
-
-    return dob.toDateString();
+    setDobError(validateDob(selectedDate));
+    setApiError("");
   };
 
   const handleNext = async () => {
-    if (!dob) return;
+    const validationError = validateDob(dob);
+    if (validationError) {
+      setDobError(validationError);
+      return;
+    }
 
     setIsSubmitting(true);
     setApiError("");
+    setDobError("");
 
     try {
-      const formattedDate = dob.toISOString().split("T")[0];
+      const formattedDate = formatDateOnly(dob);
       await onboardingApi.updateProfile({ dob: formattedDate });
-      mergeAuthenticatedUserFromMe(setUser); // fire and forget — no need to block navigation
+      mergeAuthenticatedUserFromMe(setUser);
       router.push("/onboarding/Interests");
     } catch (error) {
       logApiError(error, "PATCH onboarding/profile dob");
-      setApiError("Failed to save date of birth. Please try again.");
+      setApiError(error?.message || "Failed to save date of birth. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const canContinue = dob instanceof Date && !validateDob(dob);
+
   return (
     <View style={styles.container}>
       <WelcomeAnimatedBackground />
-      <OnboardingHeader
-        step={3}
-        total={5}
-        onBack={handleBack}
-        showSkip
-        onSkip={() => router.push("/onboarding/Interests")}
-      />
+      <OnboardingHeader step={3} total={5} onBack={handleBack} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -103,29 +126,33 @@ export default function DOB() {
           </Animated.View>
 
           <Text style={styles.title}>When is your birthday?</Text>
-          <Text style={styles.subtitle}>This helps us personalise events for your age group.</Text>
+          <Text style={styles.subtitle}>
+            You must be {MIN_MEMBER_AGE} or older. This helps us personalise events for your age group.
+          </Text>
 
           {apiError ? <Text style={styles.errorText}>{apiError}</Text> : null}
+          {dobError ? <Text style={styles.errorText}>{dobError}</Text> : null}
 
           <Pressable onPress={() => setOpen(true)} style={styles.input}>
             <Text style={{ fontSize: 16, color: dob instanceof Date ? "#333" : "#B0B0B0" }}>
-              {getDobDisplayText()}
+              {formatDobDisplay(dob)}
             </Text>
           </Pressable>
 
-          {open && (
+          {open ? (
             <DateTimePicker
-              value={dob || new Date(2000, 0, 1)}
+              value={dob || maxBirthDate}
               mode="date"
               display={Platform.OS === "ios" ? "spinner" : "default"}
-            onValueChange={handleDateChange}
-            onDismiss={() => setOpen(false)}
+              onChange={handleDateChange}
+              maximumDate={maxBirthDate}
+              minimumDate={minBirthDate}
             />
-          )}
+          ) : null}
 
           <Pressable
-            style={[styles.button, { opacity: !dob || isSubmitting ? 0.5 : 1, marginTop: "auto" }]}
-            disabled={!dob || isSubmitting}
+            style={[styles.button, { opacity: !canContinue || isSubmitting ? 0.5 : 1, marginTop: "auto" }]}
+            disabled={!canContinue || isSubmitting}
             onPress={handleNext}
           >
             {isSubmitting ? (

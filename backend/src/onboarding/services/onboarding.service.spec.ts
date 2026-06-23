@@ -18,7 +18,7 @@ describe('OnboardingService', () => {
   let organizerDocumentRepository: jest.Mocked<
     Pick<
       Repository<OrganizerVerificationDocument>,
-      'find' | 'save' | 'create' | 'query'
+      'find' | 'findOne' | 'save' | 'create' | 'query'
     >
   >;
 
@@ -33,6 +33,7 @@ describe('OnboardingService', () => {
     };
     organizerDocumentRepository = {
       find: jest.fn(),
+      findOne: jest.fn(),
       save: jest.fn(),
       create: jest.fn(),
       query: jest.fn(),
@@ -211,6 +212,48 @@ describe('OnboardingService', () => {
       ).rejects.toThrow(BadRequestException);
 
       expect(organizerDocumentRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('accepts other document type on varchar column', async () => {
+      organizerDocumentRepository.find.mockResolvedValue([]);
+      organizerDocumentRepository.create.mockImplementation((input) => input as any);
+      organizerDocumentRepository.save.mockImplementation((input) =>
+        Promise.resolve({ id: 3, ...input } as any),
+      );
+      organizerDocumentRepository.findOne.mockResolvedValue({
+        id: 3,
+        organizerId: userId,
+        documentType: 'other',
+      } as any);
+      organizerProfileRepository.findOne.mockResolvedValue({
+        userId,
+        verificationStatus: 'unverified',
+        organizationName: 'Org',
+        organizationDescription: 'Desc',
+      } as OrganizerProfile);
+      organizerProfileRepository.save.mockImplementation((p) =>
+        Promise.resolve(p as any),
+      );
+
+      const result = await service.upsertOrganizerDocument(userId, mockFile, 'other');
+
+      expect(result.documentType).toBe('other');
+    });
+
+    it('maps other to enum value when present', async () => {
+      organizerDocumentRepository.query.mockResolvedValue([
+        { Type: "enum('business_license','other')" },
+      ]);
+      organizerDocumentRepository.find.mockResolvedValue([]);
+      organizerDocumentRepository.create.mockImplementation((input) => input as any);
+      organizerDocumentRepository.save.mockImplementation((input) =>
+        Promise.resolve({ id: 4, ...input } as any),
+      );
+      organizerProfileRepository.findOne.mockResolvedValue(null);
+
+      const result = await service.upsertOrganizerDocument(userId, mockFile, 'other');
+
+      expect(result.documentType).toBe('other');
     });
   });
 });

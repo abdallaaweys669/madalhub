@@ -1,5 +1,5 @@
 /** Last member main tabs href so auth welcome "Cancel" can return to the correct tab (explore vs home, etc.). */
-let lastMemberTabsHref = '/(tabs)';
+let lastMemberTabsHref = '/(tabs)/explore';
 
 export function rememberMemberTabsHref(href) {
   if (typeof href !== 'string' || !href.startsWith('/(tabs)')) return;
@@ -14,8 +14,8 @@ export function getMemberTabsReturnHref() {
 export function hrefFromTabsSegments(segments) {
   if (!segments || segments[0] !== '(tabs)') return '/(tabs)';
   const parts = segments.slice(1).filter(Boolean);
-  if (parts.length === 0 || (parts.length === 1 && parts[0] === 'index')) {
-    return '/(tabs)';
+  if (parts.length === 0 || parts.length === 1 && parts[0] === 'index') {
+    return '/(tabs)/explore';
   }
   if (parts.length === 1 && parts[0] === 'home') {
     return '/(tabs)/home';

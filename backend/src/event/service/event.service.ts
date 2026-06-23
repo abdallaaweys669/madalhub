@@ -14,7 +14,6 @@ import { SavedEvent } from 'src/database/entities/saved-event.entity';
 import { EventProgramRoster } from 'src/database/entities/event-program-roster.entity';
 import { EventSession } from 'src/database/entities/event-session.entity';
 import { EventCohost } from 'src/database/entities/event-cohost.entity';
-import { EventLike } from 'src/database/entities/event-like.entity';
 import { MemberInterest } from 'src/database/entities/member-interest.entity';
 import { MemberEventInteraction } from 'src/database/entities/member-event-interaction.entity';
 import type { MemberEventInteractionAction } from 'src/database/entities/member-event-interaction.entity';
@@ -71,8 +70,6 @@ export class EventService {
     private eventSessionRepo: Repository<EventSession>,
     @InjectRepository(EventCohost)
     private eventCohostRepo: Repository<EventCohost>,
-    @InjectRepository(EventLike)
-    private eventLikeRepo: Repository<EventLike>,
     @InjectRepository(MemberInterest)
     private memberInterestRepo: Repository<MemberInterest>,
     @InjectRepository(MemberEventInteraction)
@@ -172,8 +169,6 @@ export class EventService {
       name: string;
       isAnonymous?: boolean;
     }[],
-    likeCount = 0,
-    isLiked = false,
   ) {
     return {
       id: event.id,
@@ -211,8 +206,6 @@ export class EventService {
       attendeePreviews: attendeePreviews ?? [],
       eventFormat: event.eventFormat ?? null,
       audienceGender: this.normalizeAudienceGender(event.audienceGender),
-      likeCount,
-      isLiked,
       createdAt: event.createdAt,
     };
   }
@@ -1075,33 +1068,6 @@ export class EventService {
       role: currentUserRole,
     });
 
-    const likeCountMap = new Map<number, number>();
-    let likedEventIdSet = new Set<number>();
-    if (eventIds.length > 0) {
-      const likeCountRows = await this.eventLikeRepo.manager
-        .createQueryBuilder()
-        .select('el.event_id', 'eventId')
-        .addSelect('COUNT(*)', 'cnt')
-        .from('event_likes', 'el')
-        .where('el.event_id IN (:...eventIds)', { eventIds })
-        .groupBy('el.event_id')
-        .getRawMany<{ eventId: number | string; cnt: string }>();
-      likeCountRows.forEach((row) => {
-        likeCountMap.set(Number(row.eventId), parseInt(String(row.cnt), 10));
-      });
-
-      if (userId !== undefined) {
-        const likedRows = await this.eventLikeRepo.manager
-          .createQueryBuilder()
-          .select('el.event_id', 'eventId')
-          .from('event_likes', 'el')
-          .where('el.event_id IN (:...eventIds)', { eventIds })
-          .andWhere('el.member_id = :userId', { userId })
-          .getRawMany<{ eventId: number | string }>();
-        likedEventIdSet = new Set(likedRows.map((row) => Number(row.eventId)));
-      }
-    }
-
     return {
       items: events.map((event) =>
         this.mapEventSummary(
@@ -1110,8 +1076,6 @@ export class EventService {
           joinedSet.has(event.id),
           savedIds.has(event.id),
           attendeePreviewMap.get(event.id) ?? [],
-          likeCountMap.get(event.id) ?? 0,
-          likedEventIdSet.has(event.id),
         ),
       ),
       page,
@@ -1442,31 +1406,6 @@ export class EventService {
       },
     );
 
-    const likeCountMap = new Map<number, number>();
-    let likedEventIdSet = new Set<number>();
-    if (topEventIds.length > 0) {
-      const likeCountRows = await this.eventLikeRepo.manager
-        .createQueryBuilder()
-        .select('el.event_id', 'eventId')
-        .addSelect('COUNT(*)', 'cnt')
-        .from('event_likes', 'el')
-        .where('el.event_id IN (:...eventIds)', { eventIds: topEventIds })
-        .groupBy('el.event_id')
-        .getRawMany<{ eventId: number | string; cnt: string }>();
-      likeCountRows.forEach((row) => {
-        likeCountMap.set(Number(row.eventId), parseInt(String(row.cnt), 10));
-      });
-
-      const likedRows = await this.eventLikeRepo.manager
-        .createQueryBuilder()
-        .select('el.event_id', 'eventId')
-        .from('event_likes', 'el')
-        .where('el.event_id IN (:...eventIds)', { eventIds: topEventIds })
-        .andWhere('el.member_id = :memberId', { memberId })
-        .getRawMany<{ eventId: number | string }>();
-      likedEventIdSet = new Set(likedRows.map((row) => Number(row.eventId)));
-    }
-
     const tasteProfileMeta = Array.from(tasteProfile.entries())
       .map(([interestId, score]) => ({
         interestId,
@@ -1488,8 +1427,6 @@ export class EventService {
           false,
           savedIds.has(event.id),
           attendeePreviewMap.get(event.id) ?? [],
-          likeCountMap.get(event.id) ?? 0,
-          likedEventIdSet.has(event.id),
         ),
       ),
       meta: {
@@ -1630,60 +1567,6 @@ export class EventService {
     return { joined: false, message: 'You have left the event' };
   }
 
-  async likeEvent(eventId: number, memberId: number) {
-    const member = await this.userRepo.findOne({ where: { id: memberId } });
-    if (!member) {
-      throw new NotFoundException('Member not found');
-    }
-    this.ensureMember(member);
-
-    const event = await this.eventRepo.findOne({ where: { id: eventId } });
-    if (!event || event.status !== 'published') {
-      throw new NotFoundException('Event not found');
-    }
-    if (!(await this.canAccessEventAudience(event, memberId, member.roleId))) {
-      throw new NotFoundException('Event not found');
-    }
-
-    const existing = await this.eventLikeRepo.findOne({
-      where: { eventId, memberId },
-      select: ['id'],
-    });
-    if (!existing) {
-      const row = this.eventLikeRepo.create({ eventId, memberId });
-      try {
-        await this.eventLikeRepo.save(row);
-      } catch (error) {
-        const mysqlCode = (error as { code?: string })?.code;
-        if (
-          !(error instanceof QueryFailedError && mysqlCode === 'ER_DUP_ENTRY')
-        ) {
-          throw error;
-        }
-      }
-    }
-
-    const likeCount = await this.eventLikeRepo.count({ where: { eventId } });
-    return { liked: true, likeCount };
-  }
-
-  async unlikeEvent(eventId: number, memberId: number) {
-    const member = await this.userRepo.findOne({ where: { id: memberId } });
-    if (!member) {
-      throw new NotFoundException('Member not found');
-    }
-    this.ensureMember(member);
-
-    const event = await this.eventRepo.findOne({ where: { id: eventId } });
-    if (!event || event.status !== 'published') {
-      throw new NotFoundException('Event not found');
-    }
-
-    await this.eventLikeRepo.delete({ eventId, memberId });
-    const likeCount = await this.eventLikeRepo.count({ where: { eventId } });
-    return { liked: false, likeCount };
-  }
-
   async saveEvent(eventId: number, memberId: number) {
     const member = await this.userRepo.findOne({ where: { id: memberId } });
     if (!member) {
@@ -1797,31 +1680,6 @@ export class EventService {
       },
     );
 
-    const likeCountMap = new Map<number, number>();
-    let likedEventIdSet = new Set<number>();
-    if (savedEventIds.length > 0) {
-      const likeCountRows = await this.eventLikeRepo.manager
-        .createQueryBuilder()
-        .select('el.event_id', 'eventId')
-        .addSelect('COUNT(*)', 'cnt')
-        .from('event_likes', 'el')
-        .where('el.event_id IN (:...eventIds)', { eventIds: savedEventIds })
-        .groupBy('el.event_id')
-        .getRawMany<{ eventId: number | string; cnt: string }>();
-      likeCountRows.forEach((row) => {
-        likeCountMap.set(Number(row.eventId), parseInt(String(row.cnt), 10));
-      });
-
-      const likedRows = await this.eventLikeRepo.manager
-        .createQueryBuilder()
-        .select('el.event_id', 'eventId')
-        .from('event_likes', 'el')
-        .where('el.event_id IN (:...eventIds)', { eventIds: savedEventIds })
-        .andWhere('el.member_id = :memberId', { memberId })
-        .getRawMany<{ eventId: number | string }>();
-      likedEventIdSet = new Set(likedRows.map((row) => Number(row.eventId)));
-    }
-
     const visibleEvents = (
       await Promise.all(
         savedRows
@@ -1844,8 +1702,6 @@ export class EventService {
         joinedSet.has(event.id),
         savedSet.has(event.id),
         attendeePreviewMap.get(event.id) ?? [],
-        likeCountMap.get(event.id) ?? 0,
-        likedEventIdSet.has(event.id),
       ),
     );
   }
@@ -1958,8 +1814,6 @@ export class EventService {
       userRegistrationRow,
       userSavedRow,
       rosterRows,
-      likeCount,
-      userLikeRow,
       sessionRows,
     ] = await Promise.all([
       this.userRepo.findOne({ where: { id: event.organizerId } }),
@@ -1978,13 +1832,6 @@ export class EventService {
         where: { eventId: event.id },
         order: { sortOrder: 'ASC' },
       }),
-      this.eventLikeRepo.count({ where: { eventId: event.id } }),
-      currentUserId != null
-        ? this.eventLikeRepo.findOne({
-            where: { eventId: event.id, memberId: currentUserId },
-            select: ['id'],
-          })
-        : Promise.resolve(null),
       canViewRunSheet
         ? this.eventSessionRepo
             .find({
@@ -2055,8 +1902,6 @@ export class EventService {
         userRegistrationRow != null &&
         userRegistrationRow.registrationId != null,
       isSaved: userSavedRow != null,
-      likeCount,
-      isLiked: userLikeRow != null,
       roster:
         rosterRows?.map((r) => ({
           id: r.id,

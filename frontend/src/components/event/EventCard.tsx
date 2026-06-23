@@ -21,7 +21,7 @@ import useAuth from '@/auth/useAuth';
 import { CoverPlaceholder } from '@/components/event/CoverPlaceholder';
 import { useSavedEvents } from '@/context/SavedEventsContext';
 import { spacing, useThemeColors } from '@/theme';
-import { DEFAULT_COVER_GRADIENT, likeEvent, unlikeEvent } from '@/api/events';
+import { DEFAULT_COVER_GRADIENT } from '@/api/events';
 import { formatKeyToDisplayLabel } from '@/constants/eventFormatLabels';
 import { EventCapacityBar } from '@/components/event/EventCapacityBar';
 import { EventFeedKindChipsRow } from '@/components/event/EventFeedKindChipsRow';
@@ -68,8 +68,6 @@ export type EventCardModel = {
   discoverySignals?: { key: string; label: string; tone: 'hot' | 'soon' }[];
   priceType?: 'Free' | 'Paid' | string;
   priceAmount?: number | null;
-  likeCount?: number;
-  isLiked?: boolean;
   locationName?: string | null;
   locationAddress?: string | null;
 };
@@ -415,19 +413,6 @@ export function EventCard({ event, style, variant = 'card', homeTab }: EventCard
         : 'View event details';
   const ctaDisabled = isEnded || isClosed;
 
-  const [likeState, setLikeState] = useState({
-    isLiked: Boolean(event.isLiked),
-    count: Math.max(0, Number(event.likeCount ?? 0) || 0),
-  });
-  const likeBusy = useRef(false);
-
-  useEffect(() => {
-    setLikeState({
-      isLiked: Boolean(event.isLiked),
-      count: Math.max(0, Number(event.likeCount ?? 0) || 0),
-    });
-  }, [event.id, event.isLiked, event.likeCount]);
-
   const handleBookmarkToggle = () => {
     if (!isLoggedIn) {
       router.push('/(auth)/welcome');
@@ -442,38 +427,6 @@ export function EventCard({ event, style, variant = 'card', homeTab }: EventCard
   };
 
   const handlePress = () => router.push(`/events/${event.id}`);
-
-  const handleLikePress = async () => {
-    if (likeBusy.current) return;
-    if (!isLoggedIn) {
-      router.push('/(auth)/welcome');
-      return;
-    }
-    likeBusy.current = true;
-    try {
-      if (likeState.isLiked) {
-        const data = await unlikeEvent(event.id);
-        setLikeState({
-          isLiked: false,
-          count:
-            typeof data?.likeCount === 'number'
-              ? data.likeCount
-              : Math.max(0, likeState.count - 1),
-        });
-      } else {
-        const data = await likeEvent(event.id);
-        setLikeState({
-          isLiked: true,
-          count:
-            typeof data?.likeCount === 'number' ? data.likeCount : likeState.count + 1,
-        });
-      }
-    } catch {
-      // Keep current state on error.
-    } finally {
-      likeBusy.current = false;
-    }
-  };
 
   return (
     <PressableCard
@@ -890,44 +843,29 @@ export function EventCard({ event, style, variant = 'card', homeTab }: EventCard
 
         {!isFeed ? (
           <View style={styles.ctaRow}>
-            <View style={styles.ctaRowInner}>
-              <TouchableOpacity
-                activeOpacity={ctaDisabled ? 1 : 0.9}
-                style={[styles.ctaButton, styles.ctaButtonFlex]}
-                onPress={handlePress}
-                disabled={ctaDisabled}
-              >
-                {ctaDisabled ? (
-                  <View style={[styles.ctaButtonFill, isEnded ? styles.ctaEnded : styles.ctaClosed]}>
-                    <Text style={[styles.ctaText, isEnded ? styles.ctaEndedText : styles.ctaClosedText]}>
-                      {ctaLabel}
-                    </Text>
-                  </View>
-                ) : isSoldOut || event.canWaitlist ? (
-                  <View style={[styles.ctaButtonFill, styles.ctaWaitlist]}>
-                    <Ionicons name="hourglass-outline" size={14} color="#C2410C" />
-                    <Text style={[styles.ctaText, styles.ctaWaitlistText]}>{ctaLabel}</Text>
-                  </View>
-                ) : (
-                  <View style={[styles.ctaButtonFill, styles.ctaOutline]}>
-                    <Text style={styles.ctaOutlineText}>{ctaLabel}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.cardLikeBtn}
-                onPress={handleLikePress}
-                activeOpacity={0.88}
-                accessibilityRole="button"
-                accessibilityLabel={likeState.isLiked ? 'Unlike event' : 'Like event'}
-              >
-                <Ionicons
-                  name={likeState.isLiked ? 'heart' : 'heart-outline'}
-                  size={20}
-                  color="#FF7A00"
-                />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              activeOpacity={ctaDisabled ? 1 : 0.9}
+              style={styles.ctaButton}
+              onPress={handlePress}
+              disabled={ctaDisabled}
+            >
+              {ctaDisabled ? (
+                <View style={[styles.ctaButtonFill, isEnded ? styles.ctaEnded : styles.ctaClosed]}>
+                  <Text style={[styles.ctaText, isEnded ? styles.ctaEndedText : styles.ctaClosedText]}>
+                    {ctaLabel}
+                  </Text>
+                </View>
+              ) : isSoldOut || event.canWaitlist ? (
+                <View style={[styles.ctaButtonFill, styles.ctaWaitlist]}>
+                  <Ionicons name="hourglass-outline" size={14} color="#C2410C" />
+                  <Text style={[styles.ctaText, styles.ctaWaitlistText]}>{ctaLabel}</Text>
+                </View>
+              ) : (
+                <View style={[styles.ctaButtonFill, styles.ctaOutline]}>
+                  <Text style={styles.ctaOutlineText}>{ctaLabel}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
         ) : null}
           </>
@@ -1492,29 +1430,10 @@ const styles = StyleSheet.create({
   ctaRow: {
     marginTop: 8,
   },
-  ctaRowInner: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 8,
-  },
   ctaButton: {
     height: 40,
     borderRadius: 12,
     overflow: 'hidden',
-  },
-  ctaButtonFlex: {
-    flex: 1,
-    minWidth: 0,
-  },
-  cardLikeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFD7BC',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   ctaButtonFill: {
     width: '100%',

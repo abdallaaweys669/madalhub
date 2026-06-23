@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -12,23 +13,12 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { API_BASE_URL } from '@/api/client';
+import { resolveApiAssetUrl } from '@/utils/mediaUrl';
+import { cacheRemoteImageForDisplay } from '@/utils/localImageUri';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
 const COVER_ASPECT = 16 / 9;
 const HORIZONTAL_PAD = 20;
-
-function resolveServerCoverUrl(coverPath) {
-  if (!coverPath || typeof coverPath !== 'string') return null;
-  const trimmed = coverPath.trim();
-  if (!trimmed) return null;
-  if (/^(file|content|ph):\/\//i.test(trimmed)) return trimmed;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-
-  const base = String(API_BASE_URL || '').replace(/\/+$/, '');
-  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  return base ? `${base}${path}` : trimmed;
-}
 
 export default function WysiwygHeader({
   coverPath,
@@ -40,35 +30,86 @@ export default function WysiwygHeader({
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const [imageFailed, setImageFailed] = useState(false);
+  const [preferServerPreview, setPreferServerPreview] = useState(false);
+  const [resolvedDisplayUrl, setResolvedDisplayUrl] = useState(null);
+  const [resolvingRemote, setResolvingRemote] = useState(false);
 
   const coverWidth = Math.max(0, windowWidth - HORIZONTAL_PAD * 2);
-  const coverHeight = Math.round(coverWidth / COVER_ASPECT);
+  const coverHeight = Math.max(180, Math.round(coverWidth / COVER_ASPECT));
 
   const localPreviewUrl = useMemo(() => {
     const raw = typeof coverPreviewUri === 'string' ? coverPreviewUri.trim() : '';
     return raw || null;
   }, [coverPreviewUri]);
 
-  const serverCoverUrl = useMemo(() => resolveServerCoverUrl(coverPath), [coverPath]);
-
-  // Keep showing the picked gallery file while creating; server path is for save/publish only.
-  const displayUrl = localPreviewUrl || serverCoverUrl;
+  const serverCoverUrl = useMemo(() => resolveApiAssetUrl(coverPath) ?? null, [coverPath]);
 
   useEffect(() => {
     setImageFailed(false);
+    setPreferServerPreview(false);
+  }, [localPreviewUrl, serverCoverUrl]);
+
+  const displayUrl = useMemo(() => {
+    if (preferServerPreview && serverCoverUrl) return serverCoverUrl;
+    if (localPreviewUrl) return localPreviewUrl;
+    return serverCoverUrl;
+  }, [localPreviewUrl, serverCoverUrl, preferServerPreview]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!displayUrl) {
+      setResolvedDisplayUrl(null);
+      setResolvingRemote(false);
+      return undefined;
+    }
+
+    if (/^(data:|file:)/i.test(displayUrl)) {
+      setResolvedDisplayUrl(displayUrl);
+      setResolvingRemote(false);
+      return undefined;
+    }
+
+    setResolvingRemote(true);
+    (async () => {
+      try {
+        const cached = await cacheRemoteImageForDisplay(displayUrl);
+        if (!cancelled) {
+          setResolvedDisplayUrl(cached || displayUrl);
+        }
+      } catch {
+        if (!cancelled) setResolvedDisplayUrl(displayUrl);
+      } finally {
+        if (!cancelled) setResolvingRemote(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [displayUrl]);
 
-  const hasCover = Boolean(displayUrl) && !imageFailed;
+  const handleImageError = () => {
+    if (localPreviewUrl && !preferServerPreview && serverCoverUrl) {
+      setPreferServerPreview(true);
+      return;
+    }
+    setImageFailed(true);
+  };
+
+  const imageUri = resolvedDisplayUrl || (/^(data:|file:)/i.test(displayUrl || '') ? displayUrl : null);
+  const hasCover = Boolean(imageUri) && !imageFailed;
+  const showEmpty = !hasCover && !resolvingRemote;
 
   return (
-    <View style={[eventStyles.headerWrapper, styles.header]}>
+    <View style={[eventStyles.headerWrapper, styles.header]} collapsable={false}>
       <View style={[styles.toolbar, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={onBack} style={[eventStyles.iconButtonMeetup, styles.backButton]}>
           <Feather name="arrow-left" size={20} color="#111827" />
         </Pressable>
       </View>
 
-      <View style={styles.coverCanvas}>
+      <View style={styles.coverCanvas} collapsable={false}>
         <Pressable
           onPress={onPickCover}
           disabled={coverUploading}
@@ -77,18 +118,21 @@ export default function WysiwygHeader({
           style={({ pressed }) => [
             styles.coverPressable,
             { width: coverWidth, height: coverHeight },
-            !hasCover && styles.coverPressableEmpty,
+            showEmpty && styles.coverPressableEmpty,
             pressed && !coverUploading ? styles.coverPressablePressed : null,
           ]}
         >
           {hasCover ? (
-            <View style={styles.coverMediaFrame}>
+            <View
+              style={[styles.coverMediaFrame, { width: coverWidth, height: coverHeight }]}
+              collapsable={false}
+            >
               <Image
-                key={displayUrl}
-                source={{ uri: displayUrl }}
-                style={styles.coverImage}
+                key={imageUri}
+                source={{ uri: imageUri }}
+                style={{ width: coverWidth, height: coverHeight, backgroundColor: '#E5E7EB' }}
                 resizeMode="cover"
-                onError={() => setImageFailed(true)}
+                onError={handleImageError}
               />
               <LinearGradient
                 colors={['rgba(15,23,42,0.08)', 'rgba(15,23,42,0.55)']}
@@ -102,23 +146,26 @@ export default function WysiwygHeader({
                 </View>
               </View>
             </View>
-          ) : (
-            <View style={styles.emptyInner}>
-              <View style={styles.emptyEdgeSpacer} />
-              <View style={styles.emptyCluster}>
-                <View style={styles.uploadIconRing}>
-                  <Feather name="image" size={30} color="#EA580C" />
-                  <View style={styles.uploadPlusBadge}>
-                    <Feather name="plus" size={14} color="#FFFFFF" />
-                  </View>
-                </View>
+          ) : null}
 
-                <Text style={styles.uploadTitle}>Add cover photo</Text>
-                <Text style={styles.uploadSubtitle}>Tap to choose from gallery · auto-cropped to 16:9</Text>
+          {showEmpty ? (
+            <View style={[styles.emptyInner, { width: coverWidth, height: coverHeight }]}>
+              <View style={styles.uploadIconRing}>
+                <Feather name="image" size={30} color="#EA580C" />
+                <View style={styles.uploadPlusBadge}>
+                  <Feather name="plus" size={14} color="#FFFFFF" />
+                </View>
               </View>
-              <View style={styles.emptyEdgeSpacer} />
+              <Text style={styles.uploadTitle}>Add cover photo</Text>
+              <Text style={styles.uploadSubtitle}>Tap to choose from gallery · auto-cropped to 16:9</Text>
             </View>
-          )}
+          ) : null}
+
+          {resolvingRemote && !hasCover ? (
+            <View style={[styles.resolvingOverlay, { width: coverWidth, height: coverHeight }]}>
+              <ActivityIndicator size="large" color="#EA580C" />
+            </View>
+          ) : null}
 
           {coverUploading ? (
             <View style={styles.uploadingOverlay}>
@@ -155,12 +202,12 @@ const styles = StyleSheet.create({
   coverPressable: {
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFBF5',
     position: 'relative',
   },
   coverPressableEmpty: {
     borderWidth: 2,
-    borderStyle: 'dashed',
+    borderStyle: Platform.OS === 'ios' ? 'dashed' : 'solid',
     borderColor: '#FDBA74',
     backgroundColor: '#FFFBF5',
   },
@@ -169,12 +216,9 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.995 }],
   },
   coverMediaFrame: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  coverImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 20,
   },
   coverScrim: {
     ...StyleSheet.absoluteFillObject,
@@ -202,20 +246,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   emptyInner: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
-  },
-  emptyEdgeSpacer: {
-    flex: 1,
-    minHeight: 12,
-  },
-  emptyCluster: {
-    alignItems: 'center',
     gap: 10,
-    flexShrink: 0,
-    paddingVertical: 4,
   },
   uploadIconRing: {
     width: 76,
@@ -258,7 +292,11 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     textAlign: 'center',
     maxWidth: 268,
-    marginTop: -4,
+  },
+  resolvingOverlay: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFBF5',
   },
   uploadingOverlay: {
     ...StyleSheet.absoluteFillObject,

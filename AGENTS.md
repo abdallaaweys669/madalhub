@@ -118,6 +118,11 @@ router.push('/(auth)/signup');
   `EMAIL_FROM` in `backend/.env` (see `.env.example`). Without a key, OTP is logged to
   the backend console in dev. Dev sender `onboarding@resend.dev` only delivers to your
   Resend account email until a domain is verified.
+- **Foreign keys:** Migration `1749000000000-AddForeignKeyConstraints` adds MySQL FK
+  constraints for the 21 active app tables (plus `users.role_id → roles`). ERD tools
+  (Workbench reverse engineer) will draw relationship lines after this migration runs.
+  Legacy tables (`reviews`, `notifications`, `event_checkins`, etc.) are intentionally
+  excluded. Event child rows cascade on delete; nullable refs use `SET NULL`.
 
 ## Organizer progressive verification and paid publish
 

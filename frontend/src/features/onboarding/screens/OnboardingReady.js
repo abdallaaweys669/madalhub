@@ -36,41 +36,22 @@ export default function OnboardingReady() {
   }, [user?.profileImg, user?.avatarUrl]);
 
   const screenOpacity = useSharedValue(1);
-  const checkOpacity = useSharedValue(0);
-  const checkY = useSharedValue(10);
   const avatarOpacity = useSharedValue(0);
   const avatarScale = useSharedValue(0.92);
   const textOpacity = useSharedValue(0);
   const textY = useSharedValue(14);
   const ctaOpacity = useSharedValue(0);
   const ctaY = useSharedValue(20);
-  const rowOpacity = useSharedValue(0);
-  const rowY = useSharedValue(14);
-
-  const completionItems = useMemo(
-    () => [
-      { id: "profile", icon: "person-outline", label: "Profile\ncompleted" },
-      { id: "interests", icon: "heart-outline", label: "Interests\nselected" },
-      { id: "photo", icon: "image-outline", label: "Photo\nuploaded" },
-    ],
-    [],
-  );
 
   useEffect(() => {
-    checkOpacity.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) });
-    checkY.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
+    avatarOpacity.value = withDelay(80, withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }));
+    avatarScale.value = withDelay(80, withSpring(1, { damping: 16, stiffness: 140 }));
 
-    avatarOpacity.value = withDelay(120, withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }));
-    avatarScale.value = withDelay(120, withSpring(1, { damping: 16, stiffness: 140 }));
+    textOpacity.value = withDelay(220, withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }));
+    textY.value = withDelay(220, withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) }));
 
-    textOpacity.value = withDelay(240, withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }));
-    textY.value = withDelay(240, withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) }));
-
-    rowOpacity.value = withDelay(320, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
-    rowY.value = withDelay(320, withTiming(0, { duration: 280, easing: Easing.out(Easing.cubic) }));
-
-    ctaOpacity.value = withDelay(420, withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }));
-    ctaY.value = withDelay(420, withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) }));
+    ctaOpacity.value = withDelay(360, withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }));
+    ctaY.value = withDelay(360, withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) }));
   }, []);
 
   const navigateToTabs = async () => {
@@ -85,10 +66,6 @@ export default function OnboardingReady() {
   };
 
   const screenStyle = useAnimatedStyle(() => ({ opacity: screenOpacity.value }));
-  const checkStyle = useAnimatedStyle(() => ({
-    opacity: checkOpacity.value,
-    transform: [{ translateY: checkY.value }],
-  }));
   const avatarStyle = useAnimatedStyle(() => ({
     opacity: avatarOpacity.value,
     transform: [{ scale: avatarScale.value }],
@@ -101,23 +78,12 @@ export default function OnboardingReady() {
     opacity: ctaOpacity.value,
     transform: [{ translateY: ctaY.value }],
   }));
-  const rowStyle = useAnimatedStyle(() => ({
-    opacity: rowOpacity.value,
-    transform: [{ translateY: rowY.value }],
-  }));
 
   return (
     <Animated.View style={[styles.root, screenStyle]}>
       <Stack.Screen options={{ gestureEnabled: false, headerShown: false }} />
 
       <View style={styles.content}>
-        <Animated.View style={[styles.successMarkWrap, checkStyle]}>
-          <View style={styles.successMark}>
-            <Ionicons name="checkmark" size={24} color="#FFFFFF" />
-          </View>
-          <Text style={styles.successLabel}>Profile complete</Text>
-        </Animated.View>
-
         <Animated.View style={avatarStyle}>
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
@@ -127,22 +93,12 @@ export default function OnboardingReady() {
         </Animated.View>
 
         <Animated.View style={[styles.textBlock, textStyle]}>
-          <Text style={styles.title}>Welcome, {firstName} 🎉</Text>
-          <Text style={styles.subtitle}>You're all set. Start exploring events happening around you.</Text>
-        </Animated.View>
-
-        <Animated.View style={[styles.completionRow, rowStyle]}>
-          {completionItems.map((item, index) => (
-            <React.Fragment key={item.id}>
-              <View style={styles.completionItem}>
-                <View style={styles.itemIconWrap}>
-                  <Ionicons name={item.icon} size={20} color="#1F2937" />
-                </View>
-                <Text style={styles.itemLabel}>{item.label}</Text>
-              </View>
-              {index < completionItems.length - 1 ? <View style={styles.itemDivider} /> : null}
-            </React.Fragment>
-          ))}
+          <Text style={styles.kicker}>Welcome to</Text>
+          <Text style={styles.brand}>MadalHub</Text>
+          <Text style={styles.title}>Hey {firstName}, you&apos;re all set.</Text>
+          <Text style={styles.subtitle}>
+            Discover events around you, save the ones you love, and join in when you&apos;re ready.
+          </Text>
         </Animated.View>
       </View>
 
@@ -168,31 +124,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingBottom: 150,
   },
-  successMark: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#22C55E",
-    shadowColor: "#22C55E",
-    shadowOpacity: 0.26,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  successMarkWrap: {
-    alignItems: "center",
-    marginBottom: 22,
-  },
-  successLabel: {
-    marginTop: 12,
-    fontSize: 32,
-    lineHeight: 38,
-    color: "#22A55A",
-    fontWeight: "600",
-    letterSpacing: 0.6,
-  },
   avatarImage: {
     width: 116,
     height: 116,
@@ -210,53 +141,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 28,
   },
+  kicker: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#63666F",
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  brand: {
+    fontSize: 36,
+    lineHeight: 42,
+    fontWeight: "800",
+    color: ACCENT,
+    letterSpacing: -0.5,
+    marginBottom: 16,
+  },
   title: {
-    fontSize: 48,
-    lineHeight: 56,
+    fontSize: 26,
+    lineHeight: 32,
     fontWeight: "700",
     color: "#14151A",
-    letterSpacing: -1,
+    letterSpacing: -0.4,
     marginBottom: 12,
+    textAlign: "center",
   },
   subtitle: {
-    fontSize: 17,
-    lineHeight: 25,
+    fontSize: 16,
+    lineHeight: 24,
     color: "#63666F",
     textAlign: "center",
-    maxWidth: 335,
-  },
-  completionRow: {
-    width: "100%",
-    marginTop: 36,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-  },
-  completionItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  itemIconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "#EEF4EF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 10,
-  },
-  itemLabel: {
-    fontSize: 16,
-    lineHeight: 26,
-    color: "#4B5563",
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  itemDivider: {
-    width: 1,
-    backgroundColor: "#E5E7EB",
-    marginTop: 10,
-    alignSelf: "stretch",
+    maxWidth: 320,
   },
   bottomCTA: {
     position: "absolute",

@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from "react";
-import { View, Animated, StyleSheet, Easing, Platform } from "react-native";
+import { View, Animated, StyleSheet, Easing, Platform, Image } from "react-native";
 import { useRootNavigationState } from "expo-router";
 import useGuardedRouter from "@/hooks/useGuardedRouter";
 import * as NavigationBar from "expo-navigation-bar";
 import useAuth from "@/auth/useAuth";
-import KulanLogo from "../src/assets/kulan_logo.svg";
+const MadalHubLogo = require("../src/assets/madalhub_logo.png");
 
 const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
@@ -139,7 +139,7 @@ export default function Splash() {
           opacity: logoOpacity,
         }}
       >
-        <KulanLogo width={130} height={130} />
+        <Image source={MadalHubLogo} style={styles.logo} resizeMode="contain" />
       </Animated.View>
     </View>
   );
@@ -157,5 +157,9 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 90,
     backgroundColor: EXPAND_CIRCLE,
+  },
+  logo: {
+    width: 130,
+    height: 130,
   },
 });

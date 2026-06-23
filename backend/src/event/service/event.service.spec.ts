@@ -12,7 +12,6 @@ import { Interest } from 'src/database/entities/interest.entity';
 import { SavedEvent } from 'src/database/entities/saved-event.entity';
 import { EventProgramRoster } from 'src/database/entities/event-program-roster.entity';
 import { EventCohost } from 'src/database/entities/event-cohost.entity';
-import { EventLike } from 'src/database/entities/event-like.entity';
 
 describe('EventService - Organizer Status Gating & Owner Scoping', () => {
   let service: EventService;
@@ -68,7 +67,6 @@ describe('EventService - Organizer Status Gating & Owner Scoping', () => {
           useFactory: mockRepo,
         },
         { provide: getRepositoryToken(EventCohost), useFactory: mockRepo },
-        { provide: getRepositoryToken(EventLike), useFactory: mockRepo },
       ],
     }).compile();
 

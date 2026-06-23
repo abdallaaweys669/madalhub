@@ -701,8 +701,6 @@ export function mapApiEventToCard(event) {
     discoverySignals,
     urgencyLabel,
     categoryName,
-    likeCount: Math.max(0, Number(event.likeCount ?? event.like_count ?? 0) || 0),
-    isLiked: Boolean(event.isLiked ?? event.is_liked),
     createdAt: event.createdAt ?? event.created_at ?? null,
   };
 }
@@ -803,18 +801,6 @@ export async function joinEvent(id) {
 
 export async function leaveEvent(id) {
   const response = await apiClient.delete(`/events/${id}/join`);
-  invalidateEventsListCache();
-  return response.data;
-}
-
-export async function likeEvent(id) {
-  const response = await apiClient.post(`/events/${id}/like`);
-  invalidateEventsListCache();
-  return response.data;
-}
-
-export async function unlikeEvent(id) {
-  const response = await apiClient.delete(`/events/${id}/like`);
   invalidateEventsListCache();
   return response.data;
 }

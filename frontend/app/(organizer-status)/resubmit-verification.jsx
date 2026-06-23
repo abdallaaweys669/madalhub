@@ -189,19 +189,7 @@ export default function ResubmitVerificationScreen() {
 
       // 3) upload verification document
       if (documentFile) {
-        const docUri = documentFile.uri;
-        const docName =
-          documentFile.fileName ||
-          (typeof docUri === 'string' && docUri.split('/').pop()?.split('?')[0]) ||
-          'document.jpg';
-        const docType = documentFile.mimeType || 'image/jpeg';
-        const file = { uri: docUri, name: docName, type: docType };
-
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('document_type', values.documentType);
-
-        await onboardingApi.uploadOrganizerDocument(formData);
+        await onboardingApi.uploadOrganizerDocument(documentFile, values.documentType);
       }
 
       setShowSubmittedModal(true);

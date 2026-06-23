@@ -171,20 +171,6 @@ export class EventController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(1)
-  @Post(':id/like')
-  likeEvent(@CurrentUser() user, @Param('id', ParseIntPipe) id: number) {
-    return this.eventService.likeEvent(id, user.userId);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(1)
-  @Delete(':id/like')
-  unlikeEvent(@CurrentUser() user, @Param('id', ParseIntPipe) id: number) {
-    return this.eventService.unlikeEvent(id, user.userId);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(1)
   @Delete(':id/join')
   leaveEvent(@CurrentUser() user, @Param('id', ParseIntPipe) id: number) {
     return this.eventService.leaveEvent(id, user.userId);

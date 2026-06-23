@@ -14,6 +14,10 @@ import { UpdateProfileDto } from '../dto/update-profile.dto';
 import { InterestsDto } from '../dto/interests.dto';
 import { UpdateOrganizerProfileDto } from '../dto/update-organizer-profile.dto';
 import { isProfileComplete } from '../helpers/organizer-profile.helper';
+import {
+  assertMinimumMemberAge,
+  parseDobInput,
+} from '../helpers/member-age.helper';
 
 const ORGANIZER_ROLE_ID = 2;
 
@@ -80,12 +84,34 @@ export class OnboardingService {
     await this.organizerProfileRepository.save(profile);
   }
 
-  private async resolveDocumentType(input: string): Promise<string> {
-    const value = input?.trim();
-
+  private normalizeDocumentTypeInput(input: string): string {
+    const value = input?.trim().toLowerCase();
     if (!value) {
       throw new BadRequestException('document_type is required');
     }
+
+    const aliasGroups: Record<string, string[]> = {
+      business_license: [
+        'business_license',
+        'business license',
+        'business',
+        'license',
+        'licence',
+      ],
+      other: ['other', 'other_document', 'other document'],
+    };
+
+    for (const [canonical, aliases] of Object.entries(aliasGroups)) {
+      if (aliases.includes(value)) {
+        return canonical;
+      }
+    }
+
+    return value;
+  }
+
+  private async resolveDocumentType(input: string): Promise<string> {
+    const normalized = this.normalizeDocumentTypeInput(input);
 
     const columnRows: Array<{ Type: string }> =
       await this.organizerDocumentRepository.query(
@@ -95,7 +121,12 @@ export class OnboardingService {
     const columnType = columnRows?.[0]?.Type ?? '';
 
     if (!columnType.toLowerCase().startsWith('enum(')) {
-      return value;
+      if (!['business_license', 'license', 'other'].includes(normalized)) {
+        throw new BadRequestException(
+          'Invalid document_type. Allowed values: business_license, license, other.',
+        );
+      }
+      return normalized;
     }
 
     const enumValues = [...columnType.matchAll(/'([^']*)'/g)].map(
@@ -103,24 +134,19 @@ export class OnboardingService {
     );
 
     const direct = enumValues.find(
-      (enumValue) => enumValue.toLowerCase() === value.toLowerCase(),
+      (enumValue) => enumValue.toLowerCase() === normalized,
     );
 
     if (direct) {
       return direct;
     }
 
-    const aliases: Record<string, string> = {
-      licence: 'license',
-    };
-
-    const aliasTarget = aliases[value.toLowerCase()];
-    if (aliasTarget) {
-      const aliasMatch = enumValues.find(
-        (enumValue) => enumValue.toLowerCase() === aliasTarget,
+    if (normalized === 'business_license') {
+      const license = enumValues.find(
+        (enumValue) => enumValue.toLowerCase() === 'license',
       );
-      if (aliasMatch) {
-        return aliasMatch;
+      if (license) {
+        return license;
       }
     }
 
@@ -164,7 +190,9 @@ export class OnboardingService {
       }
 
       if (dto.dob !== undefined) {
-        profile.dob = dto.dob;
+        const parsedDob = parseDobInput(dto.dob);
+        assertMinimumMemberAge(parsedDob);
+        profile.dob = parsedDob;
       }
 
       await this.profileRepository.save(profile);
@@ -201,16 +229,16 @@ export class OnboardingService {
       await this.interestRepository.save(rows);
     }
 
-    let profile = await this.profileRepository.findOne({ where: { userId } });
+    const profile = await this.profileRepository.findOne({ where: { userId } });
 
-    if (!profile) {
-      profile = this.profileRepository.create({
-        userId,
-        profileCompleted: true,
-      });
-    } else {
-      profile.profileCompleted = true;
+    if (!profile?.dob) {
+      throw new BadRequestException(
+        'Date of birth is required before completing onboarding.',
+      );
     }
+
+    assertMinimumMemberAge(parseDobInput(profile.dob));
+    profile.profileCompleted = true;
 
     await this.profileRepository.save(profile);
 
