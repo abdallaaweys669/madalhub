@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getOrganizerAnalytics } from '@/api/organizer';
 import OrganizerStackHeader from '@/features/organizer/components/OrganizerStackHeader';
-import { formatCount, formatRating } from '@/components/organizer/OrganizerProfileChrome';
+import { formatCount } from '@/components/organizer/OrganizerProfileChrome';
 import { COLORS } from '@/theme/colors';
 
 function MetricCard({ label, value, accent = COLORS.primary, bg = '#FFF7ED' }) {
@@ -85,19 +85,12 @@ export default function OrganizerAnalyticsScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         >
           <Text style={{ color: COLORS.textSecondary, marginBottom: 14, fontSize: 14 }}>
-            Overview of your events, audience, and reputation.
+            Overview of your events and audience.
           </Text>
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             <MetricCard label="Total events" value={formatCount(data?.eventsTotal)} />
             <MetricCard label="Total attendees" value={formatCount(data?.totalAttendees)} accent="#2563EB" bg="#EFF6FF" />
-            <MetricCard label="Followers" value={formatCount(data?.followersCount)} accent="#7C3AED" bg="#F5F3FF" />
-            <MetricCard
-              label="Average rating"
-              value={formatRating(data?.ratingAverage)}
-              accent="#059669"
-              bg="#ECFDF5"
-            />
             <MetricCard label="Drafts" value={formatCount(data?.drafts)} accent="#4F46E5" bg="#EEF2FF" />
             <MetricCard label="Upcoming" value={formatCount(data?.upcoming)} accent="#FF7B3F" bg="#FFF7ED" />
             <MetricCard label="Live / active" value={formatCount(data?.publishedActive)} accent="#059669" bg="#ECFDF5" />

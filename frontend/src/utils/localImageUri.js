@@ -46,9 +46,19 @@ export async function normalizeLocalImageUri(uri) {
   try {
     await FileSystem.copyAsync({ from: trimmed, to: dest });
     return withFileScheme(dest) || dest;
-  } catch (error) {
-    console.warn('[normalizeLocalImageUri]', error?.message || error);
-    return withFileScheme(trimmed);
+  } catch (copyError) {
+    try {
+      const base64 = await FileSystem.readAsStringAsync(trimmed, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      await FileSystem.writeAsStringAsync(dest, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      return withFileScheme(dest) || dest;
+    } catch (readError) {
+      console.warn('[normalizeLocalImageUri]', copyError?.message || readError?.message || copyError);
+      return withFileScheme(trimmed);
+    }
   }
 }
 

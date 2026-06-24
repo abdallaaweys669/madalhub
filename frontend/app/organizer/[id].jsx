@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,7 +15,6 @@ import useGuardedRouter from '@/hooks/useGuardedRouter';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
-import useAuth from '@/auth/useAuth';
 import organizerApi from '@/api/organizer';
 import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 import { ExploreEventCard } from '@/components/explore/ExploreEventCard';
@@ -23,13 +23,10 @@ import {
   OrganizerInfoRow,
   StatTile,
   formatCount,
-  formatRating,
 } from '@/components/organizer/OrganizerProfileChrome';
 import { spacing } from '@/theme';
 import { COLORS } from '@/theme/colors';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
-
-const ROLE_MEMBER = 1;
 
 function formatOrganizerEventDateTime(event) {
   const startDate = new Date(event.startsAt ?? Date.now());
@@ -87,7 +84,6 @@ export default function PublicOrganizerProfileScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams();
   const organizerId = Number(Array.isArray(id) ? id[0] : id);
-  const { isLoggedIn, isMember, userRole } = useAuth();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -96,7 +92,6 @@ export default function PublicOrganizerProfileScreen() {
   const [eventItems, setEventItems] = useState([]);
   const [mainTab, setMainTab] = useState('events');
   const [eventScope, setEventScope] = useState('upcoming');
-  const [followBusy, setFollowBusy] = useState(false);
 
   const loadProfile = useCallback(async () => {
     const data = await organizerApi.getPublicOrganizerProfile(organizerId);
@@ -155,10 +150,10 @@ export default function PublicOrganizerProfileScreen() {
   const stats = useMemo(
     () => [
       { key: 'events', label: 'Events', value: formatCount(profile?.eventsCount) },
-      { key: 'followers', label: 'Followers', value: formatCount(profile?.followersCount) },
-      { key: 'rating', label: 'Rating', value: formatRating(profile?.ratingAverage) },
+      { key: 'attendees', label: 'Attendees', value: formatCount(profile?.attendeesTotal) },
+      { key: 'upcoming', label: 'Upcoming', value: formatCount(profile?.upcomingEventsCount) },
     ],
-    [profile?.eventsCount, profile?.followersCount, profile?.ratingAverage],
+    [profile?.eventsCount, profile?.attendeesTotal, profile?.upcomingEventsCount],
   );
 
   const displayName = profile?.displayName || profile?.organizationName || profile?.fullName || 'Organizer';
@@ -175,33 +170,21 @@ export default function PublicOrganizerProfileScreen() {
     }
   };
 
-  const handleFollowPress = async () => {
-    if (!isLoggedIn) {
-      router.push('/(auth)/welcome');
+  const handleOpenWebsite = async () => {
+    const raw = String(profile?.website || '').trim();
+    if (!raw) {
+      Alert.alert('No website', 'This organizer has not added a website yet.');
       return;
     }
-    if (userRole !== ROLE_MEMBER || !isMember) {
-      Alert.alert('Members only', 'Switch to a member account to follow organizers.');
-      return;
-    }
-    if (!profile) return;
-    setFollowBusy(true);
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     try {
-      if (profile.isFollowing) {
-        await organizerApi.unfollowOrganizer(organizerId);
-        setProfile((p) => (p ? { ...p, isFollowing: false } : p));
-      } else {
-        await organizerApi.followOrganizer(organizerId);
-        setProfile((p) => (p ? { ...p, isFollowing: true } : p));
-      }
-    } catch (e) {
-      Alert.alert('Could not update', e?.message || 'Try again.');
-    } finally {
-      setFollowBusy(false);
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Could not open link', 'Try again later.');
     }
   };
 
-  const handleMessage = () => {
+  const handleContact = () => {
     Alert.alert('Coming soon', 'Messaging organizers will be available in a future update.');
   };
 
@@ -235,7 +218,7 @@ export default function PublicOrganizerProfileScreen() {
     );
   }
 
-  const followLabel = profile.isFollowing ? 'Following' : 'Follow';
+  const websiteLabel = String(profile?.website || '').trim();
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F5F5F5' }}>
@@ -288,8 +271,7 @@ export default function PublicOrganizerProfileScreen() {
 
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
           <Pressable
-            onPress={handleFollowPress}
-            disabled={followBusy}
+            onPress={handleShare}
             style={({ pressed }) => ({
               flex: 1,
               minHeight: 48,
@@ -297,15 +279,13 @@ export default function PublicOrganizerProfileScreen() {
               backgroundColor: COLORS.primary,
               alignItems: 'center',
               justifyContent: 'center',
-              opacity: followBusy ? 0.65 : pressed ? 0.9 : 1,
+              opacity: pressed ? 0.9 : 1,
             })}
           >
-            <Text style={{ color: COLORS.card, fontWeight: '800', fontSize: 15 }}>
-              {followBusy ? '…' : followLabel}
-            </Text>
+            <Text style={{ color: COLORS.card, fontWeight: '800', fontSize: 15 }}>Share profile</Text>
           </Pressable>
           <Pressable
-            onPress={handleMessage}
+            onPress={websiteLabel ? handleOpenWebsite : handleContact}
             style={({ pressed }) => ({
               flex: 1,
               minHeight: 48,
@@ -318,7 +298,9 @@ export default function PublicOrganizerProfileScreen() {
               opacity: pressed ? 0.88 : 1,
             })}
           >
-            <Text style={{ color: COLORS.textPrimary, fontWeight: '800', fontSize: 15 }}>Message</Text>
+            <Text style={{ color: COLORS.textPrimary, fontWeight: '800', fontSize: 15 }}>
+              {websiteLabel ? 'Visit website' : 'Contact'}
+            </Text>
           </Pressable>
         </View>
 
@@ -429,7 +411,7 @@ export default function PublicOrganizerProfileScreen() {
             <OrganizerInfoRow skipEmpty icon="globe" label="WEBSITE" value={profile.website || ''} />
             <OrganizerInfoRow skipEmpty icon="map-pin" label="LOCATION" value={profile.location || ''} />
             <Pressable
-              onPress={handleMessage}
+              onPress={websiteLabel ? handleOpenWebsite : handleContact}
               style={({ pressed }) => ({
                 marginTop: 20,
                 minHeight: 48,
@@ -441,7 +423,9 @@ export default function PublicOrganizerProfileScreen() {
                 opacity: pressed ? 0.85 : 1,
               })}
             >
-              <Text style={{ fontWeight: '700', fontSize: 15, color: COLORS.textPrimary }}>Contact organizer</Text>
+              <Text style={{ fontWeight: '700', fontSize: 15, color: COLORS.textPrimary }}>
+                {websiteLabel ? 'Open website' : 'Contact organizer'}
+              </Text>
             </Pressable>
           </View>
         )}

@@ -113,7 +113,7 @@ describe('AuthService - Role Enforcement', () => {
   });
 
   describe('login - organizer blocked from member endpoint', () => {
-    it('should throw UnauthorizedException when organizer uses member login', async () => {
+    it('should return generic invalid credentials when organizer uses member login', async () => {
       (userRepository.findOne as jest.Mock).mockResolvedValue({
         id: 5,
         email: 'organizer@test.com',
@@ -121,19 +121,16 @@ describe('AuthService - Role Enforcement', () => {
         status: 'pending',
         password: '$2b$12$hashed',
       });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       await expect(
         service.login({ email: 'organizer@test.com', password: 'password123' }),
       ).rejects.toThrow(
-        new UnauthorizedException(
-          'Use organizer login from the Welcome screen.',
-        ),
+        new UnauthorizedException('Invalid email or password'),
       );
-
-      expect(bcrypt.compare).not.toHaveBeenCalled();
     });
 
-    it('should not proceed to password check for organizer role', async () => {
+    it('should return generic invalid credentials for organizer email with wrong password', async () => {
       (userRepository.findOne as jest.Mock).mockResolvedValue({
         id: 5,
         email: 'organizer@test.com',
@@ -141,17 +138,18 @@ describe('AuthService - Role Enforcement', () => {
         status: 'active',
         password: '$2b$12$hashed',
       });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      try {
-        await service.login({
+      await expect(
+        service.login({
           email: 'organizer@test.com',
           password: 'anything',
-        });
-      } catch {
-        // expected
-      }
+        }),
+      ).rejects.toThrow(
+        new UnauthorizedException('Invalid email or password'),
+      );
 
-      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(bcrypt.compare).toHaveBeenCalled();
     });
   });
 });

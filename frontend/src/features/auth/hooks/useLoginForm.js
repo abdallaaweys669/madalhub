@@ -61,34 +61,19 @@ export default function useLoginForm() {
           : '/onboarding/WelcomeIntro'
       );
     } catch (error) {
-      if (error.response && error.response.status === 401) {
-        const rawMessage =
-          error.response.data?.message ||
-          'Invalid email or password. Please try again.';
-        if (rawMessage.includes('organizer login') || rawMessage.includes('Welcome screen')) {
-          setFormError(
-            rawMessage + '\n\nTap "Login as Organizer" on Welcome.'
-          );
-        } else if (isInvalidCredentialsMessage(rawMessage)) {
-          const invalidErrors = getInvalidCredentialsErrors();
-          setServerErrors({ email: invalidErrors.email, password: invalidErrors.password });
-          setFormError(invalidErrors.form);
-        } else {
-          setFormError(rawMessage);
-        }
-      } else if (error.message) {
-        const rawMessage = error.message;
-        if (rawMessage.includes('organizer login') || rawMessage.includes('Welcome screen')) {
-          setFormError(
-            rawMessage + '\n\nTap "Login as Organizer" on Welcome.'
-          );
-        } else if (isInvalidCredentialsMessage(rawMessage)) {
-          const invalidErrors = getInvalidCredentialsErrors();
-          setServerErrors({ email: invalidErrors.email, password: invalidErrors.password });
-          setFormError(invalidErrors.form);
-        } else {
-          setFormError(rawMessage);
-        }
+      const rawMessage =
+        (error.response && error.response.status === 401
+          ? error.response.data?.message
+          : null) ||
+        error.message ||
+        'Invalid email or password. Please try again.';
+
+      if (isInvalidCredentialsMessage(rawMessage)) {
+        const invalidErrors = getInvalidCredentialsErrors();
+        setServerErrors({ email: invalidErrors.email, password: invalidErrors.password });
+        setFormError(invalidErrors.form);
+      } else if (error.response || error.message) {
+        setFormError(rawMessage);
       } else {
         setFormError('An unexpected error occurred. Please try again.');
         console.error('Login error:', error);

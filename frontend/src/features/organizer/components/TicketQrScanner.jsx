@@ -1,44 +1,43 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { parseTicketQrValue } from '@/utils/parseTicketQr';
+function loadCameraScannerModule() {
+  // Metro-safe lazy load — avoid dynamic import() async chunks on Android.
+  return require('./TicketQrScannerCamera').default;
+}
 
 export default function TicketQrScanner({ visible, onClose, onScan, scanning = false }) {
   const insets = useSafeAreaInsets();
-  const [permission, requestPermission] = useCameraPermissions();
-  const [error, setError] = useState('');
-  const lastScanRef = useRef('');
+  const cameraModuleRef = useRef(null);
+  const [CameraScanner, setCameraScanner] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!visible) {
-      lastScanRef.current = '';
-      setError('');
+      setCameraScanner(null);
+      setLoadError(false);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setLoadError(false);
+
+    try {
+      if (!cameraModuleRef.current) {
+        cameraModuleRef.current = loadCameraScannerModule();
+      }
+      setCameraScanner(() => cameraModuleRef.current);
+    } catch {
+      setLoadError(true);
+      setCameraScanner(null);
+    } finally {
+      setLoading(false);
     }
   }, [visible]);
-
-  useEffect(() => {
-    if (visible && !permission?.granted) {
-      requestPermission();
-    }
-  }, [visible, permission?.granted, requestPermission]);
-
-  const handleBarcode = useCallback(
-    ({ data }) => {
-      if (scanning || !data || data === lastScanRef.current) return;
-      const parsed = parseTicketQrValue(data);
-      if (!parsed) {
-        setError('Not a valid MadalHub ticket QR.');
-        return;
-      }
-      lastScanRef.current = data;
-      setError('');
-      onScan?.(parsed);
-    },
-    [onScan, scanning],
-  );
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -50,27 +49,23 @@ export default function TicketQrScanner({ visible, onClose, onScan, scanning = f
           </Pressable>
         </View>
 
-        {!permission?.granted ? (
+        {loading ? (
           <View style={styles.centered}>
-            <Text style={styles.helpText}>Camera access is required to scan tickets at the door.</Text>
-            <Pressable style={styles.permissionBtn} onPress={requestPermission}>
-              <Text style={styles.permissionBtnText}>Allow camera</Text>
+            <ActivityIndicator color="#FF7A00" size="large" />
+          </View>
+        ) : loadError ? (
+          <View style={styles.centered}>
+            <Text style={styles.helpText}>
+              Ticket scanning needs a dev build with camera support. Rebuild the app, then try again:
+            </Text>
+            <Text style={styles.codeText}>npx expo run:android</Text>
+            <Pressable style={styles.permissionBtn} onPress={onClose}>
+              <Text style={styles.permissionBtnText}>Close</Text>
             </Pressable>
           </View>
-        ) : (
-          <View style={styles.cameraWrap}>
-            <CameraView
-              style={StyleSheet.absoluteFill}
-              facing="back"
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={scanning ? undefined : handleBarcode}
-            />
-            <View style={styles.frame} pointerEvents="none" />
-            <Text style={styles.hint}>Point at the attendee&apos;s ticket QR code</Text>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            {scanning ? <Text style={styles.processing}>Verifying ticket…</Text> : null}
-          </View>
-        )}
+        ) : CameraScanner ? (
+          <CameraScanner onClose={onClose} onScan={onScan} scanning={scanning} />
+        ) : null}
       </View>
     </Modal>
   );
@@ -103,7 +98,14 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 12,
+  },
+  codeText: {
+    color: '#FFFFFF',
+    fontFamily: 'monospace',
+    fontSize: 13,
     marginBottom: 16,
+    textAlign: 'center',
   },
   permissionBtn: {
     backgroundColor: '#FF7A00',
@@ -114,52 +116,5 @@ const styles = StyleSheet.create({
   permissionBtnText: {
     color: '#FFFFFF',
     fontWeight: '800',
-  },
-  cameraWrap: {
-    flex: 1,
-    margin: 16,
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: '#111827',
-  },
-  frame: {
-    position: 'absolute',
-    top: '22%',
-    left: '12%',
-    right: '12%',
-    bottom: '32%',
-    borderWidth: 2,
-    borderColor: 'rgba(255,122,0,0.85)',
-    borderRadius: 18,
-  },
-  hint: {
-    position: 'absolute',
-    bottom: 24,
-    left: 16,
-    right: 16,
-    textAlign: 'center',
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  error: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    right: 16,
-    textAlign: 'center',
-    color: '#FCA5A5',
-    fontWeight: '700',
-  },
-  processing: {
-    position: 'absolute',
-    top: '50%',
-    alignSelf: 'center',
-    color: '#FFFFFF',
-    fontWeight: '800',
-    backgroundColor: 'rgba(15,23,42,0.72)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
   },
 });

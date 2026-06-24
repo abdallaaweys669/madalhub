@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
-import { cacheRemoteImageForDisplay } from '@/utils/localImageUri';
+import { normalizeLocalImageUri } from '@/utils/localImageUri';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
 const COVER_ASPECT = 16 / 9;
@@ -29,77 +29,56 @@ export default function WysiwygHeader({
 }) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
+  const [displayUri, setDisplayUri] = useState(null);
   const [imageFailed, setImageFailed] = useState(false);
-  const [preferServerPreview, setPreferServerPreview] = useState(false);
-  const [resolvedDisplayUrl, setResolvedDisplayUrl] = useState(null);
-  const [resolvingRemote, setResolvingRemote] = useState(false);
 
   const coverWidth = Math.max(0, windowWidth - HORIZONTAL_PAD * 2);
   const coverHeight = Math.max(180, Math.round(coverWidth / COVER_ASPECT));
 
-  const localPreviewUrl = useMemo(() => {
-    const raw = typeof coverPreviewUri === 'string' ? coverPreviewUri.trim() : '';
-    return raw || null;
-  }, [coverPreviewUri]);
-
-  const serverCoverUrl = useMemo(() => resolveApiAssetUrl(coverPath) ?? null, [coverPath]);
+  const imageUri = useMemo(() => {
+    const local = typeof coverPreviewUri === 'string' ? coverPreviewUri.trim() : '';
+    if (local) return local;
+    return resolveApiAssetUrl(coverPath) ?? null;
+  }, [coverPreviewUri, coverPath]);
 
   useEffect(() => {
     setImageFailed(false);
-    setPreferServerPreview(false);
-  }, [localPreviewUrl, serverCoverUrl]);
-
-  const displayUrl = useMemo(() => {
-    if (preferServerPreview && serverCoverUrl) return serverCoverUrl;
-    if (localPreviewUrl) return localPreviewUrl;
-    return serverCoverUrl;
-  }, [localPreviewUrl, serverCoverUrl, preferServerPreview]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!displayUrl) {
-      setResolvedDisplayUrl(null);
-      setResolvingRemote(false);
-      return undefined;
+    if (!imageUri) {
+      setDisplayUri(null);
+      return;
     }
-
-    if (/^(data:|file:)/i.test(displayUrl)) {
-      setResolvedDisplayUrl(displayUrl);
-      setResolvingRemote(false);
-      return undefined;
+    if (/^content:/i.test(imageUri)) {
+      let cancelled = false;
+      normalizeLocalImageUri(imageUri)
+        .then((local) => {
+          if (!cancelled) setDisplayUri(local || imageUri);
+        })
+        .catch(() => {
+          if (!cancelled) setDisplayUri(imageUri);
+        });
+      return () => {
+        cancelled = true;
+      };
     }
-
-    setResolvingRemote(true);
-    (async () => {
-      try {
-        const cached = await cacheRemoteImageForDisplay(displayUrl);
-        if (!cancelled) {
-          setResolvedDisplayUrl(cached || displayUrl);
-        }
-      } catch {
-        if (!cancelled) setResolvedDisplayUrl(displayUrl);
-      } finally {
-        if (!cancelled) setResolvingRemote(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [displayUrl]);
+    setDisplayUri(imageUri);
+    return undefined;
+  }, [imageUri]);
 
   const handleImageError = () => {
-    if (localPreviewUrl && !preferServerPreview && serverCoverUrl) {
-      setPreferServerPreview(true);
+    if (/^content:/i.test(displayUri || imageUri || '')) {
+      normalizeLocalImageUri(displayUri || imageUri)
+        .then((local) => {
+          if (local && local !== displayUri) setDisplayUri(local);
+          else setImageFailed(true);
+        })
+        .catch(() => setImageFailed(true));
       return;
     }
     setImageFailed(true);
   };
 
-  const imageUri = resolvedDisplayUrl || (/^(data:|file:)/i.test(displayUrl || '') ? displayUrl : null);
-  const hasCover = Boolean(imageUri) && !imageFailed;
-  const showEmpty = !hasCover && !resolvingRemote;
+  const hasCover = Boolean(displayUri) && !imageFailed;
+  const showEmpty = !hasCover && !coverUploading;
 
   return (
     <View style={[eventStyles.headerWrapper, styles.header]} collapsable={false}>
@@ -128,8 +107,7 @@ export default function WysiwygHeader({
               collapsable={false}
             >
               <Image
-                key={imageUri}
-                source={{ uri: imageUri }}
+                source={{ uri: displayUri }}
                 style={{ width: coverWidth, height: coverHeight, backgroundColor: '#E5E7EB' }}
                 resizeMode="cover"
                 onError={handleImageError}
@@ -158,12 +136,6 @@ export default function WysiwygHeader({
               </View>
               <Text style={styles.uploadTitle}>Add cover photo</Text>
               <Text style={styles.uploadSubtitle}>Tap to choose from gallery · auto-cropped to 16:9</Text>
-            </View>
-          ) : null}
-
-          {resolvingRemote && !hasCover ? (
-            <View style={[styles.resolvingOverlay, { width: coverWidth, height: coverHeight }]}>
-              <ActivityIndicator size="large" color="#EA580C" />
             </View>
           ) : null}
 
@@ -292,11 +264,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     textAlign: 'center',
     maxWidth: 268,
-  },
-  resolvingOverlay: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFBF5',
   },
   uploadingOverlay: {
     ...StyleSheet.absoluteFillObject,

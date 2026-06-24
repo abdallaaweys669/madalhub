@@ -137,9 +137,13 @@ describe('OrganizerService', () => {
         password: '$2b$12$hashed',
       } as unknown as User);
 
+      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true);
+
       await expect(
         service.login('member@test.com', 'password123'),
-      ).rejects.toThrow(UnauthorizedException);
+      ).rejects.toThrow(
+        new UnauthorizedException('Invalid email or password'),
+      );
     });
 
     it('should throw on invalid password', async () => {

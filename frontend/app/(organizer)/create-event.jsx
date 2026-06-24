@@ -23,7 +23,6 @@ import apiClient from '@/api/client';
 import { createOrganizerEvent, getEventInterests, patchOrganizerEvent, publishOrganizerEvent } from '@/api/events';
 import { uploadEventCoverImage } from '@/api/eventAssets';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
-import { normalizeLocalImageUri, buildPickerPreviewUri } from '@/utils/localImageUri';
 import useAuth from '@/auth/useAuth';
 import { getPublishEligibility } from '@/api/organizer';
 import { resolveOrganizerPublishGate } from '@/utils/organizerPublish';
@@ -283,8 +282,9 @@ export default function CreateEventScreen() {
 
         setOnlineLink(data.onlineLink || '');
         setLocationPin(hasPin ? { latitude, longitude } : null);
-        setCoverImagePath(data.image || data.coverImage || null);
-        setCoverPreviewUri(null);
+        const loadedCoverPath = data.image || data.coverImage || null;
+        setCoverImagePath(loadedCoverPath);
+        setCoverPreviewUri(resolveApiAssetUrl(loadedCoverPath) || null);
         setAudienceGender(['all', 'female', 'male'].includes(data.audienceGender) ? data.audienceGender : 'all');
         setRemoteStatus(data.status ?? null);
         setTicketPaid(Number(data.price ?? data.totalPrice ?? 0) > 0);
@@ -364,23 +364,12 @@ export default function CreateEventScreen() {
       quality: 0.85,
       allowsEditing: true,
       aspect: [16, 9],
-      base64: true,
     });
     if (result.canceled || !result.assets?.[0]) return;
 
     const picked = result.assets[0];
-    const instantPreview = buildPickerPreviewUri(picked);
-    setCoverPreviewUri(instantPreview || picked.uri);
+    setCoverPreviewUri(picked.uri);
     setCoverUploading(true);
-
-    if (!instantPreview) {
-      try {
-        const normalized = (await normalizeLocalImageUri(picked.uri)) || picked.uri;
-        setCoverPreviewUri(normalized);
-      } catch {
-        setCoverPreviewUri(picked.uri);
-      }
-    }
 
     try {
       const path = await uploadEventCoverImage(picked);

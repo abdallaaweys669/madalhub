@@ -21,7 +21,6 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateReviewDto } from '../dto/create-review.dto';
 import { UpdateReviewDto } from '../dto/update-review.dto';
-import { FollowOrganizerDto } from '../dto/follow-organizer.dto';
 import { UpdateMemberDto } from '../dto/update-member.dto';
 import { SocialLoginDto } from '../dto/social-login.dto';
 import { CreateOrganizerPaymentRequestDto } from '../dto/create-payment-request.dto';
@@ -54,14 +53,13 @@ export class OrganizerController {
     return this.service.login(dto.email, dto.password);
   }
 
-  /** Public organizer summary for member apps (optional JWT for isFollowing). */
+  /** Public organizer summary for member apps. */
   @UseGuards(OptionalJwtAuthGuard)
   @Get('public/:organizerId')
   getPublicOrganizerProfile(
     @Param('organizerId', ParseIntPipe) organizerId: number,
-    @CurrentUser() user?: { userId: number; role: number },
   ) {
-    return this.service.getPublicOrganizerProfile(organizerId, user);
+    return this.service.getPublicOrganizerProfile(organizerId);
   }
 
   @Post('social-login')
@@ -105,30 +103,6 @@ export class OrganizerController {
   @Post('change-password')
   changePassword(@CurrentUser() user: any, @Body() dto: ChangePasswordDto) {
     return this.service.changePassword(user.userId, dto);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(1)
-  @Post('follow')
-  followOrganizer(@CurrentUser() user: any, @Body() dto: FollowOrganizerDto) {
-    return this.service.followOrganizer(dto.organizerId, user.userId);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(1)
-  @Delete('follow/:organizerId')
-  unfollowOrganizer(
-    @CurrentUser() user: any,
-    @Param('organizerId', ParseIntPipe) organizerId: number,
-  ) {
-    return this.service.unfollowOrganizer(organizerId, user.userId);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(2)
-  @Get('followers')
-  getFollowers(@CurrentUser() user: any) {
-    return this.service.getFollowers(user.userId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

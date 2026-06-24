@@ -98,15 +98,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (user.roleId === 2) {
-      throw new UnauthorizedException(
-        'Use organizer login from the Welcome screen.',
-      );
-    }
-
     const isMatch = await bcrypt.compare(loginDto.password, user.password);
 
-    if (!isMatch) {
+    if (!isMatch || user.roleId !== 1) {
       throw new UnauthorizedException('Invalid email or password');
     }
 

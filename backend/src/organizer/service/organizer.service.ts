@@ -13,7 +13,6 @@ import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity
 import { OrganizerVerificationDocument } from 'src/database/entities/organizer-verification-document.entity';
 import { Event } from 'src/database/entities/event.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
-import { OrganizerFollow } from 'src/database/entities/organizer-follow.entity';
 import { OrganizerReview } from 'src/database/entities/organizer-review.entity';
 import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
 import { OrganizerCreditRequest } from 'src/database/entities/organizer-credit-request.entity';
@@ -46,8 +45,6 @@ export class OrganizerService {
     private eventRepository: Repository<Event>,
     @InjectRepository(EventRegistration)
     private eventRegistrationRepository: Repository<EventRegistration>,
-    @InjectRepository(OrganizerFollow)
-    private organizerFollowRepository: Repository<OrganizerFollow>,
     @InjectRepository(OrganizerReview)
     private organizerReviewRepository: Repository<OrganizerReview>,
     @InjectRepository(OrganizerPaymentRequest)
@@ -58,6 +55,74 @@ export class OrganizerService {
     private jwtService: JwtService,
     private notificationsService: NotificationsService,
   ) {}
+
+  private async getPublishedOrganizerMetrics(organizerId: number) {
+    const publishedEvents = await this.eventRepository.find({
+      where: { organizerId, status: 'published' },
+      select: ['id', 'startDatetime', 'endDatetime'],
+    });
+
+    const now = Date.now();
+    const eventIds = publishedEvents.map((event) => event.id);
+    let attendeesTotal = 0;
+
+    if (eventIds.length > 0) {
+      const attendeeRow = await this.eventRegistrationRepository
+        .createQueryBuilder('reg')
+        .select('COUNT(reg.id)', 'cnt')
+        .where('reg.eventId IN (:...eventIds)', { eventIds })
+        .andWhere("reg.status != 'cancelled'")
+        .getRawOne<{ cnt: string }>();
+      attendeesTotal = attendeeRow ? Number(attendeeRow.cnt) : 0;
+    }
+
+    let upcomingEventsCount = 0;
+    for (const event of publishedEvents) {
+      const startMs = event.startDatetime
+        ? new Date(event.startDatetime).getTime()
+        : null;
+      const endMs = event.endDatetime
+        ? new Date(event.endDatetime).getTime()
+        : null;
+      const isPast =
+        (endMs != null && now > endMs) ||
+        (endMs == null && startMs != null && now > startMs + 86400000);
+      if (!isPast && startMs != null && startMs > now) {
+        upcomingEventsCount += 1;
+      }
+    }
+
+    return {
+      eventsCount: publishedEvents.length,
+      attendeesTotal,
+      upcomingEventsCount,
+    };
+  }
+
+  private countUpcomingPublishedEvents(
+    events: Pick<Event, 'status' | 'startDatetime' | 'endDatetime'>[],
+  ) {
+    const now = Date.now();
+    let upcomingEventsCount = 0;
+
+    for (const event of events) {
+      if (event.status !== 'published') continue;
+      const startMs = event.startDatetime
+        ? new Date(event.startDatetime).getTime()
+        : null;
+      const endMs = event.endDatetime
+        ? new Date(event.endDatetime).getTime()
+        : null;
+      const isPast =
+        (endMs != null && now > endMs) ||
+        (endMs == null && startMs != null && now > startMs + 86400000);
+      if (!isPast && startMs != null && startMs > now) {
+        upcomingEventsCount += 1;
+      }
+    }
+
+    return upcomingEventsCount;
+  }
 
   private async assertOrganizerOwnsEvent(organizerId: number, eventId: number) {
     const user = await this.userRepository.findOne({ where: { id: organizerId } });
@@ -155,14 +220,8 @@ export class OrganizerService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (user.roleId !== 2) {
-      throw new UnauthorizedException(
-        'This account is not registered as an organizer. Use member login instead.',
-      );
-    }
-
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
+    if (!isMatch || user.roleId !== 2) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -284,9 +343,7 @@ export class OrganizerService {
     }
 
     if (user.roleId !== 2) {
-      throw new UnauthorizedException(
-        'This account is not registered as an organizer.',
-      );
+      throw new UnauthorizedException('Sign in failed');
     }
 
     return this.issueOrganizerToken(user);
@@ -445,44 +502,7 @@ export class OrganizerService {
       attendeesTotal = attendeeRows ? Number(attendeeRows.cnt) : 0;
     }
 
-    const followersCount = await this.organizerFollowRepository.count({
-      where: { organizerId: userId },
-    });
-
-    const ratingStats = await this.organizerReviewRepository
-      .createQueryBuilder('rev')
-      .select('AVG(rev.rating)', 'avg')
-      .addSelect('COUNT(rev.id)', 'cnt')
-      .where('rev.organizerId = :organizerId', { organizerId: userId })
-      .getRawOne<{ avg: string | null; cnt: string }>();
-
-    const ratingAverage = ratingStats?.avg
-      ? Number(Number(ratingStats.avg).toFixed(1))
-      : null;
-    const ratingCount = ratingStats ? Number(ratingStats.cnt) : 0;
-
-    const recentFollowRows = await this.organizerFollowRepository
-      .createQueryBuilder('f')
-      .leftJoin(User, 'u', 'u.id = f.memberId')
-      .select([
-        'f.memberId AS memberId',
-        'u.full_name AS fullName',
-        'u.profile_img AS profileImg',
-      ])
-      .where('f.organizerId = :organizerId', { organizerId: userId })
-      .orderBy('f.createdAt', 'DESC')
-      .limit(4)
-      .getRawMany<{
-        memberId: number;
-        fullName: string;
-        profileImg: string | null;
-      }>();
-
-    const recentFollowers = recentFollowRows.map((r) => ({
-      memberId: Number(r.memberId),
-      fullName: r.fullName ?? 'Member',
-      profileImg: r.profileImg ?? null,
-    }));
+    const upcomingEventsCount = this.countUpcomingPublishedEvents(events);
 
     return {
       userId: user.id,
@@ -498,17 +518,14 @@ export class OrganizerService {
       rejectionReason: organizerProfile?.rejectionReason ?? null,
       eventsCount,
       attendeesTotal,
-      followersCount,
-      ratingAverage,
-      ratingCount,
-      recentFollowers,
+      upcomingEventsCount,
     };
   }
 
   /** Member-facing / shareable organizer summary (no private contact fields). */
   async getPublicOrganizerProfile(
     organizerId: number,
-    viewer?: { userId: number; role: number },
+    _viewer?: { userId: number; role: number },
   ) {
     const user = await this.userRepository.findOne({
       where: { id: organizerId },
@@ -522,33 +539,7 @@ export class OrganizerService {
       where: { userId: organizerId },
     });
 
-    const publishedCount = await this.eventRepository.count({
-      where: { organizerId, status: 'published' },
-    });
-
-    const followersCount = await this.organizerFollowRepository.count({
-      where: { organizerId },
-    });
-
-    const ratingStats = await this.organizerReviewRepository
-      .createQueryBuilder('rev')
-      .select('AVG(rev.rating)', 'avg')
-      .addSelect('COUNT(rev.id)', 'cnt')
-      .where('rev.organizerId = :organizerId', { organizerId })
-      .getRawOne<{ avg: string | null; cnt: string }>();
-
-    const ratingAverage = ratingStats?.avg
-      ? Number(Number(ratingStats.avg).toFixed(1))
-      : null;
-    const ratingCount = ratingStats ? Number(ratingStats.cnt) : 0;
-
-    let isFollowing = false;
-    if (viewer?.role === 1 && viewer.userId) {
-      const row = await this.organizerFollowRepository.findOne({
-        where: { organizerId, memberId: viewer.userId },
-      });
-      isFollowing = !!row;
-    }
+    const metrics = await this.getPublishedOrganizerMetrics(organizerId);
 
     const displayName =
       (organizerProfile?.organizationName || '').trim() ||
@@ -566,83 +557,10 @@ export class OrganizerService {
         organizerProfile?.organizationDescription ?? null,
       website: organizerProfile?.website ?? null,
       verificationStatus: organizerProfile?.verificationStatus ?? 'pending',
-      eventsCount: publishedCount,
-      followersCount,
-      ratingAverage,
-      ratingCount,
-      isFollowing,
+      eventsCount: metrics.eventsCount,
+      attendeesTotal: metrics.attendeesTotal,
+      upcomingEventsCount: metrics.upcomingEventsCount,
     };
-  }
-
-  async followOrganizer(organizerId: number, memberId: number) {
-    const organizer = await this.userRepository.findOne({
-      where: { id: organizerId, roleId: 2 },
-    });
-    if (!organizer) {
-      throw new NotFoundException('Organizer not found');
-    }
-
-    const member = await this.userRepository.findOne({
-      where: { id: memberId, roleId: 1 },
-    });
-    if (!member) {
-      throw new BadRequestException('Only members can follow organizers');
-    }
-
-    const existing = await this.organizerFollowRepository.findOne({
-      where: { organizerId, memberId },
-    });
-    if (existing) {
-      throw new BadRequestException('Already following this organizer');
-    }
-
-    const follow = this.organizerFollowRepository.create({
-      organizerId,
-      memberId,
-      createdAt: new Date(),
-    });
-    await this.organizerFollowRepository.save(follow);
-
-    return { message: 'Following organizer', organizerId, memberId };
-  }
-
-  async unfollowOrganizer(organizerId: number, memberId: number) {
-    const existing = await this.organizerFollowRepository.findOne({
-      where: { organizerId, memberId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Not following this organizer');
-    }
-
-    await this.organizerFollowRepository.remove(existing);
-    return { message: 'Unfollowed organizer' };
-  }
-
-  async getFollowers(organizerId: number) {
-    const rows = await this.organizerFollowRepository
-      .createQueryBuilder('f')
-      .leftJoin(User, 'u', 'u.id = f.memberId')
-      .select([
-        'f.memberId AS memberId',
-        'u.full_name AS fullName',
-        'u.profile_img AS profileImg',
-        'f.createdAt AS followedAt',
-      ])
-      .where('f.organizerId = :organizerId', { organizerId })
-      .orderBy('f.createdAt', 'DESC')
-      .getRawMany<{
-        memberId: number;
-        fullName: string;
-        profileImg: string | null;
-        followedAt: Date;
-      }>();
-
-    return rows.map((r) => ({
-      memberId: Number(r.memberId),
-      fullName: r.fullName ?? 'Member',
-      profileImg: r.profileImg ?? null,
-      followedAt: r.followedAt,
-    }));
   }
 
   async createReview(memberId: number, dto: CreateReviewDto) {
@@ -871,9 +789,6 @@ export class OrganizerService {
       past,
       upcoming,
       totalAttendees: dashboard.attendeesTotal,
-      followersCount: dashboard.followersCount,
-      ratingAverage: dashboard.ratingAverage,
-      ratingCount: dashboard.ratingCount,
       topEventsByAttendees: topEventRows.map((row) => ({
         eventId: Number(row.eventId),
         title: row.title ?? 'Untitled event',
@@ -1444,7 +1359,14 @@ export class OrganizerService {
       throw new BadRequestException('This ticket is not registered for this event');
     }
 
-    if (registration.status === 'checked_in') {
+    if (registration.status === 'cancelled') {
+      throw new BadRequestException('This registration was cancelled');
+    }
+
+    if (
+      registration.status === 'checked_in' ||
+      registration.status === 'attended'
+    ) {
       const member = await this.userRepository.findOne({ where: { id: memberId } });
       return {
         success: true,
@@ -1453,7 +1375,7 @@ export class OrganizerService {
       };
     }
 
-    registration.status = 'checked_in';
+    registration.status = 'attended';
     await this.eventRegistrationRepository.save(registration);
 
     const member = await this.userRepository.findOne({ where: { id: memberId } });
