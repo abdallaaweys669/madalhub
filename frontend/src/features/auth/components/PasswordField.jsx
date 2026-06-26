@@ -3,7 +3,15 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/loginSignin/authStyles';
 
-export default function PasswordField({ label, error, helperText, underline = false, inputStyle, ...rest }) {
+export default function PasswordField({
+  label,
+  error,
+  helperText,
+  underline = false,
+  inputStyle,
+  showLeadingLock = false,
+  ...rest
+}) {
   const [show, setShow] = useState(false);
   const [focused, setFocused] = useState(false);
 
@@ -65,11 +73,19 @@ export default function PasswordField({ label, error, helperText, underline = fa
           inputStyle,
         ]}
       >
+        {showLeadingLock ? (
+          <Ionicons
+            name="lock-closed-outline"
+            size={20}
+            color={focused ? COLORS.primary : '#94A3B8'}
+            style={styles.leadingIcon}
+          />
+        ) : null}
         <TextInput
           {...rest}
           secureTextEntry={!show}
           placeholderTextColor={COLORS.placeholder}
-          style={{ flex: 1, fontSize: 16, color: COLORS.textDark }}
+          style={[styles.boxInput, showLeadingLock && styles.boxInputWithIcon]}
           onFocus={() => setFocused(true)}
           onBlur={() => {
             setFocused(false);
@@ -77,7 +93,7 @@ export default function PasswordField({ label, error, helperText, underline = fa
           }}
         />
 
-        <Pressable onPress={() => setShow(!show)}>
+        <Pressable onPress={() => setShow(!show)} hitSlop={8}>
           <Ionicons
             name={show ? 'eye-off-outline' : 'eye-outline'}
             size={22}
@@ -130,5 +146,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.danger,
     marginTop: 5,
+  },
+  leadingIcon: {
+    marginRight: 10,
+  },
+  boxInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.textDark,
+  },
+  boxInputWithIcon: {
+    paddingLeft: 0,
   },
 });

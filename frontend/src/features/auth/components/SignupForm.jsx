@@ -40,10 +40,11 @@ export default function SignupForm() {
   } = useSignupForm();
 
   const legalValid = ageConfirmed && termsAccepted;
+  const canSubmit = isValid && legalValid;
 
   const handleSubmit = () => {
     setLegalAttempted(true);
-    if (!legalValid) return;
+    if (!canSubmit) return;
     onSubmit();
   };
 
@@ -80,7 +81,7 @@ export default function SignupForm() {
 
       <AuthSubmitButton
         onPress={handleSubmit}
-        disabled={loading}
+        disabled={!canSubmit || loading}
         loading={loading}
         label="Create account"
         loadingLabel="Creating account..."

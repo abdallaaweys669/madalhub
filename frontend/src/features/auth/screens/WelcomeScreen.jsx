@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import useGuardedRouter, { resetNavigationGuard } from '@/hooks/useGuardedRouter';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import useAuth from '@/auth/useAuth';
 import { COLORS } from '@/constants/loginSignin/authStyles';
 import { getMemberTabsReturnHref } from '@/navigation/memberTabsReturn';
+import { GUEST_EXPLORE_HREF, markGuestWelcomeSeen } from '@/navigation/guestWelcome';
 import { getOrganizerEntryHref } from '@/navigation/organizerGate';
 import WelcomeAuthActions from '@/features/auth/components/welcome/WelcomeAuthActions';
 import {
@@ -32,11 +34,19 @@ export default function WelcomeScreen() {
   const router = useGuardedRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const { firstLaunch } = useLocalSearchParams();
   const { isLoggedIn, isOrganizer, organizerStatus } = useAuth();
 
   const [fontsLoaded] = useFonts(authFontAssets);
 
   const isCompact = height < 760;
+  const isFirstLaunch = firstLaunch === '1' || firstLaunch === 'true';
+
+  const handleBrowseAsGuest = useCallback(async () => {
+    resetNavigationGuard();
+    await markGuestWelcomeSeen();
+    router.replace(GUEST_EXPLORE_HREF);
+  }, [router]);
 
   const handleCancel = () => {
     resetNavigationGuard();
@@ -52,7 +62,7 @@ export default function WelcomeScreen() {
     }
 
     const href = getMemberTabsReturnHref();
-    router.replace(href === '/(tabs)' ? '/(tabs)/explore' : href);
+    router.replace(href === '/(tabs)' ? GUEST_EXPLORE_HREF : href);
   };
 
   if (!fontsLoaded) {
@@ -75,15 +85,17 @@ export default function WelcomeScreen() {
             },
           ]}
         >
-          <Pressable
-            onPress={handleCancel}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={[styles.cancelButton, { top: 8 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel and go to Discovery"
-          >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </Pressable>
+          {!isFirstLaunch ? (
+            <Pressable
+              onPress={handleCancel}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={[styles.cancelButton, { top: 8 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel and go to Discovery"
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          ) : null}
 
           <View style={styles.topSection}>
             <View style={styles.topBar}>
@@ -137,6 +149,17 @@ export default function WelcomeScreen() {
                 <Text style={styles.loginLink}>Log in</Text>
               </Text>
             </Pressable>
+
+            {!isLoggedIn ? (
+              <Pressable
+                onPress={() => void handleBrowseAsGuest()}
+                style={styles.guestBrowseRow}
+                accessibilityRole="button"
+                accessibilityLabel="Browse events as guest"
+              >
+                <Text style={styles.guestBrowseText}>Browse events as guest</Text>
+              </Pressable>
+            ) : null}
 
             <View style={[styles.organizerCard, isCompact && styles.organizerCardCompact]}>
               <View style={styles.organizerCardTop}>
@@ -338,6 +361,18 @@ const styles = StyleSheet.create({
   loginLink: {
     fontFamily: FONT_JAKARTA_BOLD,
     color: COLORS.primary,
+  },
+  guestBrowseRow: {
+    alignSelf: 'center',
+    marginBottom: 12,
+    paddingVertical: 4,
+  },
+  guestBrowseText: {
+    fontFamily: FONT_JAKARTA_BOLD,
+    fontSize: 14,
+    color: '#5F6B7A',
+    textAlign: 'center',
+    textDecorationLine: 'underline',
   },
   organizerCard: {
     backgroundColor: '#FFFFFF',

@@ -5,6 +5,7 @@ const profileCompletedKey = 'profileCompleted';
 const userRoleKey = 'userRole';
 const organizerStatusKey = 'organizerStatus';
 const rejectionReasonKey = 'rejectionReason';
+const guestWelcomeSeenKey = 'guestWelcomeSeen';
 
 const storeToken = async (authToken) => {
   try {
@@ -125,6 +126,23 @@ const getRejectionReason = async () => {
   }
 };
 
+const getGuestWelcomeSeen = async () => {
+  try {
+    return (await AsyncStorage.getItem(guestWelcomeSeenKey)) === 'true';
+  } catch (error) {
+    console.log('Error getting guest welcome seen state', error);
+    return false;
+  }
+};
+
+const storeGuestWelcomeSeen = async () => {
+  try {
+    await AsyncStorage.setItem(guestWelcomeSeenKey, 'true');
+  } catch (error) {
+    console.log('Error storing guest welcome seen state', error);
+  }
+};
+
 const clearAll = async () => {
   try {
     await Promise.all([
@@ -152,5 +170,7 @@ export default {
   getOrganizerStatus,
   storeRejectionReason,
   getRejectionReason,
+  getGuestWelcomeSeen,
+  storeGuestWelcomeSeen,
   clearAll,
 };

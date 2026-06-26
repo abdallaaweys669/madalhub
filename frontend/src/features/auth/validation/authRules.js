@@ -34,15 +34,33 @@ export const getFullNameError = (value) =>
 export const getOrganizationNameError = (value) =>
   getPersonNameError(value, { label: 'Organization name' });
 
+export const INVALID_EMAIL_FORMAT = 'Invalid email format';
+
+export const EMAIL_EXAMPLES = {
+  member: 'member@email.com',
+  organizer: 'organizer@email.com',
+};
+
+export const getEmailFormatHint = (variant = 'member') => {
+  const example = EMAIL_EXAMPLES[variant] || EMAIL_EXAMPLES.member;
+  return `e.g. ${example}`;
+};
+
 export const getEmailError = (value) => {
   const email = normalizeEmail(value);
   if (!email) return 'Email is required.';
-  if (email.includes(' ')) return 'Remove spaces from your email.';
-  if (!email.includes('@')) return 'Include @ in your email (e.g. name@example.com).';
-  if (!emailRegex.test(email)) return 'Enter a valid email (e.g. name@example.com).';
-  const [, domain] = email.split('@');
-  if (!domain?.includes('.')) return 'Email domain looks incomplete.';
+  if (email.includes(' ') || !emailRegex.test(email)) {
+    return INVALID_EMAIL_FORMAT;
+  }
   return '';
+};
+
+export const getSignupEmailDisplayError = (value, variant = 'member') => {
+  const error = getEmailError(value);
+  if (error === INVALID_EMAIL_FORMAT) {
+    return `${INVALID_EMAIL_FORMAT} (${getEmailFormatHint(variant)})`;
+  }
+  return error;
 };
 
 export const getPasswordChecks = (value = '') => ({
@@ -118,19 +136,25 @@ export const getOrganizerSignupErrors = (values) =>
 
 export const getLoginErrors = ({ email, password }) => {
   const emailError = getEmailError(email);
-  const passwordError = !password
-    ? 'Password is required.'
-    : password.length < 6
-    ? 'Password looks too short. Check it and try again.'
-    : '';
+  const passwordError = !password ? 'Password is required.' : '';
 
   return { email: emailError, password: passwordError };
 };
 
+/** Login button stays disabled until email is valid and password has 8+ characters. */
+export const isLoginSubmitEnabled = ({ email, password }) => {
+  const errors = getLoginErrors({ email, password });
+  return (
+    !errors.email &&
+    !errors.password &&
+    String(password || '').length >= PASSWORD_MIN_LENGTH
+  );
+};
+
+export const INVALID_LOGIN_CREDENTIALS = 'Invalid email or password';
+
 export const getInvalidCredentialsErrors = () => ({
-  email: 'Check that this is the email for your account.',
-  password: 'Check your password. Passwords are case-sensitive.',
-  form: "We couldn't sign you in. Review the highlighted fields and try again.",
+  form: INVALID_LOGIN_CREDENTIALS,
 });
 
 export const isInvalidCredentialsMessage = (message) => {

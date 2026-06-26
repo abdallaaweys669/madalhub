@@ -14,9 +14,10 @@ import useAuth from '@/auth/useAuth';
 import organizerApi from '@/api/organizer';
 import { getOrganizerEntryHref } from '@/navigation/organizerGate';
 import {
-  getInvalidCredentialsErrors,
+  INVALID_LOGIN_CREDENTIALS,
   getLoginErrors,
   isInvalidCredentialsMessage,
+  isLoginSubmitEnabled,
   normalizeEmail,
 } from '@/features/auth/validation/authRules';
 import { authFontAssets, FONT_JAKARTA_BOLD } from '@/features/auth/theme/authTypography';
@@ -42,7 +43,7 @@ export default function OrganizerLoginScreen() {
   const [keepLoggedIn, setKeepLoggedIn] = useState(true);
 
   const fieldErrors = useMemo(() => getLoginErrors(values), [values]);
-  const isValid = !fieldErrors.email && !fieldErrors.password;
+  const isValid = useMemo(() => isLoginSubmitEnabled(values), [values]);
 
   const onChange = (field, value) => {
     setValues((prev) => ({ ...prev, [field]: value }));
@@ -74,13 +75,12 @@ export default function OrganizerLoginScreen() {
       });
       await routeOrganizerAfterLogin(result);
     } catch (error) {
-      const message = error.message || 'Login failed. Please try again.';
-      if (isInvalidCredentialsMessage(message)) {
-        const invalidErrors = getInvalidCredentialsErrors();
-        setServerErrors({ email: invalidErrors.email, password: invalidErrors.password });
-        setFormError(invalidErrors.form);
+      const status = error.response?.status;
+      const message = error.response?.data?.message || error.message || '';
+      if (status === 401 || isInvalidCredentialsMessage(message)) {
+        setFormError(INVALID_LOGIN_CREDENTIALS);
       } else {
-        setFormError(message);
+        setFormError(message || 'Login failed. Please try again.');
       }
     } finally {
       setLoading(false);

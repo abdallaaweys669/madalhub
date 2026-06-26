@@ -81,8 +81,9 @@ router.push('/(auth)/signup');
   Password min length is **8**; reuse `getAuthSignupErrors`, `getPasswordChecks`,
   `getConfirmPasswordDisplayError`, `parseAuthApiFieldErrors`, `getSignupPayload`.
 - Signup form state: `useAuthSignupForm` (base) → `useSignupForm` (member) / `useOrganizerSignupForm`.
-- Reusable UI: `SignupFormFields`, `PasswordRequirements` (wrapping pill chips with ticks),
-  `AuthCheckbox`, `SignupLegalBlock` (18+ / Terms & Privacy), `TextField`, `PasswordField`.
+- Reusable UI: `SignupFormFields`, `PasswordRequirements` (strength bar + rule row while typing; hides when all
+  rules pass), `AuthCheckbox`, `SignupLegalBlock` (member: 18+ + Terms & Privacy; organizer: Terms only — links open
+  `/(modal)/termsOfService` and `/(modal)/privacyPolicy`), `TextField`, `PasswordField`.
 - Inputs are white (`#FFFFFF`) with a subtle orange border so they read clearly on the
   cream background.
 - For Clerk flows, use `getClerkSessionToken` (`src/features/auth/hooks/getClerkSessionToken.js`)
@@ -98,6 +99,14 @@ router.push('/(auth)/signup');
 - Original animation: orange canvas (`#FF7B3F`), logo fades in, white circle expands to fill the screen.
 - Expanding circle is **white** (`#FFFFFF`), not peach (`#FFEFE5`), so the hold frame matches a white app chrome.
 - Orange MadalHub wordmark SVG on top (asset: `kulan_logo.svg`, default colors).
+- **Guest routing:** after splash, logged-out users who have **not** seen welcome go to
+  `/(auth)/welcome?firstLaunch=1`; otherwise `/(tabs)/explore`. “Browse events as guest” on
+  welcome sets `guestWelcomeSeen` in AsyncStorage (`src/navigation/guestWelcome.js`). That flag
+  survives logout (not cleared in `clearAll`).
+
+### Guest welcome (`WelcomeScreen`)
+- First launch: no Cancel button; **Browse events as guest** → Discovery + marks welcome seen.
+- In-app (save/join/settings): Cancel returns to previous tab; guest browse link still available.
 
 ### Warnings
 - Known harmless warnings (Reanimated reduced-motion, `setLayoutAnimationEnabledExperimental`)

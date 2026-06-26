@@ -12,9 +12,10 @@ import useAuth from '@/auth/useAuth';
 import authApi from '@/api/auth';
 import { jwtDecode } from 'jwt-decode';
 import {
-  getInvalidCredentialsErrors,
+  INVALID_LOGIN_CREDENTIALS,
   getLoginErrors,
   isInvalidCredentialsMessage,
+  isLoginSubmitEnabled,
   normalizeEmail,
 } from '@/features/auth/validation/authRules';
 import { authFontAssets } from '@/features/auth/theme/authTypography';
@@ -39,7 +40,7 @@ export default function AdminLoginScreen() {
   const [serverErrors, setServerErrors] = useState({});
 
   const fieldErrors = useMemo(() => getLoginErrors(values), [values]);
-  const isValid = !fieldErrors.email && !fieldErrors.password;
+  const isValid = useMemo(() => isLoginSubmitEnabled(values), [values]);
 
   const onChange = (field, value) => {
     setValues((prev) => ({ ...prev, [field]: value }));
@@ -72,12 +73,12 @@ export default function AdminLoginScreen() {
       await login(result.token, result.onboardingCompleted);
       router.replace('/(admin)/organizers');
     } catch (error) {
-      const message = error.message || 'Login failed. Please try again.';
-      if (isInvalidCredentialsMessage(message)) {
-        const invalidErrors = getInvalidCredentialsErrors();
-        setServerErrors({ email: invalidErrors.email, password: invalidErrors.password });
+      const status = error.response?.status;
+      const message = error.response?.data?.message || error.message || '';
+      if (status === 401 || isInvalidCredentialsMessage(message)) {
+        setFormError(INVALID_LOGIN_CREDENTIALS);
       } else {
-        setFormError(message);
+        setFormError(message || 'Login failed. Please try again.');
       }
     } finally {
       setLoading(false);

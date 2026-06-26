@@ -3,8 +3,6 @@ import React from 'react';
 import TextField from '@/features/auth/components/TextField';
 import PasswordField from '@/features/auth/components/PasswordField';
 import PasswordRequirements from '@/features/auth/components/PasswordRequirements';
-import { COLORS } from '@/constants/loginSignin/authStyles';
-import { isStrongPassword } from '@/features/auth/validation/authRules';
 
 const PASSWORD_INPUT_STYLE = {
   borderWidth: 1.5,
@@ -18,7 +16,6 @@ export default function SignupFormFields({
   getDisplayError,
   showPasswordChecklist,
   passwordChecks,
-  password,
   onChange,
   onBlur,
 }) {
@@ -62,10 +59,9 @@ export default function SignupFormFields({
         error={getDisplayError('password')}
         placeholder="Create password"
         inputStyle={PASSWORD_INPUT_STYLE}
+        showLeadingLock
       />
-      {showPasswordChecklist && !isStrongPassword(password) ? (
-        <PasswordRequirements checks={passwordChecks} />
-      ) : null}
+      {showPasswordChecklist ? <PasswordRequirements checks={passwordChecks} /> : null}
 
       <PasswordField
         label="Confirm Password"

@@ -6,20 +6,23 @@ import { COLORS } from '@/constants/loginSignin/authStyles';
 export default function AuthCheckbox({ checked, onPress, label, error, wrapStyle }) {
   return (
     <View style={[styles.wrap, wrapStyle]}>
-      <Pressable
-        onPress={onPress}
-        style={styles.row}
-        hitSlop={8}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked }}
-      >
-        <View style={[styles.box, checked && styles.boxChecked, error && !checked && styles.boxError]}>
-          {checked ? (
-            <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-          ) : null}
+      <View style={styles.row}>
+        <Pressable
+          onPress={onPress}
+          hitSlop={8}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked }}
+        >
+          <View style={[styles.box, checked && styles.boxChecked, error && !checked && styles.boxError]}>
+            {checked ? (
+              <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+            ) : null}
+          </View>
+        </Pressable>
+        <View style={styles.labelWrap}>
+          {typeof label === 'string' ? <Text style={styles.label}>{label}</Text> : label}
         </View>
-        <Text style={styles.label}>{label}</Text>
-      </Pressable>
+      </View>
       {error && !checked ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : null}
@@ -33,8 +36,12 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
+  },
+  labelWrap: {
+    flex: 1,
+    paddingTop: 1,
   },
   box: {
     width: 22,

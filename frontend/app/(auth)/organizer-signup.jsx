@@ -16,7 +16,6 @@ import { AUTH_FORM_CANVAS } from '@/features/auth/components/welcome/welcomeThem
 export default function OrganizerSignupScreen() {
   const router = useGuardedRouter();
   const [fontsLoaded] = useFonts(authFontAssets);
-  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [legalAttempted, setLegalAttempted] = useState(false);
 
@@ -33,11 +32,12 @@ export default function OrganizerSignupScreen() {
     formError,
   } = useOrganizerSignupForm();
 
-  const legalValid = ageConfirmed && termsAccepted;
+  const legalValid = termsAccepted;
+  const canSubmit = isValid && legalValid;
 
   const handleSubmit = () => {
     setLegalAttempted(true);
-    if (!legalValid) return;
+    if (!canSubmit) return;
     onSubmit();
   };
 
@@ -65,16 +65,15 @@ export default function OrganizerSignupScreen() {
       />
 
       <SignupLegalBlock
-        ageConfirmed={ageConfirmed}
+        requireAgeConfirmation={false}
         termsAccepted={termsAccepted}
-        onToggleAge={() => setAgeConfirmed((v) => !v)}
         onToggleTerms={() => setTermsAccepted((v) => !v)}
         showErrors={legalAttempted}
       />
 
       <AuthSubmitButton
         onPress={handleSubmit}
-        disabled={!isValid || loading}
+        disabled={!canSubmit || loading}
         loading={loading}
         label="Create account"
         style={styles.submitButton}

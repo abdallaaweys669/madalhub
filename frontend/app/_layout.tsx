@@ -36,6 +36,8 @@ export default function RootLayout() {
                 <Stack.Screen name="profile" options={{ headerShown: false }} />
                 <Stack.Screen name="organizer/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="(modal)/changePassword" options={{ presentation: 'modal', headerShown: false }} />
+                <Stack.Screen name="(modal)/termsOfService" options={{ presentation: 'modal', headerShown: false }} />
+                <Stack.Screen name="(modal)/privacyPolicy" options={{ presentation: 'modal', headerShown: false }} />
               </Stack>
             </SavedEventsProvider>
           </OnboardingProvider>

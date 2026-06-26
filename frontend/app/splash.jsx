@@ -4,6 +4,7 @@ import { useRootNavigationState } from "expo-router";
 import useGuardedRouter from "@/hooks/useGuardedRouter";
 import * as NavigationBar from "expo-navigation-bar";
 import useAuth from "@/auth/useAuth";
+import { GUEST_EXPLORE_HREF, hasGuestWelcomeSeen } from "@/navigation/guestWelcome";
 const MadalHubLogo = require("../src/assets/madalhub_logo.png");
 
 const ROLE_MEMBER = 1;
@@ -55,9 +56,10 @@ export default function Splash() {
       router.replace(href);
     };
 
-    const finishRouting = () => {
+    const finishRouting = async () => {
       if (!user) {
-        go("/(tabs)/explore");
+        const seenWelcome = await hasGuestWelcomeSeen();
+        go(seenWelcome ? GUEST_EXPLORE_HREF : "/(auth)/welcome?firstLaunch=1");
         return;
       }
 
@@ -102,7 +104,7 @@ export default function Splash() {
         useNativeDriver: true,
       }).start(() => {
         if (cancelled) return;
-        finishRouting();
+        void finishRouting();
       });
     });
 

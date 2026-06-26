@@ -4,9 +4,10 @@ import useGuardedRouter from '@/hooks/useGuardedRouter';
 import api from '@/api/auth';
 import useAuth from '@/auth/useAuth';
 import {
-  getInvalidCredentialsErrors,
+  INVALID_LOGIN_CREDENTIALS,
   getLoginErrors,
   isInvalidCredentialsMessage,
+  isLoginSubmitEnabled,
   normalizeEmail,
 } from '@/features/auth/validation/authRules';
 
@@ -21,7 +22,7 @@ export default function useLoginForm() {
   const [serverErrors, setServerErrors] = useState({});
 
   const fieldErrors = useMemo(() => getLoginErrors(values), [values]);
-  const isValid = !fieldErrors.email && !fieldErrors.password;
+  const isValid = useMemo(() => isLoginSubmitEnabled(values), [values]);
 
   const onChange = (field, value) => {
     setValues((prev) => ({ ...prev, [field]: value }));
@@ -61,19 +62,13 @@ export default function useLoginForm() {
           : '/onboarding/WelcomeIntro'
       );
     } catch (error) {
-      const rawMessage =
-        (error.response && error.response.status === 401
-          ? error.response.data?.message
-          : null) ||
-        error.message ||
-        'Invalid email or password. Please try again.';
+      const status = error.response?.status;
+      const rawMessage = error.response?.data?.message || error.message || '';
 
-      if (isInvalidCredentialsMessage(rawMessage)) {
-        const invalidErrors = getInvalidCredentialsErrors();
-        setServerErrors({ email: invalidErrors.email, password: invalidErrors.password });
-        setFormError(invalidErrors.form);
+      if (status === 401 || isInvalidCredentialsMessage(rawMessage)) {
+        setFormError(INVALID_LOGIN_CREDENTIALS);
       } else if (error.response || error.message) {
-        setFormError(rawMessage);
+        setFormError(rawMessage || 'An unexpected error occurred. Please try again.');
       } else {
         setFormError('An unexpected error occurred. Please try again.');
         console.error('Login error:', error);

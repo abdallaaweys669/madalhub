@@ -1,36 +1,46 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-import { COLORS } from '@/constants/loginSignin/authStyles';
 import { PASSWORD_MIN_LENGTH } from '@/features/auth/validation/authRules';
 
 const RULES = [
-  {
-    key: 'length',
-    label: `${PASSWORD_MIN_LENGTH} characters`,
-  },
-  {
-    key: 'upper',
-    label: '1 capital letter',
-  },
-  {
-    key: 'lower',
-    label: '1 small letter',
-  },
-  {
-    key: 'number',
-    label: '1 number',
-  },
+  { key: 'length', label: `${PASSWORD_MIN_LENGTH}+ chars` },
+  { key: 'upper', label: '1 uppercase' },
+  { key: 'lower', label: '1 lowercase' },
+  { key: 'number', label: '1 number' },
 ];
 
-function RequirementPill({ met, label }) {
+function getStrengthColor(checks) {
+  const score = RULES.filter((rule) => checks[rule.key]).length;
+  if (score >= 4) return '#16A34A';
+  if (score >= 3) return '#F59E0B';
+  return '#FF7B3F';
+}
+
+function StrengthBar({ checks }) {
+  const score = RULES.filter((rule) => checks[rule.key]).length;
+  const fillPercent = `${(score / RULES.length) * 100}%`;
+
   return (
-    <View style={[styles.pill, met ? styles.pillMet : styles.pillPending]}>
-      {met ? (
-        <Ionicons name="checkmark" size={14} color="#15803D" style={styles.tick} />
-      ) : null}
-      <Text style={[styles.pillText, met && styles.pillTextMet]}>{label}</Text>
+    <View style={styles.barTrack}>
+      <View style={[styles.barFill, { width: fillPercent, backgroundColor: getStrengthColor(checks) }]} />
+    </View>
+  );
+}
+
+function RuleItem({ met, label, isLast }) {
+  return (
+    <View style={styles.ruleItem}>
+      <Ionicons
+        name={met ? 'checkmark' : 'close'}
+        size={13}
+        color={met ? '#16A34A' : '#EF4444'}
+        style={styles.ruleIcon}
+      />
+      <Text style={styles.ruleText} numberOfLines={1}>
+        {label}
+      </Text>
+      {!isLast ? <Text style={styles.ruleSep}>|</Text> : null}
     </View>
   );
 }
@@ -47,48 +57,63 @@ export default function PasswordRequirements({ checks }) {
 
   return (
     <View style={styles.wrap}>
-      {RULES.map((rule) => (
-        <RequirementPill key={rule.key} met={checks[rule.key]} label={rule.label} />
-      ))}
+      <StrengthBar checks={checks} />
+
+      <View style={styles.rulesRow}>
+        {RULES.map((rule, index) => (
+          <RuleItem
+            key={rule.key}
+            met={checks[rule.key]}
+            label={rule.label}
+            isLast={index === RULES.length - 1}
+          />
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
     marginTop: 10,
     marginBottom: 12,
+    gap: 8,
   },
-  pill: {
+  barTrack: {
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  rulesRow: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ruleItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
+    justifyContent: 'center',
+    minWidth: 0,
   },
-  pillPending: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  ruleIcon: {
+    marginRight: 2,
   },
-  pillMet: {
-    backgroundColor: '#DCFCE7',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+  ruleText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '400',
   },
-  tick: {
-    marginRight: 4,
-  },
-  pillText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#64748B',
-  },
-  pillTextMet: {
-    color: '#15803D',
-    fontWeight: '600',
+  ruleSep: {
+    marginHorizontal: 4,
+    fontSize: 11,
+    color: '#D1D5DB',
+    flexShrink: 0,
   },
 });

@@ -4,6 +4,7 @@ import {
   getAuthSignupErrors,
   getConfirmPasswordDisplayError,
   getPasswordChecks,
+  getSignupEmailDisplayError,
 } from '@/features/auth/validation/authRules';
 
 const INITIAL_VALUES = {
@@ -72,10 +73,15 @@ export default function useAuthSignupForm(variant = 'member') {
         });
       }
 
+      if (field === 'email') {
+        if (!shouldShowError(field)) return '';
+        return getSignupEmailDisplayError(values.email, variant);
+      }
+
       if (!shouldShowError(field)) return '';
       return fieldErrors[field] || '';
     },
-    [shouldShowError, serverErrors, fieldErrors, values.password, values.confirm, submitted, touched.confirm],
+    [shouldShowError, serverErrors, fieldErrors, values.email, values.password, values.confirm, submitted, touched.confirm, variant],
   );
 
   const showPasswordChecklist =

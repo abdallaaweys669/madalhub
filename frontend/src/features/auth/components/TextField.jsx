@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { COLORS } from '@/constants/loginSignin/authStyles';
 
-export default function TextField({ label, error, helperText, underline = false, inputStyle, ...rest }) {
+export default function TextField({ label, error, errorHint, helperText, underline = false, inputStyle, ...rest }) {
   const [focused, setFocused] = useState(false);
 
   const lineColor = error
@@ -35,7 +35,7 @@ export default function TextField({ label, error, helperText, underline = false,
   }
 
   return (
-    <View style={{ marginBottom: error ? 4 : 16 }}>
+    <View style={{ marginBottom: error || helperText || errorHint ? 4 : 16 }}>
       <Text style={{ marginBottom: 6, fontWeight: '600', color: COLORS.textDark }}>
         {label}
       </Text>
@@ -66,18 +66,9 @@ export default function TextField({ label, error, helperText, underline = false,
         />
       </View>
 
-      {error || helperText ? (
-        <Text
-          style={{
-            color: error ? COLORS.danger : '#64748B',
-            fontSize: 12,
-            marginTop: 4,
-            lineHeight: 16,
-          }}
-        >
-          {error || helperText}
-        </Text>
-      ) : null}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error && errorHint ? <Text style={styles.errorHintText}>{errorHint}</Text> : null}
+      {!error && helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
     </View>
   );
 }
@@ -106,6 +97,19 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 12,
     color: COLORS.danger,
-    marginTop: 5,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  errorHintText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 4,
+    lineHeight: 16,
   },
 });
