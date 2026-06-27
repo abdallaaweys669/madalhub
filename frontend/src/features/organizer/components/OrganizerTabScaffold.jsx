@@ -3,8 +3,10 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import OrganizerAppHeader from '@/features/organizer/components/OrganizerAppHeader';
+import OrganizerBioReminderBanner from '@/features/organizer/components/OrganizerBioReminderBanner';
 import OrganizerDrawer from '@/features/organizer/components/OrganizerDrawer';
 import OrganizerFab from '@/features/organizer/components/OrganizerFab';
+import useOrganizerBioReminder from '@/features/organizer/hooks/useOrganizerBioReminder';
 import useOrganizerNotificationBadge from '@/features/organizer/hooks/useOrganizerNotificationBadge';
 
 export default function OrganizerTabScaffold({
@@ -16,6 +18,7 @@ export default function OrganizerTabScaffold({
   const insets = useSafeAreaInsets();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { unreadCount } = useOrganizerNotificationBadge();
+  const { needsBio } = useOrganizerBioReminder();
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F7F7F8' }}>
@@ -25,6 +28,7 @@ export default function OrganizerTabScaffold({
           unreadCount={unreadCount}
           onMenuPress={() => setDrawerOpen(true)}
         />
+        {needsBio ? <OrganizerBioReminderBanner /> : null}
       </View>
       <View style={{ flex: 1 }}>{children}</View>
       {showFab ? <OrganizerFab /> : null}

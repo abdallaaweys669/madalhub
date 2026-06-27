@@ -166,6 +166,21 @@ export const getOrganizerStatus = async () => {
   }
 };
 
+export const checkOrganizerPhoneAvailable = async (phone) => {
+  try {
+    const response = await apiClient.get('/organizer/verification/check-phone', {
+      params: { phone },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Could not verify phone number';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
 export const updateOrganizerContact = async ({ phone, location }) => {
   try {
     const response = await apiClient.patch('/organizer/contact', { phone, location });
@@ -501,6 +516,49 @@ export const getOrganizerReviews = async (organizerId) => {
   }
 };
 
+export const getOrganizerTypes = async () => {
+  try {
+    const response = await apiClient.get('/organizer/types');
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Failed to load organizer types');
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+export const getVerificationDocumentTypes = async () => {
+  try {
+    const response = await apiClient.get('/organizer/verification-document-types');
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Failed to load document types');
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
+/**
+ * Submit the organizer verification wizard.
+ * @param {FormData} formData - multipart/form-data with fields + optional `document` file
+ */
+export const submitOrganizerVerification = async (formData) => {
+  try {
+    const response = await apiClient.post('/organizer/verification/submit', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      const message = extractApiMessage(error) || 'Verification submission failed';
+      throw new Error(message);
+    }
+    throw new Error(getNetworkErrorMessage(error));
+  }
+};
+
 export default {
   organizerRegister,
   organizerLogin,
@@ -511,6 +569,7 @@ export default {
   createPaymentRequest,
   getMyPaymentRequests,
   getOrganizerStatus,
+  checkOrganizerPhoneAvailable,
   updateOrganizerContact,
   getOrganizerEvents,
   deleteEvent,
@@ -534,4 +593,7 @@ export default {
   updateOrganizerReview,
   deleteOrganizerReview,
   getOrganizerReviews,
+  getOrganizerTypes,
+  getVerificationDocumentTypes,
+  submitOrganizerVerification,
 };

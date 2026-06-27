@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,8 +10,14 @@ import {
   Post,
   Query,
   Req,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { getUploadsDir } from 'src/common/uploads-path';
 import { CreateOrganizerDto } from '../dto/create-organizer.dto';
 import { OrganizerService } from '../service/organizer.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -72,6 +79,101 @@ export class OrganizerController {
   @Get('status')
   getStatus(@Req() req: any) {
     return this.service.getStatus(req.user.userId);
+  }
+
+  @Get('types')
+  getOrganizerTypes() {
+    return this.service.getOrganizerTypes();
+  }
+
+  @Get('verification-document-types')
+  getVerificationDocumentTypes() {
+    return this.service.getVerificationDocumentTypes();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Get('verification/check-phone')
+  checkVerificationPhone(@CurrentUser() user: any, @Query('phone') phone?: string) {
+    return this.service.isOrganizerPhoneAvailable(phone ?? '', user.userId).then((available) => ({
+      available,
+    }));
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(2)
+  @Post('verification/submit')
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'document', maxCount: 1 },
+        { name: 'profileImage', maxCount: 1 },
+      ],
+      {
+        storage: diskStorage({
+          destination: getUploadsDir(),
+          filename: (req, file, cb) => {
+            const ext = extname(file.originalname).toLowerCase();
+            if (file.fieldname === 'document') {
+              const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png'];
+              if (!allowedExts.includes(ext)) {
+                return cb(new BadRequestException('Only PDF, JPG, PNG files are allowed'), '');
+              }
+              cb(null, `${Date.now()}-doc${ext}`);
+              return;
+            }
+            const allowedImageExts = ['.jpg', '.jpeg', '.png'];
+            if (!allowedImageExts.includes(ext)) {
+              return cb(new BadRequestException('Profile image must be JPG or PNG'), '');
+            }
+            cb(null, `${Date.now()}-profile${ext}`);
+          },
+        }),
+        limits: { fileSize: 10 * 1024 * 1024 },
+      },
+    ),
+  )
+  submitVerification(
+    @CurrentUser() user: any,
+    @Body() body: {
+      organizationName: string;
+      organizerTypeId?: string;
+      organizerTypeOther?: string;
+      phone?: string;
+      location?: string;
+      website?: string;
+      facebook?: string;
+      instagram?: string;
+      documentTypeSlug?: string;
+      keepExistingDocument?: string;
+    },
+    @UploadedFiles()
+    files?: {
+      document?: Array<{ filename: string; size?: number }>;
+      profileImage?: Array<{ filename: string; size?: number }>;
+    },
+  ) {
+    const document = files?.document?.[0];
+    const profileImage = files?.profileImage?.[0];
+
+    if (profileImage?.size != null && profileImage.size > 5 * 1024 * 1024) {
+      throw new BadRequestException('Profile image must be under 5 MB.');
+    }
+
+    return this.service.submitVerification(user.userId, {
+      organizationName: body.organizationName,
+      organizerTypeId: body.organizerTypeId ? Number(body.organizerTypeId) : null,
+      organizerTypeOther: body.organizerTypeOther || null,
+      phone: body.phone || null,
+      location: body.location || null,
+      website: body.website || null,
+      facebook: body.facebook || null,
+      instagram: body.instagram || null,
+      documentTypeSlug: body.documentTypeSlug || null,
+      documentPath: document?.filename ?? null,
+      keepExistingDocument: body.keepExistingDocument === '1',
+      profileImagePath: profileImage?.filename ?? null,
+    });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

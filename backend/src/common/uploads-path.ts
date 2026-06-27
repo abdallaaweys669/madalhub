@@ -9,3 +9,13 @@ export function getUploadsDir(): string {
   }
   return uploadsDir;
 }
+
+/** Store paths as `/uploads/filename` for static file serving. */
+export function toPublicUploadPath(filename: string | null | undefined): string | null {
+  const raw = String(filename ?? '').trim();
+  if (!raw) return null;
+  if (raw.startsWith('/uploads/')) return raw;
+  if (raw.startsWith('uploads/')) return `/${raw}`;
+  const base = raw.replace(/^\/+/, '');
+  return `/uploads/${base}`;
+}

@@ -8,8 +8,11 @@ export class OrganizerVerificationDocument {
   @Column({ name: 'organizer_id' })
   organizerId!: number;
 
-  @Column({ name: 'document_type' })
+  @Column({ name: 'document_type', type: 'varchar', length: 64 })
   documentType!: string;
+
+  @Column({ name: 'document_type_slug', type: 'varchar', length: 64, nullable: true })
+  documentTypeSlug!: string | null;
 
   @Column({ name: 'document_path' })
   documentPath!: string;

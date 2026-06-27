@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import KulanLogo from '@/assets/kulan_logo.svg';
+import { Image, StyleSheet, Text, View } from 'react-native';
+
+const MADALHUB_LOGO = require('@/assets/madalhub_logo.png');
 
 const MADALHUB_AT_PATTERN = /^(.+?)\s+at\s+MadalHub$/i;
 
@@ -20,10 +21,10 @@ export default function AttendeeSubtitle({ text, style, logoHeight = 14 }) {
         <Text style={[styles.text, style]} numberOfLines={1}>
           {match[1].trim()} at{' '}
         </Text>
-        <KulanLogo
-          width={logoWidth}
-          height={logoHeight}
-          preserveAspectRatio="xMidYMid meet"
+        <Image
+          source={MADALHUB_LOGO}
+          style={{ width: logoWidth, height: logoHeight }}
+          resizeMode="contain"
           accessibilityLabel="MadalHub"
         />
       </View>

@@ -5,6 +5,8 @@ import useGuardedRouter from "@/hooks/useGuardedRouter";
 import * as NavigationBar from "expo-navigation-bar";
 import useAuth from "@/auth/useAuth";
 import { GUEST_EXPLORE_HREF, hasGuestWelcomeSeen } from "@/navigation/guestWelcome";
+import { getOrganizerEntryHref } from "@/navigation/organizerGate";
+import { getOrganizerStatus } from "@/api/organizer";
 const MadalHubLogo = require("../src/assets/madalhub_logo.png");
 
 const ROLE_MEMBER = 1;
@@ -69,7 +71,12 @@ export default function Splash() {
       }
 
       if (userRole === ROLE_ORGANIZER) {
-        go('/(organizer)/(tabs)');
+        try {
+          const status = await getOrganizerStatus();
+          go(getOrganizerEntryHref(status?.verificationStatus));
+        } catch {
+          go('/(organizer-status)/welcome');
+        }
         return;
       }
 

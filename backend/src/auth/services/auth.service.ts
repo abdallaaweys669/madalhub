@@ -18,6 +18,12 @@ import * as bcrypt from 'bcrypt';
 import { OtpService } from './otp.service';
 import { MemberService } from 'src/member/services/member.service';
 
+const MEMBER_ROLE_ID = 1;
+const ADMIN_ROLE_ID = 3;
+
+/** Roles allowed to sign in with email + password on POST /auth/login */
+const PASSWORD_LOGIN_ROLE_IDS = new Set([MEMBER_ROLE_ID, ADMIN_ROLE_ID]);
+
 export type AuthTokenResponse = {
   access_token: string;
   profileCompleted?: boolean;
@@ -100,7 +106,7 @@ export class AuthService {
 
     const isMatch = await bcrypt.compare(loginDto.password, user.password);
 
-    if (!isMatch || user.roleId !== 1) {
+    if (!isMatch || !PASSWORD_LOGIN_ROLE_IDS.has(user.roleId)) {
       throw new UnauthorizedException('Invalid email or password');
     }
 

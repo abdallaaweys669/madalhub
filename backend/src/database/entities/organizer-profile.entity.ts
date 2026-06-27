@@ -14,6 +14,21 @@ export class OrganizerProfile {
   @Column({ name: 'website', type: 'varchar', nullable: true })
   website!: string | null;
 
+  @Column({ name: 'organizer_type_id', type: 'int', nullable: true })
+  organizerTypeId!: number | null;
+
+  @Column({ name: 'organizer_type_other', type: 'varchar', length: 128, nullable: true })
+  organizerTypeOther!: string | null;
+
+  @Column({ name: 'phone', type: 'varchar', length: 32, nullable: true, unique: true })
+  phone!: string | null;
+
+  @Column({ name: 'facebook', type: 'varchar', length: 256, nullable: true })
+  facebook!: string | null;
+
+  @Column({ name: 'instagram', type: 'varchar', length: 256, nullable: true })
+  instagram!: string | null;
+
   @Column({
     name: 'verification_status',
     type: 'enum',

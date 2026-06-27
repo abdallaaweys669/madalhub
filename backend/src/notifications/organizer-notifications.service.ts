@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { OrganizerNotification } from 'src/database/entities/organizer-notification.entity';
+import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
 
 const ROLE_ORGANIZER = 2;
 
@@ -33,6 +34,8 @@ export class OrganizerNotificationsService {
   constructor(
     @InjectRepository(OrganizerNotification)
     private notificationRepo: Repository<OrganizerNotification>,
+    @InjectRepository(OrganizerProfile)
+    private organizerProfileRepo: Repository<OrganizerProfile>,
   ) {}
 
   private assertOrganizerRole(role?: number) {
@@ -56,8 +59,48 @@ export class OrganizerNotificationsService {
     };
   }
 
+  private async getVerificationStatus(userId: number): Promise<string> {
+    const profile = await this.organizerProfileRepo.findOne({
+      where: { userId },
+      select: ['verificationStatus'],
+    });
+    return profile?.verificationStatus ?? 'unverified';
+  }
+
+  /** Hide stale verification alerts (e.g. old rejections after approval). */
+  private isVerificationNotificationVisible(
+    row: Pick<OrganizerNotification, 'type'>,
+    verificationStatus: string,
+  ): boolean {
+    if (row.type === 'verification_rejected') {
+      return verificationStatus === 'rejected';
+    }
+    if (row.type === 'verification_approved') {
+      return verificationStatus === 'approved';
+    }
+    return true;
+  }
+
+  private filterVisibleNotifications(
+    rows: OrganizerNotification[],
+    verificationStatus: string,
+  ) {
+    return rows.filter((row) =>
+      this.isVerificationNotificationVisible(row, verificationStatus),
+    );
+  }
+
+  async clearVerificationRejectedNotifications(userId: number) {
+    await this.notificationRepo.delete({
+      userId,
+      type: 'verification_rejected',
+    });
+  }
+
   async listForOrganizer(userId: number, role?: number) {
     this.assertOrganizerRole(role);
+
+    const verificationStatus = await this.getVerificationStatus(userId);
 
     const rows = await this.notificationRepo.find({
       where: { userId },
@@ -65,10 +108,11 @@ export class OrganizerNotificationsService {
       take: 100,
     });
 
-    const unreadCount = rows.filter((row) => !row.readAt).length;
+    const visibleRows = this.filterVisibleNotifications(rows, verificationStatus);
+    const unreadCount = visibleRows.filter((row) => !row.readAt).length;
 
     return {
-      items: rows.map((row) => this.toDto(row)),
+      items: visibleRows.map((row) => this.toDto(row)),
       unreadCount,
     };
   }
@@ -76,9 +120,16 @@ export class OrganizerNotificationsService {
   async getUnreadCount(userId: number, role?: number) {
     this.assertOrganizerRole(role);
 
-    const unreadCount = await this.notificationRepo.count({
+    const verificationStatus = await this.getVerificationStatus(userId);
+
+    const rows = await this.notificationRepo.find({
       where: { userId, readAt: IsNull() },
     });
+
+    const unreadCount = this.filterVisibleNotifications(
+      rows,
+      verificationStatus,
+    ).length;
 
     return { unreadCount };
   }
@@ -117,6 +168,8 @@ export class OrganizerNotificationsService {
   }
 
   async notifyVerificationApproved(userId: number) {
+    await this.clearVerificationRejectedNotifications(userId);
+
     return this.upsertByDedupeKey({
       userId,
       dedupeKey: 'verification_approved',

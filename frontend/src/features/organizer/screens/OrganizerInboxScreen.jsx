@@ -19,6 +19,10 @@ import {
   markAllOrganizerNotificationsRead,
   markOrganizerNotificationRead,
 } from '@/api/organizerNotifications';
+import {
+  isOrganizerVerificationNotificationVisible,
+  shouldFollowOrganizerNotificationRoute,
+} from '@/features/organizer/utils/organizerNotificationUtils';
 import { useThemeColors } from '@/theme';
 
 const TYPE_META = {
@@ -49,7 +53,7 @@ function groupNotifications(items) {
 export default function OrganizerInboxScreen() {
   const router = useGuardedRouter();
   const colors = useThemeColors();
-  const { organizationName, headerFullName } = useOrganizerDashboardData();
+  const { organizationName, headerFullName, verificationStatus } = useOrganizerDashboardData();
   const { refreshUnreadCount, adjustUnreadCount, setUnreadCount } = useOrganizerNotificationBadge();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,9 +63,14 @@ export default function OrganizerInboxScreen() {
 
   const load = useCallback(async () => {
     const data = await getOrganizerNotifications();
-    setItems(Array.isArray(data?.items) ? data.items : []);
+    const raw = Array.isArray(data?.items) ? data.items : [];
+    setItems(
+      raw.filter((item) =>
+        isOrganizerVerificationNotificationVisible(item, verificationStatus),
+      ),
+    );
     await refreshUnreadCount();
-  }, [refreshUnreadCount]);
+  }, [refreshUnreadCount, verificationStatus]);
 
   useFocusEffect(
     useCallback(() => {
@@ -103,9 +112,13 @@ export default function OrganizerInboxScreen() {
         adjustUnreadCount(-1);
         void refreshUnreadCount();
       }
-      if (item.actionRoute) router.push(item.actionRoute);
+      if (shouldFollowOrganizerNotificationRoute(item, verificationStatus)) {
+        router.push(item.actionRoute);
+      }
     } catch {
-      if (item.actionRoute) router.push(item.actionRoute);
+      if (shouldFollowOrganizerNotificationRoute(item, verificationStatus)) {
+        router.push(item.actionRoute);
+      }
     }
   };
 

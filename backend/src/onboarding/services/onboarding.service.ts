@@ -121,10 +121,14 @@ export class OnboardingService {
     const columnType = columnRows?.[0]?.Type ?? '';
 
     if (!columnType.toLowerCase().startsWith('enum(')) {
-      if (!['business_license', 'license', 'other'].includes(normalized)) {
-        throw new BadRequestException(
-          'Invalid document_type. Allowed values: business_license, license, other.',
-        );
+      const rows: Array<{ slug: string }> = await this.organizerDocumentRepository.query(
+        `SELECT slug FROM organizer_verification_document_types
+         WHERE is_active = 1 AND slug = ?
+         LIMIT 1`,
+        [normalized],
+      );
+      if (!rows.length) {
+        throw new BadRequestException('Invalid document_type.');
       }
       return normalized;
     }
@@ -333,6 +337,7 @@ export class OnboardingService {
 
     if (existingDocument) {
       existingDocument.documentType = resolvedDocumentType;
+      existingDocument.documentTypeSlug = resolvedDocumentType;
       existingDocument.documentPath = filePath;
       existingDocument.status = 'pending';
       existingDocument.uploadedAt = new Date();
@@ -355,6 +360,7 @@ export class OnboardingService {
     const created = this.organizerDocumentRepository.create({
       organizerId: userId,
       documentType: resolvedDocumentType,
+      documentTypeSlug: resolvedDocumentType,
       documentPath: filePath,
       status: 'pending',
       uploadedAt: new Date(),

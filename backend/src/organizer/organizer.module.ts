@@ -6,6 +6,8 @@ import { OrganizerService } from './service/organizer.service';
 import { User } from 'src/database/entities/user.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
 import { OrganizerVerificationDocument } from 'src/database/entities/organizer-verification-document.entity';
+import { OrganizerType } from 'src/database/entities/organizer-type.entity';
+import { OrganizerVerificationDocumentType } from 'src/database/entities/organizer-verification-document-type.entity';
 import { Event } from 'src/database/entities/event.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { OrganizerReview } from 'src/database/entities/organizer-review.entity';
@@ -22,6 +24,8 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
       User,
       OrganizerProfile,
       OrganizerVerificationDocument,
+      OrganizerType,
+      OrganizerVerificationDocumentType,
       Event,
       EventRegistration,
       OrganizerReview,

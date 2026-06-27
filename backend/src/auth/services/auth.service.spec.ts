@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -58,6 +59,10 @@ describe('AuthService - Role Enforcement', () => {
           provide: MemberService,
           useValue: { register: jest.fn() },
         },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -109,6 +114,29 @@ describe('AuthService - Role Enforcement', () => {
       await expect(
         service.login({ email: 'member@test.com', password: 'wrong' }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('login - admin dashboard', () => {
+    it('should return token for valid admin credentials', async () => {
+      (userRepository.findOne as jest.Mock).mockResolvedValue({
+        id: 99,
+        email: 'admin@gmail.com',
+        roleId: 3,
+        status: 'active',
+        password: '$2b$12$hashed',
+      });
+
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const result = await service.login({
+        email: 'admin@gmail.com',
+        password: '123',
+      });
+
+      expect(result.access_token).toBe('test-token');
+      expect(result.profileCompleted).toBeUndefined();
+      expect(result.organizerStatus).toBeUndefined();
     });
   });
 

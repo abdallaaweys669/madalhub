@@ -32,6 +32,7 @@ import {
 } from "@/lib/api";
 import { getUploadUrl } from "@/lib/upload-url";
 import { cn } from "@/lib/utils";
+import { facebookUrl, instagramUrl, normalizeWebsiteUrl } from "@/lib/verification-proof";
 
 function isEventPast(event: Pick<EventDetail, "startDatetime" | "endDatetime">) {
   const end = event.endDatetime ? new Date(event.endDatetime) : new Date(event.startDatetime);
@@ -340,6 +341,42 @@ export function OrganizerDetailDialog({
                   </a>
                 }
               />
+            ) : data.website || data.facebook || data.instagram ? (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">Online verification links</p>
+                <div className="flex flex-col gap-1.5 text-sm">
+                  {data.website ? (
+                    <a
+                      href={normalizeWebsiteUrl(data.website)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      Website <ExternalLink className="size-3.5" />
+                    </a>
+                  ) : null}
+                  {data.facebook ? (
+                    <a
+                      href={facebookUrl(data.facebook)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      Facebook <ExternalLink className="size-3.5" />
+                    </a>
+                  ) : null}
+                  {data.instagram ? (
+                    <a
+                      href={instagramUrl(data.instagram)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      Instagram <ExternalLink className="size-3.5" />
+                    </a>
+                  ) : null}
+                </div>
+              </div>
             ) : null}
 
             <div>

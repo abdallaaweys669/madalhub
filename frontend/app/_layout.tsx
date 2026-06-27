@@ -7,11 +7,9 @@ import { OnboardingProvider } from '@/features/onboarding/hooks/useOnboarding';
 import { SavedEventsProvider } from '@/context/SavedEventsContext';
 import { AuthProvider } from '@/context/AuthProvider';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { IGNORED_DEV_WARNINGS } from '@/dev/suppressDevWarnings';
 
-LogBox.ignoreLogs([
-  '[Reanimated] Reduced motion setting is enabled',
-  'setLayoutAnimationEnabledExperimental is currently a no-op',
-]);
+LogBox.ignoreLogs(IGNORED_DEV_WARNINGS);
 
 export default function RootLayout() {
   return (

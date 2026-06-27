@@ -26,6 +26,8 @@ import { AdminReportsService } from '../service/admin-reports.service';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { CreateInterestDto } from '../dto/create-interest.dto';
 import { UpdateInterestDto } from '../dto/update-interest.dto';
+import { CreateVerificationCatalogDto } from '../dto/create-verification-catalog.dto';
+import { UpdateVerificationCatalogDto } from '../dto/update-verification-catalog.dto';
 
 @Controller('admin')
 export class AdminController {
@@ -278,5 +280,64 @@ export class AdminController {
   @Delete('interests/:id')
   deleteInterest(@Param('id') id: number) {
     return this.adminService.deleteInterest(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Get('organizer-types')
+  listOrganizerTypes() {
+    return this.adminService.listOrganizerTypes();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Post('organizer-types')
+  createOrganizerType(@Body() dto: CreateVerificationCatalogDto) {
+    return this.adminService.createOrganizerType(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Patch('organizer-types/:id')
+  updateOrganizerType(@Param('id') id: number, @Body() dto: UpdateVerificationCatalogDto) {
+    return this.adminService.updateOrganizerType(id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Delete('organizer-types/:id')
+  deleteOrganizerType(@Param('id') id: number) {
+    return this.adminService.deleteOrganizerType(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Get('verification-document-types')
+  listVerificationDocumentTypes() {
+    return this.adminService.listVerificationDocumentTypes();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Post('verification-document-types')
+  createVerificationDocumentType(@Body() dto: CreateVerificationCatalogDto) {
+    return this.adminService.createVerificationDocumentType(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Patch('verification-document-types/:id')
+  updateVerificationDocumentType(
+    @Param('id') id: number,
+    @Body() dto: UpdateVerificationCatalogDto,
+  ) {
+    return this.adminService.updateVerificationDocumentType(id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(3)
+  @Delete('verification-document-types/:id')
+  deleteVerificationDocumentType(@Param('id') id: number) {
+    return this.adminService.deleteVerificationDocumentType(id);
   }
 }

@@ -4,7 +4,10 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000").re
 export function getUploadUrl(path: string): string {
   if (!path) return API_BASE;
   if (/^https?:\/\//i.test(path)) return path;
-  const normalized = path.startsWith("/") ? path : `/${path}`;
+  let normalized = path.startsWith("/") ? path : `/${path}`;
+  if (!normalized.startsWith("/uploads/")) {
+    normalized = `/uploads/${normalized.replace(/^\/+/, "")}`;
+  }
   return `${API_BASE}${normalized}`;
 }
 

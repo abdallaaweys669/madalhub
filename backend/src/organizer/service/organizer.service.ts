@@ -29,7 +29,14 @@ import { CreateReviewDto } from '../dto/create-review.dto';
 import { UpdateReviewDto } from '../dto/update-review.dto';
 import { SocialLoginDto } from '../dto/social-login.dto';
 import { isProfileComplete } from 'src/onboarding/helpers/organizer-profile.helper';
+import { toPublicUploadPath } from 'src/common/uploads-path';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { OrganizerNotificationsService } from 'src/notifications/organizer-notifications.service';
+import {
+  hasOnlinePresenceProof,
+  resolveVerificationProofType,
+} from '../helpers/verification-proof.helper';
+import { formatPhoneE164, normalizePhoneDigits } from 'src/common/phone.util';
 
 @Injectable()
 export class OrganizerService {
@@ -54,6 +61,7 @@ export class OrganizerService {
     private configService: ConfigService,
     private jwtService: JwtService,
     private notificationsService: NotificationsService,
+    private organizerNotificationsService: OrganizerNotificationsService,
   ) {}
 
   private async getPublishedOrganizerMetrics(organizerId: number) {
@@ -146,6 +154,50 @@ export class OrganizerService {
     return rows.map((row) => row.memberId);
   }
 
+  private async assertOrganizerPhoneUnique(
+    phone: string,
+    excludeUserId: number,
+  ): Promise<void> {
+    const normalized = normalizePhoneDigits(phone);
+    if (!normalized) {
+      return;
+    }
+
+    const profiles = await this.organizerProfileRepository.find({
+      select: ['userId', 'phone'],
+    });
+
+    const taken = profiles.some(
+      (row) =>
+        row.userId !== excludeUserId &&
+        row.phone &&
+        normalizePhoneDigits(row.phone) === normalized,
+    );
+
+    if (taken) {
+      throw new BadRequestException(
+        'This phone number is already registered to another organizer.',
+      );
+    }
+  }
+
+  async isOrganizerPhoneAvailable(phone: string, userId: number): Promise<boolean> {
+    const normalized = normalizePhoneDigits(phone);
+    if (normalized.length < 6) {
+      return false;
+    }
+
+    try {
+      await this.assertOrganizerPhoneUnique(phone, userId);
+      return true;
+    } catch (err) {
+      if (err instanceof BadRequestException) {
+        return false;
+      }
+      throw err;
+    }
+  }
+
   async register(dto: CreateOrganizerDto) {
     const existingUser = await this.userRepository.findOne({
       where: [{ email: dto.email }, { phone: dto.phone }],
@@ -199,7 +251,21 @@ export class OrganizerService {
       throw new NotFoundException('Organizer not found');
     }
 
-    if (dto.phone !== undefined) user.phone = dto.phone;
+    if (dto.phone !== undefined) {
+      const phoneE164 = formatPhoneE164(dto.phone);
+      if (phoneE164) {
+        await this.assertOrganizerPhoneUnique(phoneE164, userId);
+        user.phone = phoneE164;
+
+        const profile = await this.organizerProfileRepository.findOne({ where: { userId } });
+        if (profile) {
+          profile.phone = phoneE164;
+          await this.organizerProfileRepository.save(profile);
+        }
+      } else {
+        user.phone = '';
+      }
+    }
     if (dto.location !== undefined) user.location = dto.location;
     await this.userRepository.save(user);
 
@@ -352,7 +418,7 @@ export class OrganizerService {
   async getStatus(userId: number) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      select: ['id', 'roleId', 'status', 'email', 'fullName'],
+      select: ['id', 'roleId', 'status', 'email', 'fullName', 'location', 'profileImg'],
     });
 
     if (!user || user.roleId !== 2) {
@@ -378,10 +444,189 @@ export class OrganizerService {
       freePublishUsed: organizerProfile?.freePublishUsed ?? false,
       paidPublishCredits: organizerProfile?.paidPublishCredits ?? 0,
       organizationName: organizerProfile?.organizationName ?? null,
-      organizationDescription:
-        organizerProfile?.organizationDescription ?? null,
+      organizationDescription: organizerProfile?.organizationDescription ?? null,
+      organizerTypeId: organizerProfile?.organizerTypeId ?? null,
+      organizerTypeOther: organizerProfile?.organizerTypeOther ?? null,
+      phone: organizerProfile?.phone ?? null,
+      website: organizerProfile?.website ?? null,
+      facebook: organizerProfile?.facebook ?? null,
+      instagram: organizerProfile?.instagram ?? null,
+      location: user.location ?? null,
+      profileImg: user.profileImg ?? null,
       hasDocument: !!document,
       documentStatus: document?.status ?? null,
+      documentTypeSlug: document?.documentTypeSlug ?? null,
+    };
+  }
+
+  async getOrganizerTypes() {
+    const rows = await this.organizerProfileRepository.query(
+      `SELECT id, slug, name, icon, sort_order FROM organizer_types WHERE is_active = 1 ORDER BY sort_order ASC`,
+    );
+    return { types: rows };
+  }
+
+  async getVerificationDocumentTypes() {
+    const rows = await this.organizerProfileRepository.query(
+      `SELECT id, slug, name, icon, sort_order FROM organizer_verification_document_types WHERE is_active = 1 ORDER BY sort_order ASC`,
+    );
+    return { types: rows };
+  }
+
+  async submitVerification(
+    userId: number,
+    data: {
+      organizationName: string;
+      organizerTypeId?: number | null;
+      organizerTypeOther?: string | null;
+      phone?: string | null;
+      website?: string | null;
+      facebook?: string | null;
+      instagram?: string | null;
+      documentTypeSlug?: string | null;
+      documentPath?: string | null;
+      keepExistingDocument?: boolean;
+      location?: string | null;
+      profileImagePath?: string | null;
+    },
+  ) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || user.roleId !== 2) {
+      throw new NotFoundException('Organizer not found');
+    }
+
+    let profile = await this.organizerProfileRepository.findOne({ where: { userId } });
+    if (!profile) {
+      throw new NotFoundException('Organizer profile not found');
+    }
+
+    if (!['unverified', 'rejected'].includes(profile.verificationStatus)) {
+      throw new BadRequestException(
+        'Verification can only be submitted from unverified or rejected status.',
+      );
+    }
+
+    const phone = formatPhoneE164(data.phone?.trim() || '');
+    if (!phone) {
+      throw new BadRequestException('Phone number is required.');
+    }
+
+    await this.assertOrganizerPhoneUnique(phone, userId);
+
+    const location = data.location?.trim() || '';
+    if (!location) {
+      throw new BadRequestException('Location is required.');
+    }
+
+    // Update profile fields
+    const orgName =
+      data.organizationName.trim() || profile.organizationName?.trim() || '';
+    profile.organizationName = orgName;
+    const existingDesc = profile.organizationDescription?.trim();
+    profile.organizationDescription = existingDesc || orgName;
+    if (data.organizerTypeId != null) profile.organizerTypeId = data.organizerTypeId;
+    if (data.organizerTypeOther != null) {
+      profile.organizerTypeOther = data.organizerTypeOther.trim() || null;
+    }
+    if (data.phone != null) profile.phone = phone;
+    if (data.website != null) profile.website = data.website.trim() || null;
+    if (data.facebook != null) profile.facebook = data.facebook.trim() || null;
+    if (data.instagram != null) profile.instagram = data.instagram.trim() || null;
+
+    const hasDocumentProof = Boolean(
+      (data.documentPath && data.documentTypeSlug) ||
+        (data.keepExistingDocument && data.documentTypeSlug),
+    );
+    const hasOnlineProof = hasOnlinePresenceProof(profile);
+    if (!hasDocumentProof && !hasOnlineProof) {
+      throw new BadRequestException(
+        'Add at least one social media link or website so we can verify you online.',
+      );
+    }
+
+    profile.verificationStatus = 'pending';
+    profile.rejectionReason = null;
+    await this.organizerProfileRepository.save(profile);
+
+    user.location = location;
+    user.phone = phone;
+    if (data.profileImagePath) {
+      user.profileImg = `/uploads/${data.profileImagePath}`;
+    }
+    await this.userRepository.save(user);
+
+    // Handle document — new upload or keep existing on resubmit
+    if (data.documentPath && data.documentTypeSlug) {
+      const publicDocumentPath = toPublicUploadPath(data.documentPath);
+      const typeRows: Array<{ slug: string }> = await this.organizerProfileRepository.query(
+        `SELECT slug FROM organizer_verification_document_types
+         WHERE is_active = 1 AND slug = ?
+         LIMIT 1`,
+        [data.documentTypeSlug],
+      );
+      if (!typeRows.length) {
+        throw new BadRequestException('Invalid document type selected.');
+      }
+
+      const existing = await this.organizerDocumentRepository.findOne({
+        where: { organizerId: userId },
+        order: { id: 'ASC' },
+      });
+
+      if (existing) {
+        existing.documentType = data.documentTypeSlug;
+        existing.documentTypeSlug = data.documentTypeSlug;
+        existing.documentPath = publicDocumentPath!;
+        existing.status = 'pending';
+        existing.uploadedAt = new Date();
+        await this.organizerDocumentRepository.save(existing);
+      } else {
+        const doc = this.organizerDocumentRepository.create({
+          organizerId: userId,
+          documentType: data.documentTypeSlug,
+          documentTypeSlug: data.documentTypeSlug,
+          documentPath: publicDocumentPath!,
+          status: 'pending',
+          uploadedAt: new Date(),
+        });
+        await this.organizerDocumentRepository.save(doc);
+      }
+    } else if (data.keepExistingDocument && data.documentTypeSlug) {
+      const typeRows: Array<{ slug: string }> = await this.organizerProfileRepository.query(
+        `SELECT slug FROM organizer_verification_document_types
+         WHERE is_active = 1 AND slug = ?
+         LIMIT 1`,
+        [data.documentTypeSlug],
+      );
+      if (!typeRows.length) {
+        throw new BadRequestException('Invalid document type selected.');
+      }
+
+      const existing = await this.organizerDocumentRepository.findOne({
+        where: { organizerId: userId },
+        order: { id: 'DESC' },
+      });
+
+      if (existing?.documentPath) {
+        existing.documentType = data.documentTypeSlug;
+        existing.documentTypeSlug = data.documentTypeSlug;
+        existing.status = 'pending';
+        existing.uploadedAt = new Date();
+        await this.organizerDocumentRepository.save(existing);
+      } else {
+        throw new BadRequestException(
+          'No existing document found. Please upload a verification document.',
+        );
+      }
+    }
+
+    void this.organizerNotificationsService
+      .clearVerificationRejectedNotifications(userId)
+      .catch(() => undefined);
+
+    return {
+      verificationStatus: 'pending',
+      message: 'Verification submitted successfully.',
     };
   }
 

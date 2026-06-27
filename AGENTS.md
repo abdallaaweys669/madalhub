@@ -133,25 +133,63 @@ router.push('/(auth)/signup');
   Legacy tables (`reviews`, `notifications`, `event_checkins`, etc.) are intentionally
   excluded. Event child rows cascade on delete; nullable refs use `SET NULL`.
 
-## Organizer progressive verification and paid publish
+## Organizer mandatory verification gate
 
-Organizers get **immediate dashboard access** after signup (`verificationStatus = unverified`,
-`user.status = active`). They can create and edit **drafts** anytime; **publish** is gated.
+Organizers **cannot access the dashboard** until their account is `approved`. The gate is enforced at:
+
+- `app/splash.jsx` -- fetches `GET /organizer/status` and routes via `getOrganizerEntryHref()`.
+- `app/(organizer)/_layout.jsx` -- redirects away if status is not `approved` (blocks deep links).
+- `app/(auth)/organizer-login.jsx` -- uses `organizerStatus` from login response to route.
+
+| Status | Routed to |
+| --- | --- |
+| `unverified` | `(organizer-status)/welcome` -> 5-step wizard |
+| `pending` | `(organizer-status)/pending-verification` (logout only) |
+| `rejected` | `(organizer-status)/verification-failed` -> `resubmit-summary` (tap flagged sections or Start Again) -> `verify` |
+| `approved` | `(organizer-status)/verification-approved` (once per session) -> `(organizer)/(tabs)` |
+
+**Live status on waiting screens:** `(organizer-status)/_layout.jsx` wraps `OrganizerVerificationStatusProvider`, which polls `GET /organizer/status` every ~12s while pending/rejected/approved status screens are focused. Admin approve/reject auto-navigates to the correct screen; rejected screens refresh the admin note without reload.
+
+**Lookup tables (DB-backed, admin CRUD on dashboard `/verification-types`):**
+- `organizer_types` -- seeded types (Company, NGO, Other, etc.). Admin can add, edit, hide (`is_active`), reorder. **Other** cannot be deleted or deactivated. Delete blocked when organizers use the type.
+- `organizer_verification_document_types` -- proof options (Business license, Event poster, etc.). Same CRUD rules; **Other** is protected. Delete blocked when uploads reference the slug.
+- Mobile wizard reads active types only via `GET /organizer/types` and `GET /organizer/verification-document-types`.
+- `organizer_profiles` now has `organizer_type_id`, `phone`, `facebook`, `instagram` columns.
+
+**Wizard steps (in order):** 1) About your organization (name + type), 2) Contact (phone + optional web/social), 3) Location (city + country, e.g. `Mogadishu, Somalia`), 4) Proof (document upload or online links), 5) Profile image (optional logo, JPG/PNG max 5 MB).
+
+**Resubmit (rejected organizers):** `resubmit-summary` shows 5 timeline cards. Admin note keywords flag sections with an **Update** badge (`inferResubmitSections.js`). Tap a section → `verify?step=N&mode=section` (single-step edit, **Save & Resubmit**). **Start Again** runs the full 5-step wizard. Resubmit may send `keepExistingDocument=1` when proof file is unchanged.
+
+**Submit endpoint:** `POST /organizer/verification/submit` -- multipart/form-data (`document` + optional `profileImage`). **Phone and location are required.** Organizer **phone must be unique** across all organizer profiles (normalized digits; stored as E.164 e.g. `+252612345678`). `GET /organizer/verification/check-phone?phone=...` checks availability on step 2. Document optional; if organizer picks no-proof, they must add **website or Facebook or Instagram** on step 4 before submit. Sets `verificationStatus = pending`; saves `users.location`, `users.phone`, and optional `users.profile_img`.
+
+**Admin verification queue** (Next.js dashboard `/verifications`): each row has `proofType` — `document` (view file), `online_presence` (click website/social links), or `none` (cannot approve). Approve when document **or** online links are present; check phone + links manually for no-doc cases.
+
+**Shared UI components:** `src/features/organizer/verification/`
+- App-wide step progress: `@/components/common/StepProgressBar` — numbered circle stepper (default, brand orange) with "Step X of Y" label; also supports `variant="segmented"` or `variant="continuous"`
+- `components/OrganizerTypeGrid.jsx` -- 2-col selectable type cards; "Other" shows full-width specify field
+- `components/DocumentTypeGrid.jsx` -- doc types + no-proof option (requires online links on step 4)
+- `components/VerificationLocationStep.jsx` -- location search + GPS detect (step 3)
+- `components/VerificationProfileImageStep.jsx` -- circular logo upload (step 5)
+- `components/VerificationStatusCard.jsx` -- purple/green/red status card
+- `hooks/useOrganizerVerificationWizard.js` -- form state, step nav, submit
+- `hooks/useOrganizerVerificationStatusSync.js` + `OrganizerVerificationStatusProvider` -- poll status + redirect on admin decision
+
+**No Maybe Later anywhere** -- verification is mandatory before any dashboard access.
+
+## Organizer publish (approved organizers only)
+
+Once approved, organizers can create and edit **drafts** anytime; **publish** is credit-gated.
 
 | Stage | Can do | Cannot do |
 | --- | --- | --- |
-| `unverified` | Dashboard, drafts | Publish live events |
-| `pending` | Same + see “under review” banner | Publish |
 | `approved`, has credits | Publish live instantly (uses 1 credit) | Publish when credits = 0 |
 | `approved`, no credits | Drafts, request credits from admin | Publish |
 
-**Frontend routing:** `getOrganizerEntryHref()` in `src/navigation/organizerGate.js` returns
-`/(organizer)/(tabs)` (Home tab). Splash and login use this — do not redirect new organizers to
-`(organizer-status)` on signup.
+**Frontend routing:** `getOrganizerEntryHref()` in `src/navigation/organizerGate.js` returns the correct status screen. Approved organizers see `verification-approved` once per session, then the dashboard.
 
 **Organizer app shell:** Route group `(organizer)/(tabs)/` — bottom tabs **Home · Events · Inbox · Profile**
 (tab route file remains `organization.jsx`). Shared chrome lives in `OrganizerTabScaffold`
-(`src/features/organizer/components/`): hamburger drawer, header bell (unread badge), and FAB (+) for create event.
+(`src/features/organizer/components/`): hamburger drawer, header bell (unread badge), FAB (+) for create event, and a **bio reminder banner** when `organizationDescription` is empty or still matches the org name (verification auto-fill). Tapping it opens `edit-profile`.
 
 **Organizer drawer:** Sidebar — Attendees, Credits, expandable **Reports** (Overview, Events,
 Registrations, Attendance, Top events); footer: Settings, Sign out. Does not duplicate bottom tabs.
@@ -172,7 +210,7 @@ screens; Profile tab stat tiles are **Events · Attendees · Upcoming** (not fol
 
 **Organizer notifications:** `GET /organizer/notifications` (+ unread-count, mark read). Emitted when
 admin approves/rejects verification, grants publish credits, and when a member registers for an organizer event.
-Inbox tab: `(organizer)/(tabs)/inbox`.
+Inbox tab: `(organizer)/(tabs)/inbox`. Stale `verification_rejected` rows are hidden (and deleted on approve/resubmit) when status is not `rejected`; inbox tap won't navigate to resubmit unless still rejected.
 
 **Legacy redirects:** `/(organizer)/dashboard`, `profile`, `my-events` redirect into tabs.
 

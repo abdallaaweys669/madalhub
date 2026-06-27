@@ -25,7 +25,7 @@ VALUES (
 );
 ```
 
-Log in from the admin dashboard using **member login** (`POST /auth/login`) with that email and password. JWT role must be `3`.
+Log in from the admin dashboard using `POST /auth/login` with that email and password. **Members (role 1) and admins (role 3)** can use this endpoint; organizers must use the organizer auth flow. JWT role must be `3` for dashboard access.
 
 ## Reactivate deactivated admins
 

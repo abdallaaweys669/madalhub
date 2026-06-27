@@ -12,8 +12,12 @@ export async function resolveOrganizerPublishGate(router, eligibility, options =
   if (eligibility?.canPublish) return true;
 
   const code = eligibility?.blockCode;
-  if (code === 'VERIFICATION_REQUIRED' || code === 'VERIFICATION_REJECTED') {
-    router.push('/(organizer-status)/resubmit-verification');
+  if (code === 'VERIFICATION_REQUIRED') {
+    router.push('/(organizer-status)/welcome');
+    return false;
+  }
+  if (code === 'VERIFICATION_REJECTED') {
+    router.push('/(organizer-status)/resubmit-summary');
     return false;
   }
   if (code === 'VERIFICATION_PENDING') {
@@ -44,7 +48,7 @@ export async function resolveOrganizerPublishGate(router, eligibility, options =
     return false;
   }
 
-  router.push('/(organizer-status)/resubmit-verification');
+  router.push('/(organizer-status)/welcome');
   return false;
 }
 
@@ -85,15 +89,13 @@ export function getOrganizerBannerPressHref(eligibility, verificationStatus) {
   if (code === 'VERIFICATION_PENDING' || verificationStatus === 'pending') {
     return '/(organizer-status)/pending-verification';
   }
-  if (
-    code === 'VERIFICATION_REQUIRED' ||
-    code === 'VERIFICATION_REJECTED' ||
-    verificationStatus === 'unverified' ||
-    verificationStatus === 'rejected'
-  ) {
-    return '/(organizer-status)/resubmit-verification';
+  if (code === 'VERIFICATION_REQUIRED' || verificationStatus === 'unverified') {
+    return '/(organizer-status)/welcome';
   }
-  return '/(organizer-status)/resubmit-verification';
+  if (code === 'VERIFICATION_REJECTED' || verificationStatus === 'rejected') {
+    return '/(organizer-status)/resubmit-summary';
+  }
+  return '/(organizer-status)/welcome';
 }
 
 /**

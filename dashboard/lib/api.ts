@@ -139,12 +139,18 @@ export interface OrganizerRow {
     organizationName: string;
     organizationDescription: string | null;
     website: string | null;
+    facebook: string | null;
+    instagram: string | null;
+    phone: string | null;
   };
   document: {
     documentType: string;
     documentPath: string;
     status: string;
   } | null;
+  hasDocument: boolean;
+  hasOnlinePresence: boolean;
+  proofType: "document" | "online_presence" | "none";
 }
 
 export function getPendingOrganizers() {
@@ -217,6 +223,8 @@ export interface OrganizerDetail {
   organizationName: string;
   organizationDescription: string | null;
   website: string | null;
+  facebook: string | null;
+  instagram: string | null;
   paidPublishCredits: number;
   rejectionReason: string | null;
   createdAt: string;
@@ -479,6 +487,78 @@ export function updateInterest(id: number, body: { name?: string; icon?: string 
 
 export function deleteInterest(id: number) {
   return request<{ ok: boolean }>("DELETE", `/admin/interests/${id}`);
+}
+
+// ─── Verification catalog (organizer types + proof document types) ─────────
+
+export interface VerificationCatalogRow {
+  id: number;
+  slug: string;
+  name: string;
+  icon: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  usageCount: number;
+}
+
+export function listOrganizerTypes() {
+  return request<{ items: VerificationCatalogRow[] }>("GET", "/admin/organizer-types");
+}
+
+export function createOrganizerType(body: {
+  name: string;
+  icon?: string | null;
+  sortOrder?: number;
+}) {
+  return request<VerificationCatalogRow>("POST", "/admin/organizer-types", body);
+}
+
+export function updateOrganizerType(
+  id: number,
+  body: {
+    name?: string;
+    icon?: string | null;
+    sortOrder?: number;
+    isActive?: boolean;
+  },
+) {
+  return request<VerificationCatalogRow>("PATCH", `/admin/organizer-types/${id}`, body);
+}
+
+export function deleteOrganizerType(id: number) {
+  return request<{ ok: boolean }>("DELETE", `/admin/organizer-types/${id}`);
+}
+
+export function listVerificationDocumentTypes() {
+  return request<{ items: VerificationCatalogRow[] }>("GET", "/admin/verification-document-types");
+}
+
+export function createVerificationDocumentType(body: {
+  name: string;
+  icon?: string | null;
+  sortOrder?: number;
+}) {
+  return request<VerificationCatalogRow>("POST", "/admin/verification-document-types", body);
+}
+
+export function updateVerificationDocumentType(
+  id: number,
+  body: {
+    name?: string;
+    icon?: string | null;
+    sortOrder?: number;
+    isActive?: boolean;
+  },
+) {
+  return request<VerificationCatalogRow>(
+    "PATCH",
+    `/admin/verification-document-types/${id}`,
+    body,
+  );
+}
+
+export function deleteVerificationDocumentType(id: number) {
+  return request<{ ok: boolean }>("DELETE", `/admin/verification-document-types/${id}`);
 }
 
 export function getAdminReport(type: ReportType, from?: string, to?: string) {

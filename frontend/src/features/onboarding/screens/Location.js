@@ -26,7 +26,7 @@ import { logApiError } from "@/api/logApiError";
 import LocationSvg from "@/assets/location.svg";
 
 // Updated Somalia districts list - Banadir now has 18 districts per 2023 reorganization
-const SOMALIA_DISTRICTS = [
+export const SOMALIA_DISTRICTS = [
   // Banadir Region (Mogadishu) - 18 districts
   { city: "Mogadishu", region: "Banadir", district: "Abdiaziz" },
   { city: "Mogadishu", region: "Banadir", district: "Bondhere" },
@@ -174,7 +174,7 @@ const SOMALIA_DISTRICTS = [
   { city: "Villa Somalia", region: "Banadir", district: "Abdiaziz" },
 ];
 
-function formatLocation(item) {
+export function formatLocation(item) {
   return `${item.city}, ${item.region}, ${item.district}`;
 }
 

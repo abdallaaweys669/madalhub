@@ -1,416 +1,232 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   Pressable,
+  Image,
+  useWindowDimensions,
   ActivityIndicator,
-  ScrollView,
-  Linking,
+  Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from 'expo-router';
-import useGuardedRouter from '@/hooks/useGuardedRouter';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import useAuth from '@/auth/useAuth';
-import organizerApi from '@/api/organizer';
-import { isOrganizerSubmissionReadyForReview } from '@/utils/organizerVerification';
-import { COLORS } from '@/constants/loginSignin/authStyles';
-import authStorage from '@/auth/storage';
-import VerificationNoticeModal from '@/components/common/VerificationNoticeModal';
+import useGuardedRouter, { resetNavigationGuard } from '@/hooks/useGuardedRouter';
 
-const STEP_ACTIVE = COLORS.primary;
-const STEP_DONE = '#22C55E';
-const STEP_MUTED = '#CBD5E1';
+const ORANGE = '#FF7B3F';
+const PENDING_ICON = require('@/assets/pending2.png');
 
-const POLL_INTERVAL_MS = 15000;
-/** After resubmit, GET /status can briefly still return `rejected` before DB flips to `pending`. One retry avoids a false "failed" modal. */
-const STALE_REJECT_RETRY_MS = 700;
+const INFO_ROWS = [
+  {
+    icon: 'checkmark-circle-outline',
+    title: 'Status',
+    detail: 'Pending Review',
+  },
+  {
+    icon: 'time-outline',
+    title: 'Review time',
+    detail: 'Usually within 24 hours',
+  },
+];
 
 export default function PendingVerificationScreen() {
+  const { logout } = useAuth();
   const router = useGuardedRouter();
-  const insets = useSafeAreaInsets();
-  const { logout, setOrganizerStatus } = useAuth();
-  const [status, setStatus] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const prevVerificationRef = useRef(null);
-  const [notice, setNotice] = useState(null);
-  const noticeRef = useRef(null);
-  const staleRejectRetryRef = useRef(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const busyRef = useRef(false);
+  const { width } = useWindowDimensions();
+  const heroSize = Math.min(width - 32, 380);
 
-  useEffect(() => {
-    noticeRef.current = notice;
-  }, [notice]);
-
-  const handleNoticePrimary = useCallback(async () => {
-    const current = noticeRef.current;
-    if (!current) return;
-
-    if (current.variant === 'success') {
-      await authStorage.storeOrganizerStatus('approved');
-      setOrganizerStatus('approved');
-      setNotice(null);
-      router.replace('/(organizer)/(tabs)');
-      return;
-    }
-
-    if (current.variant === 'error') {
-      await authStorage.storeOrganizerStatus('rejected');
-      setOrganizerStatus('rejected');
-      setNotice(null);
-      router.replace('/(organizer-status)/verification-failed');
-    }
-  }, [router, setOrganizerStatus]);
-
-  const fetchStatus = useCallback(async () => {
-    if (noticeRef.current) return;
+  const handleLogout = useCallback(async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setLoggingOut(true);
 
     try {
-      let data = await organizerApi.getOrganizerStatus();
-
-      if (data.verificationStatus === 'pending' && !isOrganizerSubmissionReadyForReview(data)) {
-        router.replace('/(organizer-status)/resubmit-verification');
-        return;
-      }
-
-      const prev = prevVerificationRef.current;
-      let curr = data.verificationStatus;
-
-      /**
-       * Right after resubmit, status can briefly still be `rejected` before the server sets `pending`.
-       * Wait once and refetch so we don't show a false "Verification failed" popup.
-       */
-      if (prev === null && curr === 'rejected' && !staleRejectRetryRef.current) {
-        staleRejectRetryRef.current = true;
-        await new Promise((resolve) => setTimeout(resolve, STALE_REJECT_RETRY_MS));
-        data = await organizerApi.getOrganizerStatus();
-        if (data.verificationStatus === 'pending' && !isOrganizerSubmissionReadyForReview(data)) {
-          router.replace('/(organizer-status)/resubmit-verification');
-          return;
-        }
-        curr = data.verificationStatus;
-      }
-
-      if (prev === 'pending' && curr === 'approved') {
-        setNotice({
-          variant: 'success',
-          title: "You're verified!",
-          message:
-            'Your organizer account is approved. You can now create and manage events.',
-          primaryLabel: 'Go to dashboard',
-        });
-      } else if (prev === 'pending' && curr === 'rejected') {
-        setNotice({
-          variant: 'error',
-          title: 'Verification failed',
-          primaryLabel: 'Continue',
-        });
-      } else if (prev === null && curr === 'approved') {
-        setNotice({
-          variant: 'success',
-          title: "You're verified!",
-          message:
-            'Your organizer account is approved. You can now create and manage events.',
-          primaryLabel: 'Go to dashboard',
-        });
-      } else if (prev === null && curr === 'rejected') {
-        router.replace('/(organizer-status)/verification-failed');
-        return;
-      }
-
-      prevVerificationRef.current = curr;
-      setStatus(data);
+      resetNavigationGuard();
+      router.replace('/(auth)/welcome');
+      await logout();
     } catch (error) {
-      console.error('Failed to fetch status:', error);
+      Alert.alert(
+        'Logout failed',
+        error?.message || 'Something went wrong. Please try again.',
+      );
+    } finally {
+      busyRef.current = false;
+      setLoggingOut(false);
     }
-  }, [router]);
-
-  useFocusEffect(
-    useCallback(() => {
-      staleRejectRetryRef.current = false;
-      let alive = true;
-      const bootstrap = async () => {
-        setLoading(true);
-        await fetchStatus();
-        if (alive) setLoading(false);
-      };
-      bootstrap();
-      const id = setInterval(fetchStatus, POLL_INTERVAL_MS);
-      return () => {
-        alive = false;
-        clearInterval(id);
-      };
-    }, [fetchStatus]),
-  );
-
-  const handleEditSubmission = () => {
-    router.push('/(organizer-status)/resubmit-verification');
-  };
-
-  const handleContactSupport = async () => {
-    const url = 'mailto:support@madalhub.app?subject=Organizer Verification Support';
-    const canOpen = await Linking.canOpenURL(url);
-    if (canOpen) {
-      Linking.openURL(url);
-    }
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/(auth)/welcome');
-  };
-
-  const steps = [
-    { title: 'Submitted', body: 'We received your documents and details.', done: true },
-    {
-      title: 'Under review',
-      body: 'Our team checks your submission — usually within a few business days.',
-      done: false,
-      current: true,
-    },
-    { title: 'Decision', body: 'You will be able to publish events once approved.', done: false },
-  ];
-
-  if (loading) {
-    return (
-      <LinearGradient colors={[COLORS.bgGradStart, COLORS.bgGradEnd]} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </LinearGradient>
-    );
-  }
-
-  const showMainUi =
-    status?.verificationStatus === 'pending' &&
-    isOrganizerSubmissionReadyForReview(status) &&
-    !notice;
+  }, [logout, router]);
 
   return (
-    <>
-      <VerificationNoticeModal
-        visible={notice !== null}
-        variant={notice?.variant ?? 'info'}
-        title={notice?.title ?? ''}
-        message={notice?.message}
-        primaryLabel={notice?.primaryLabel ?? 'OK'}
-        onPrimary={handleNoticePrimary}
-      />
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
+      <View style={styles.screen}>
+        <View style={styles.content}>
+          <View style={styles.headerBlock}>
+            <Image
+              source={PENDING_ICON}
+              style={[styles.heroIcon, { width: heroSize, height: heroSize * 0.88 }]}
+              resizeMode="contain"
+              accessibilityIgnoresInvertColors
+            />
 
-      <LinearGradient colors={[COLORS.bgGradStart, COLORS.bgGradEnd]} style={{ flex: 1 }}>
-        {showMainUi ? (
-          <ScrollView
-            contentContainerStyle={{
-              paddingHorizontal: 20,
-              paddingTop: insets.top + 12,
-              paddingBottom: insets.bottom + 36,
-            }}
-            showsVerticalScrollIndicator={false}
-          >
-            <LinearGradient
-              colors={['#FF7B3F', '#FF9B5C']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                borderRadius: 28,
-                padding: 24,
-                marginBottom: 22,
-                shadowColor: '#FF7B3F',
-                shadowOpacity: 0.35,
-                shadowRadius: 16,
-                shadowOffset: { width: 0, height: 10 },
-                elevation: 8,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <View
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 18,
-                    backgroundColor: 'rgba(255,255,255,0.28)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Feather name="shield" size={26} color="#FFFFFF" />
-                </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.92)', letterSpacing: 0.3 }}>
-                    Organizer verification
-                  </Text>
-                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 2, letterSpacing: -0.4 }}>
-                    Review in progress
-                  </Text>
-                </View>
-              </View>
-              <Text style={{ fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.95)' }}>
-                Relax — your application is safe with us. We will notify you when there is an update.
-              </Text>
-            </LinearGradient>
-
-            <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.textLight, marginBottom: 14, letterSpacing: 0.6, textTransform: 'uppercase' }}>
-              What happens next
+            <Text style={styles.title}>Verification in Review</Text>
+            <Text style={styles.subtitle}>
+              Your verification is still under review by our team.
             </Text>
-            <View
-              style={{
-                backgroundColor: COLORS.cardBg,
-                borderRadius: 20,
-                padding: 20,
-                marginBottom: 18,
-                borderWidth: 1,
-                borderColor: 'rgba(15,23,42,0.06)',
-                shadowColor: '#0F172A',
-                shadowOpacity: 0.06,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 4 },
-                elevation: 3,
-              }}
-            >
-              {steps.map((step, index) => (
-                <View key={step.title} style={{ flexDirection: 'row', minHeight: index < steps.length - 1 ? 72 : undefined }}>
-                  <View style={{ alignItems: 'center', width: 28 }}>
-                    <View
-                      style={{
-                        width: 14,
-                        height: 14,
-                        borderRadius: 7,
-                        backgroundColor: step.done ? STEP_DONE : step.current ? STEP_ACTIVE : STEP_MUTED,
-                        borderWidth: step.current && !step.done ? 3 : 0,
-                        borderColor: '#FFF',
-                      }}
-                    />
-                    {index < steps.length - 1 ? (
-                      <View style={{ flex: 1, width: 2, backgroundColor: '#E2E8F0', marginVertical: 4 }} />
-                    ) : null}
-                  </View>
-                  <View style={{ flex: 1, paddingLeft: 10, paddingBottom: index < steps.length - 1 ? 16 : 0 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.textDark }}>{step.title}</Text>
-                    <Text style={{ fontSize: 14, color: COLORS.textLight, marginTop: 4, lineHeight: 20 }}>{step.body}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
+          </View>
 
-            <View
-              style={{
-                backgroundColor: COLORS.cardBg,
-                borderRadius: 20,
-                padding: 18,
-                marginBottom: 20,
-                borderWidth: 1,
-                borderColor: 'rgba(15,23,42,0.06)',
-              }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.textDark, marginBottom: 14 }}>Your submission</Text>
-              {[
-                { icon: 'briefcase', label: 'Organization', value: status?.organizationName || '—' },
-                {
-                  icon: 'file-text',
-                  label: 'Document',
-                  value: status?.hasDocument ? 'Uploaded' : 'Missing',
-                  valueColor: status?.hasDocument ? '#16A34A' : COLORS.textLight,
-                },
-              ].map((row) => (
-                <View
-                  key={row.label}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: 12,
-                    borderTopWidth: 1,
-                    borderTopColor: '#F1F5F9',
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 12,
-                      backgroundColor: '#FFF7ED',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      marginRight: 12,
-                    }}
-                  >
-                    <Feather name={row.icon} size={18} color={COLORS.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 12, color: COLORS.textLight, fontWeight: '600' }}>{row.label}</Text>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: row.valueColor || COLORS.textDark, marginTop: 2 }} numberOfLines={2}>
-                      {row.value}
-                    </Text>
-                  </View>
+          <View style={styles.card}>
+            {INFO_ROWS.map((row) => (
+              <View key={row.title} style={styles.cardRow}>
+                <View style={styles.cardIconWrap}>
+                  <Ionicons name={row.icon} size={20} color={ORANGE} />
                 </View>
-              ))}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 12,
-                    backgroundColor: '#FFFBEB',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 12,
-                  }}
-                >
-                  <Feather name="clock" size={18} color="#D97706" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: COLORS.textLight, fontWeight: '600' }}>Status</Text>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.primary, marginTop: 2 }}>Pending review</Text>
+                <View style={styles.cardTextBlock}>
+                  <Text style={styles.cardTitle}>{row.title}</Text>
+                  <Text style={styles.cardDetail}>{row.detail}</Text>
                 </View>
               </View>
-            </View>
-
-            <Pressable
-              onPress={handleEditSubmission}
-              style={({ pressed }) => ({
-                backgroundColor: COLORS.primary,
-                borderRadius: 16,
-                height: 54,
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: 12,
-                opacity: pressed ? 0.92 : 1,
-                shadowColor: COLORS.primary,
-                shadowOpacity: 0.35,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 6 },
-                elevation: 5,
-              })}
-            >
-              <Text style={{ color: 'white', fontWeight: '800', fontSize: 16, letterSpacing: 0.2 }}>Edit submission</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={handleContactSupport}
-              style={({ pressed }) => ({
-                backgroundColor: COLORS.cardBg,
-                borderRadius: 16,
-                height: 54,
-                justifyContent: 'center',
-                alignItems: 'center',
-                borderWidth: 1.5,
-                borderColor: 'rgba(255,123,63,0.35)',
-                marginBottom: 8,
-                opacity: pressed ? 0.9 : 1,
-              })}
-            >
-              <Text style={{ color: COLORS.primary, fontWeight: '800', fontSize: 16 }}>Contact support</Text>
-            </Pressable>
-
-            <Pressable onPress={handleLogout} style={{ alignItems: 'center', paddingVertical: 16 }}>
-              <Text style={{ color: COLORS.textLight, fontSize: 15, fontWeight: '600' }}>Sign out</Text>
-            </Pressable>
-          </ScrollView>
-        ) : notice ? (
-          <View style={{ flex: 1 }} />
-        ) : (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            ))}
           </View>
-        )}
-      </LinearGradient>
-    </>
+
+          <View style={styles.noticeBanner}>
+            <Text style={styles.noticeText}>
+              You'll receive a notification once it's approved.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.logoutBtn,
+              pressed && styles.logoutBtnPressed,
+              loggingOut && styles.logoutBtnDisabled,
+            ]}
+            onPress={handleLogout}
+            disabled={loggingOut}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: loggingOut, busy: loggingOut }}
+          >
+            {loggingOut ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.logoutLabel}>Logout</Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  screen: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: 8,
+  },
+  headerBlock: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  heroIcon: {
+    marginBottom: -32,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 8,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: '#FFF7F3',
+    borderRadius: 18,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    gap: 18,
+    marginBottom: 12,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  cardIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTextBlock: {
+    flex: 1,
+    paddingTop: 2,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  cardDetail: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  noticeBanner: {
+    width: '100%',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+  },
+  noticeText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  footer: {
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  logoutBtn: {
+    width: '100%',
+    backgroundColor: ORANGE,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  logoutBtnPressed: {
+    opacity: 0.92,
+  },
+  logoutBtnDisabled: {
+    opacity: 0.85,
+  },
+  logoutLabel: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+});

@@ -9,7 +9,6 @@ import {
   ScrollView,
   Text,
   TextInput,
-  UIManager,
   View,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
@@ -44,10 +43,6 @@ import AppPopup from '@/components/common/AppPopup';
 import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 
 import AudienceDropdown from '@/components/createEvent/AudienceDropdown';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 function formatRelativeSaveTime(date) {
   if (!date || !Number.isFinite(date.getTime())) return 'Not saved yet';

@@ -18,12 +18,16 @@ import { ListToolbar } from "@/components/admin/list-toolbar";
 import RejectDialog from "@/components/RejectDialog";
 import DocumentPreviewDialog from "@/components/DocumentPreviewDialog";
 import {
+  VerificationProofCell,
+  organizerCanApprove,
+} from "@/components/admin/verification-proof-cell";
+import {
   getPendingOrganizers,
   approveOrganizer,
   rejectOrganizer,
   type OrganizerRow,
 } from "@/lib/api";
-import { CheckCircle, XCircle, RefreshCw, FileText } from "lucide-react";
+import { CheckCircle, XCircle, RefreshCw } from "lucide-react";
 
 export default function VerificationsPage() {
   const [rows, setRows] = useState<OrganizerRow[]>([]);
@@ -73,11 +77,18 @@ export default function VerificationsPage() {
         org.fullName.toLowerCase().includes(q) ||
         org.email.toLowerCase().includes(q) ||
         (org.profile.website?.toLowerCase().includes(q) ?? false) ||
+        (org.profile.facebook?.toLowerCase().includes(q) ?? false) ||
+        (org.profile.instagram?.toLowerCase().includes(q) ?? false) ||
+        (org.phone?.toLowerCase().includes(q) ?? false) ||
         (org.document?.documentType?.toLowerCase().includes(q) ?? false),
     );
   }, [rows, searchInput]);
 
   async function handleApprove(org: OrganizerRow) {
+    if (!organizerCanApprove(org)) {
+      toast.error("Cannot approve — organizer has no document or online links to verify.");
+      return;
+    }
     setActionId(org.id);
     try {
       await approveOrganizer(org.id);
@@ -108,7 +119,7 @@ export default function VerificationsPage() {
     <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
       <PageHeader
         title="Verification queue"
-        description={`${filtered.length} pending review`}
+        description="Review document uploads or verify organizers via their website and social links."
         actions={
           <Button variant="outline" size="sm" onClick={() => { setLoading(true); void load(); }} className="gap-2">
             <RefreshCw size={14} />
@@ -120,17 +131,17 @@ export default function VerificationsPage() {
       <ListToolbar
         search={searchInput}
         onSearchChange={setSearchInput}
-        searchPlaceholder="Search organization, name, email…"
+        searchPlaceholder="Search organization, name, email, phone…"
       />
 
       <AdminTableCard>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className={`${ADMIN_TH} w-[24%]`}>Organization</TableHead>
-            <TableHead className={`${ADMIN_TH} w-[26%]`}>Name / Email</TableHead>
-            <TableHead className={`${ADMIN_TH} w-[14%]`}>Status</TableHead>
-            <TableHead className={`${ADMIN_TH} w-[16%]`}>Document</TableHead>
-            <TableHead className={`${ADMIN_TH} w-[20%] text-right`}>Actions</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[20%]`}>Organization</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[22%]`}>Contact</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[12%]`}>Status</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[24%]`}>Proof</TableHead>
+            <TableHead className={`${ADMIN_TH} w-[22%] text-right`}>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -151,81 +162,79 @@ export default function VerificationsPage() {
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((org) => (
-              <TableRow key={org.id}>
-                <TableCell className="max-w-0 px-3">
-                  <p className="font-medium truncate" title={org.profile.organizationName}>
-                    {org.profile.organizationName}
-                  </p>
-                  {org.profile.website && (
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate" title={org.profile.website}>
-                      {org.profile.website}
+            filtered.map((org) => {
+              const canApprove = organizerCanApprove(org);
+              return (
+                <TableRow key={org.id}>
+                  <TableCell className="max-w-0 px-3">
+                    <p className="font-medium truncate" title={org.profile.organizationName}>
+                      {org.profile.organizationName}
                     </p>
-                  )}
-                </TableCell>
-                <TableCell className="max-w-0 px-3">
-                  <p className="text-sm truncate" title={org.fullName}>
-                    {org.fullName}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate" title={org.email}>
-                    {org.email}
-                  </p>
-                </TableCell>
-                <TableCell className="px-3">
-                  <Badge variant="secondary" className="bg-primary/10 text-primary border-0 capitalize">
-                    {org.verificationStatus}
-                  </Badge>
-                </TableCell>
-                <TableCell className="px-3">
-                  {org.document ? (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground capitalize">{org.document.documentType}</p>
+                  </TableCell>
+                  <TableCell className="max-w-0 px-3">
+                    <p className="text-sm truncate" title={org.fullName}>
+                      {org.fullName}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate" title={org.email}>
+                      {org.email}
+                    </p>
+                    {org.phone ? (
+                      <p className="text-xs text-muted-foreground truncate" title={org.phone}>
+                        {org.phone}
+                      </p>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="px-3">
+                    <Badge variant="secondary" className="bg-primary/10 text-primary border-0 capitalize">
+                      {org.verificationStatus}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-3 align-top">
+                    <VerificationProofCell
+                      org={org}
+                      onViewDocument={() =>
+                        org.document &&
+                        setPreviewDoc({
+                          title: org.profile.organizationName,
+                          path: org.document.documentPath,
+                          type: org.document.documentType,
+                        })
+                      }
+                    />
+                  </TableCell>
+                  <TableCell className="text-right px-3 align-top">
+                    <div className="flex items-center justify-end gap-1.5">
                       <Button
-                        type="button"
-                        variant="link"
                         size="sm"
-                        className="h-auto p-0 text-xs text-primary gap-1"
-                        onClick={() =>
-                          setPreviewDoc({
-                            title: org.profile.organizationName,
-                            path: org.document!.documentPath,
-                            type: org.document!.documentType,
-                          })
+                        className="gap-1 h-7 px-2 text-xs"
+                        disabled={actionId === org.id || !canApprove}
+                        title={
+                          canApprove
+                            ? org.proofType === "online_presence"
+                              ? "Approve after checking website/social links"
+                              : "Approve organizer"
+                            : "Needs a document or online links"
                         }
+                        onClick={() => handleApprove(org)}
                       >
-                        <FileText size={12} />
-                        View document
+                        <CheckCircle size={12} />
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 h-7 px-2 text-xs text-destructive hover:text-destructive"
+                        disabled={actionId === org.id}
+                        onClick={() => setRejectTarget(org)}
+                      >
+                        <XCircle size={12} />
+                        Reject
                       </Button>
                     </div>
-                  ) : (
-                    <span className="text-destructive text-xs">Missing document</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right px-3">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <Button
-                      size="sm"
-                      className="gap-1 h-7 px-2 text-xs"
-                      disabled={actionId === org.id || !org.document}
-                      onClick={() => handleApprove(org)}
-                    >
-                      <CheckCircle size={12} />
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1 h-7 px-2 text-xs text-destructive hover:text-destructive"
-                      disabled={actionId === org.id}
-                      onClick={() => setRejectTarget(org)}
-                    >
-                      <XCircle size={12} />
-                      Reject
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
+                  </TableCell>
+                </TableRow>
+              );
+            })
           )}
         </TableBody>
       </AdminTableCard>

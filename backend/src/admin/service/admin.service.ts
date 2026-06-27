@@ -13,8 +13,14 @@ import { OrganizerCreditRequest } from 'src/database/entities/organizer-credit-r
 import { Event } from 'src/database/entities/event.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { Interest } from 'src/database/entities/interest.entity';
+import { OrganizerType } from 'src/database/entities/organizer-type.entity';
+import { OrganizerVerificationDocumentType } from 'src/database/entities/organizer-verification-document-type.entity';
 import { Repository } from 'typeorm';
 import { isProfileComplete } from 'src/onboarding/helpers/organizer-profile.helper';
+import {
+  hasOnlinePresenceProof,
+  resolveVerificationProofType,
+} from 'src/organizer/helpers/verification-proof.helper';
 import { ConfigService } from '@nestjs/config';
 import { OrganizerNotificationsService } from 'src/notifications/organizer-notifications.service';
 import * as bcrypt from 'bcrypt';
@@ -25,6 +31,8 @@ import { AdminReportQueryDto } from '../dto/admin-report-query.dto';
 import { GrantOrganizerCreditsDto } from '../dto/grant-organizer-credits.dto';
 import { CreateInterestDto } from '../dto/create-interest.dto';
 import { UpdateInterestDto } from '../dto/update-interest.dto';
+import { CreateVerificationCatalogDto } from '../dto/create-verification-catalog.dto';
+import { UpdateVerificationCatalogDto } from '../dto/update-verification-catalog.dto';
 
 const ADMIN_ROLE_ID = 3;
 const PRIMARY_ADMIN_EMAIL = 'admin@gmail.com';
@@ -58,6 +66,10 @@ export class AdminService {
     private registrationRepository: Repository<EventRegistration>,
     @InjectRepository(Interest)
     private interestRepository: Repository<Interest>,
+    @InjectRepository(OrganizerType)
+    private organizerTypeRepository: Repository<OrganizerType>,
+    @InjectRepository(OrganizerVerificationDocumentType)
+    private verificationDocumentTypeRepository: Repository<OrganizerVerificationDocumentType>,
     private configService: ConfigService,
     private organizerNotificationsService: OrganizerNotificationsService,
   ) {}
@@ -85,14 +97,13 @@ export class AdminService {
       throw new BadRequestException('Organizer profile is incomplete');
     }
 
-    const documents = await this.organizerDocumentRepository.find({
+    const document = await this.organizerDocumentRepository.findOne({
       where: { organizerId: user.id },
-      select: ['id'],
     });
-
-    if (documents.length !== 1) {
+    const hasOnlineProof = hasOnlinePresenceProof(organizerProfile);
+    if (!document && !hasOnlineProof) {
       throw new BadRequestException(
-        'Organizer must have exactly one verification document before approval',
+        'Cannot approve: organizer has no document or online presence links to verify.',
       );
     }
 
@@ -154,17 +165,24 @@ export class AdminService {
           where: { organizerId: user.id },
         });
 
+        const hasOnlineProof = hasOnlinePresenceProof(profile);
+        const hasDocument = Boolean(document?.documentPath);
+        const proofType = resolveVerificationProofType(hasDocument, hasOnlineProof);
+
         return {
           id: user.id,
           fullName: user.fullName,
           email: user.email,
-          phone: user.phone,
+          phone: profile.phone || user.phone || null,
           userStatus: user.status,
           verificationStatus: profile.verificationStatus,
           profile: {
             organizationName: profile.organizationName,
             organizationDescription: profile.organizationDescription,
             website: profile.website,
+            facebook: profile.facebook,
+            instagram: profile.instagram,
+            phone: profile.phone,
           },
           document: document
             ? {
@@ -173,6 +191,9 @@ export class AdminService {
                 status: document.status,
               }
             : null,
+          hasDocument,
+          hasOnlinePresence: hasOnlineProof,
+          proofType,
         };
       }),
     ).then((rows) => rows.filter(Boolean));
@@ -1128,6 +1149,8 @@ export class AdminService {
       organizationName: profile.organizationName,
       organizationDescription: profile.organizationDescription,
       website: profile.website,
+      facebook: profile.facebook,
+      instagram: profile.instagram,
       paidPublishCredits: profile.paidPublishCredits,
       rejectionReason: profile.rejectionReason,
       createdAt: profile.createdAt,
@@ -1434,6 +1457,275 @@ export class AdminService {
       [id],
     );
     await this.interestRepository.delete(id);
+    return { ok: true };
+  }
+
+  private slugifyCatalogName(name: string): string {
+    const base =
+      name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 56) || 'type';
+    return base;
+  }
+
+  private async uniqueCatalogSlug(
+    repo: Repository<OrganizerType | OrganizerVerificationDocumentType>,
+    base: string,
+  ): Promise<string> {
+    let slug = base;
+    let suffix = 1;
+    while (await repo.findOne({ where: { slug } as never })) {
+      slug = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    return slug;
+  }
+
+  private mapCatalogRow(row: OrganizerType | OrganizerVerificationDocumentType, usageCount: number) {
+    return {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      icon: row.icon,
+      sortOrder: row.sortOrder,
+      isActive: row.isActive,
+      usageCount,
+    };
+  }
+
+  async listOrganizerTypes() {
+    const rows = await this.organizerTypeRepository.find({
+      order: { sortOrder: 'ASC', name: 'ASC' },
+    });
+
+    const counts = await this.organizerProfileRepository
+      .createQueryBuilder('p')
+      .select('p.organizerTypeId', 'typeId')
+      .addSelect('COUNT(*)', 'count')
+      .where('p.organizerTypeId IS NOT NULL')
+      .groupBy('p.organizerTypeId')
+      .getRawMany<{ typeId: string; count: string }>();
+
+    const countById = counts.reduce<Record<number, number>>((acc, row) => {
+      const id = Number(row.typeId);
+      if (Number.isFinite(id)) acc[id] = Number(row.count) || 0;
+      return acc;
+    }, {});
+
+    return {
+      items: rows.map((row) => this.mapCatalogRow(row, countById[row.id] ?? 0)),
+    };
+  }
+
+  async createOrganizerType(dto: CreateVerificationCatalogDto) {
+    const name = dto.name.trim();
+    const duplicate = await this.organizerTypeRepository.findOne({ where: { name } });
+    if (duplicate) {
+      throw new ConflictException('An organizer type with this name already exists');
+    }
+
+    const maxSort = await this.organizerTypeRepository
+      .createQueryBuilder('t')
+      .select('MAX(t.sortOrder)', 'max')
+      .getRawOne<{ max: string | null }>();
+    const nextSort = (Number(maxSort?.max) || 0) + 1;
+
+    const slug = await this.uniqueCatalogSlug(
+      this.organizerTypeRepository,
+      this.slugifyCatalogName(name),
+    );
+
+    const saved = await this.organizerTypeRepository.save(
+      this.organizerTypeRepository.create({
+        slug,
+        name,
+        icon: dto.icon?.trim() || null,
+        sortOrder: dto.sortOrder ?? nextSort,
+        isActive: true,
+      }),
+    );
+
+    return this.mapCatalogRow(saved, 0);
+  }
+
+  async updateOrganizerType(id: number, dto: UpdateVerificationCatalogDto) {
+    const row = await this.organizerTypeRepository.findOne({ where: { id } });
+    if (!row) {
+      throw new NotFoundException('Organizer type not found');
+    }
+
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      const duplicate = await this.organizerTypeRepository.findOne({ where: { name } });
+      if (duplicate && duplicate.id !== id) {
+        throw new ConflictException('An organizer type with this name already exists');
+      }
+      row.name = name;
+    }
+
+    if (dto.icon !== undefined) {
+      row.icon = dto.icon?.trim() || null;
+    }
+
+    if (dto.sortOrder !== undefined) {
+      row.sortOrder = dto.sortOrder;
+    }
+
+    if (dto.isActive !== undefined) {
+      if (row.slug === 'other' && !dto.isActive) {
+        throw new BadRequestException('The "Other" organizer type cannot be deactivated');
+      }
+      row.isActive = dto.isActive;
+    }
+
+    const saved = await this.organizerTypeRepository.save(row);
+    const usageCount = await this.organizerProfileRepository.count({
+      where: { organizerTypeId: saved.id },
+    });
+
+    return this.mapCatalogRow(saved, usageCount);
+  }
+
+  async deleteOrganizerType(id: number) {
+    const row = await this.organizerTypeRepository.findOne({ where: { id } });
+    if (!row) {
+      throw new NotFoundException('Organizer type not found');
+    }
+
+    if (row.slug === 'other') {
+      throw new BadRequestException('The "Other" organizer type cannot be deleted');
+    }
+
+    const usageCount = await this.organizerProfileRepository.count({
+      where: { organizerTypeId: id },
+    });
+    if (usageCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete a type used by ${usageCount} organizer(s). Deactivate it instead.`,
+      );
+    }
+
+    await this.organizerTypeRepository.delete(id);
+    return { ok: true };
+  }
+
+  async listVerificationDocumentTypes() {
+    const rows = await this.verificationDocumentTypeRepository.find({
+      order: { sortOrder: 'ASC', name: 'ASC' },
+    });
+
+    const counts = await this.organizerDocumentRepository
+      .createQueryBuilder('d')
+      .select('COALESCE(d.documentTypeSlug, d.documentType)', 'slug')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('COALESCE(d.documentTypeSlug, d.documentType)')
+      .getRawMany<{ slug: string; count: string }>();
+
+    const countBySlug = counts.reduce<Record<string, number>>((acc, row) => {
+      if (row.slug) acc[row.slug] = Number(row.count) || 0;
+      return acc;
+    }, {});
+
+    return {
+      items: rows.map((row) => this.mapCatalogRow(row, countBySlug[row.slug] ?? 0)),
+    };
+  }
+
+  async createVerificationDocumentType(dto: CreateVerificationCatalogDto) {
+    const name = dto.name.trim();
+    const duplicate = await this.verificationDocumentTypeRepository.findOne({ where: { name } });
+    if (duplicate) {
+      throw new ConflictException('A proof type with this name already exists');
+    }
+
+    const maxSort = await this.verificationDocumentTypeRepository
+      .createQueryBuilder('t')
+      .select('MAX(t.sortOrder)', 'max')
+      .getRawOne<{ max: string | null }>();
+    const nextSort = (Number(maxSort?.max) || 0) + 1;
+
+    const slug = await this.uniqueCatalogSlug(
+      this.verificationDocumentTypeRepository,
+      this.slugifyCatalogName(name),
+    );
+
+    const saved = await this.verificationDocumentTypeRepository.save(
+      this.verificationDocumentTypeRepository.create({
+        slug,
+        name,
+        icon: dto.icon?.trim() || null,
+        sortOrder: dto.sortOrder ?? nextSort,
+        isActive: true,
+      }),
+    );
+
+    return this.mapCatalogRow(saved, 0);
+  }
+
+  async updateVerificationDocumentType(id: number, dto: UpdateVerificationCatalogDto) {
+    const row = await this.verificationDocumentTypeRepository.findOne({ where: { id } });
+    if (!row) {
+      throw new NotFoundException('Proof type not found');
+    }
+
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      const duplicate = await this.verificationDocumentTypeRepository.findOne({ where: { name } });
+      if (duplicate && duplicate.id !== id) {
+        throw new ConflictException('A proof type with this name already exists');
+      }
+      row.name = name;
+    }
+
+    if (dto.icon !== undefined) {
+      row.icon = dto.icon?.trim() || null;
+    }
+
+    if (dto.sortOrder !== undefined) {
+      row.sortOrder = dto.sortOrder;
+    }
+
+    if (dto.isActive !== undefined) {
+      if (row.slug === 'other' && !dto.isActive) {
+        throw new BadRequestException('The "Other" proof type cannot be deactivated');
+      }
+      row.isActive = dto.isActive;
+    }
+
+    const saved = await this.verificationDocumentTypeRepository.save(row);
+    const usageCount = await this.organizerDocumentRepository
+      .createQueryBuilder('d')
+      .where('COALESCE(d.documentTypeSlug, d.documentType) = :slug', { slug: saved.slug })
+      .getCount();
+
+    return this.mapCatalogRow(saved, usageCount);
+  }
+
+  async deleteVerificationDocumentType(id: number) {
+    const row = await this.verificationDocumentTypeRepository.findOne({ where: { id } });
+    if (!row) {
+      throw new NotFoundException('Proof type not found');
+    }
+
+    if (row.slug === 'other') {
+      throw new BadRequestException('The "Other" proof type cannot be deleted');
+    }
+
+    const usageCount = await this.organizerDocumentRepository
+      .createQueryBuilder('d')
+      .where('COALESCE(d.documentTypeSlug, d.documentType) = :slug', { slug: row.slug })
+      .getCount();
+
+    if (usageCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete a proof type used by ${usageCount} upload(s). Deactivate it instead.`,
+      );
+    }
+
+    await this.verificationDocumentTypeRepository.delete(id);
     return { ok: true };
   }
 }
