@@ -9,10 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
-import * as DocumentPicker from 'expo-document-picker';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
 import useAuth from '@/auth/useAuth';
 import { getOrganizerTypes, getVerificationDocumentTypes, checkOrganizerPhoneAvailable } from '@/api/organizer';
@@ -40,6 +39,7 @@ import {
 } from '@/features/organizer/verification/constants/verificationCopy';
 import { hasOnlinePresenceProof } from '@/features/organizer/verification/utils/verificationHelpers';
 import { getSectionByStep } from '@/features/organizer/verification/utils/inferResubmitSections';
+import { pickVerificationDocument } from '@/features/organizer/verification/utils/pickVerificationDocument';
 
 const ORANGE = '#FF7B3F';
 const INPUT_BORDER = 'rgba(255,123,63,0.28)';
@@ -59,6 +59,8 @@ export default function VerifyScreen() {
   );
   const sectionMode = params.mode === 'section';
   const sectionMeta = sectionMode ? getSectionByStep(initialStep) : null;
+  const insets = useSafeAreaInsets();
+  const footerBottomPad = Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 12) + 16;
 
   const [orgTypes, setOrgTypes] = useState([]);
   const [docTypes, setDocTypes] = useState([]);
@@ -139,29 +141,26 @@ export default function VerifyScreen() {
 
   const handlePickDocument = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'image/jpeg', 'image/png'],
-        copyToCacheDirectory: true,
-      });
-      if (!result.canceled && result.assets?.length > 0) {
-        const asset = result.assets[0];
-        if (asset.size && asset.size > 10 * 1024 * 1024) {
-          showPopup({
-            variant: 'warning',
-            title: 'File too large',
-            message: 'Please choose a file under 10 MB.',
-          });
-          return;
-        }
-        setField('documentUri', asset.uri);
-        setField('documentName', asset.name);
-        setField('documentMimeType', asset.mimeType);
+      const result = await pickVerificationDocument();
+      if (result.error === 'too_large') {
+        showPopup({
+          variant: 'warning',
+          title: 'File too large',
+          message: 'Please choose a file under 10 MB.',
+        });
+        return;
       }
-    } catch {
+      const asset = result.asset;
+      if (!asset) return;
+
+      setField('documentUri', asset.uri);
+      setField('documentName', asset.name);
+      setField('documentMimeType', asset.mimeType);
+    } catch (error) {
       showPopup({
         variant: 'error',
         title: 'Could not pick file',
-        message: 'Please try again.',
+        message: error?.message || 'Please try again.',
       });
     }
   };
@@ -469,8 +468,8 @@ export default function VerifyScreen() {
                     <Ionicons name="cloud-upload-outline" size={22} color={ORANGE} />
                     <Text style={styles.uploadBtnLabel}>
                       {hasExistingDocument && !form.documentUri
-                        ? 'Replace document (PDF, JPG, PNG · max 10 MB)'
-                        : 'Choose file (PDF, JPG, PNG · max 10 MB)'}
+                        ? 'Replace document (JPG, PNG · max 10 MB)'
+                        : 'Choose photo (JPG, PNG · max 10 MB)'}
                     </Text>
                   </Pressable>
                 </View>
@@ -548,7 +547,7 @@ export default function VerifyScreen() {
         ) : null}
 
         {/* Bottom CTA */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: footerBottomPad }]}>
           {sectionMode || step === VERIFICATION_TOTAL_STEPS ? (
             <Pressable
               style={[
@@ -642,7 +641,7 @@ const styles = StyleSheet.create({
   scroll: {
     padding: 20,
     paddingTop: 4,
-    paddingBottom: 20,
+    paddingBottom: 28,
   },
   stepTitle: {
     fontSize: 22,
@@ -795,7 +794,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   footer: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },

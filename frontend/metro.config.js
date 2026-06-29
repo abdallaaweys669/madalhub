@@ -8,8 +8,8 @@ module.exports = (() => {
   config.resolver.assetExts = config.resolver.assetExts.filter(ext => ext !== 'svg');
   config.resolver.sourceExts.push('svg');
 
-  // Fewer parallel workers = less RAM (jest-worker OOM on 8GB machines).
-  config.maxWorkers = 2;
+  // Single worker avoids Metro OOM on Windows laptops with 8 GB RAM.
+  config.maxWorkers = 1;
 
   return config;
 })();

@@ -33,7 +33,7 @@ It has two parts:
 
 ```bash
 # Frontend (from frontend/)
-npm run start        # expo start (cached — fast)
+npm run start        # expo start (cached — fast). Alias: npm run dev
 npm run start:clear  # expo start --clear (only when cache is stale)
 npm run android      # native android build
 npm run ios          # native ios build
@@ -41,6 +41,9 @@ npm run ios          # native ios build
 # Backend (from backend/)
 npm run start:dev
 ```
+
+If Metro crashes with **out of memory** on Windows, close other apps and retry `npm run start`
+(uses 1 worker + 4 GB Node heap). Do not run multiple Metro instances on port 8081.
 
 ## Frontend conventions
 

@@ -79,7 +79,8 @@
       ],
       "expo-sharing",
       "expo-secure-store",
-      "expo-image"
+      "expo-image",
+      "expo-document-picker"
     ],
     "scheme": "madalhub",
     "extra": {
