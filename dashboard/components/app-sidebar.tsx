@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -76,12 +77,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/" />}>
-              <div
-                className="flex aspect-square size-8 items-center justify-center rounded-lg text-white font-bold text-sm"
-                style={{ background: "linear-gradient(135deg,#FF7B3F,#FF5A1F)" }}
-              >
-                M
-              </div>
+              <Image
+                src="/madalhub_logo.png"
+                alt="MadalHub"
+                width={32}
+                height={32}
+                className="size-8 shrink-0 rounded-lg object-contain"
+                priority
+              />
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">MadalHub</span>
                 <span className="truncate text-xs text-muted-foreground">Admin</span>

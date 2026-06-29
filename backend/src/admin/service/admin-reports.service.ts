@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { User } from 'src/database/entities/user.entity';
 import { OrganizerProfile } from 'src/database/entities/organizer-profile.entity';
 import { OrganizerPaymentRequest } from 'src/database/entities/organizer-payment-request.entity';
@@ -8,6 +8,7 @@ import { OrganizerCreditRequest } from 'src/database/entities/organizer-credit-r
 import { Event } from 'src/database/entities/event.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { Interest } from 'src/database/entities/interest.entity';
+import { MemberProfile } from 'src/database/entities/member-profile.entity';
 import {
   AdminReportSummaryQueryDto,
   ReportSummaryType,
@@ -30,6 +31,8 @@ export type ReportSummaryResponse = {
   breakdown: Breakdown[];
   rows: Record<string, unknown>[];
   topCreators?: Record<string, unknown>[];
+  topEvents?: Record<string, unknown>[];
+  categoryBreakdown?: Breakdown[];
   exportType: string | null;
 };
 
@@ -50,14 +53,17 @@ export class AdminReportsService {
     private registrationRepository: Repository<EventRegistration>,
     @InjectRepository(Interest)
     private interestRepository: Repository<Interest>,
+    @InjectRepository(MemberProfile)
+    private memberProfileRepository: Repository<MemberProfile>,
   ) {}
 
   async getSummary(query: AdminReportSummaryQueryDto): Promise<ReportSummaryResponse> {
     const { fromDate, toDate } = this.parseRange(query.from, query.to);
 
     switch (query.type) {
+      case 'members':
       case 'user-growth':
-        return this.userGrowthReport(fromDate, toDate);
+        return this.membersReport(fromDate, toDate, query.gender);
       case 'organizers':
         return this.organizersReport(fromDate, toDate);
       case 'events':
@@ -137,66 +143,100 @@ export class AdminReportsService {
     return { trendMonths, trendValues };
   }
 
-  private async userGrowthReport(fromDate: Date, toDate: Date): Promise<ReportSummaryResponse> {
-    const [total, active, pending, newInRange, admins] = await Promise.all([
-      this.userRepository.count({ where: { roleId: MEMBER_ROLE_ID } }),
-      this.userRepository.count({ where: { roleId: MEMBER_ROLE_ID, status: 'active' } }),
-      this.userRepository.count({ where: { roleId: MEMBER_ROLE_ID, status: 'pending' } }),
-      this.userRepository
-        .createQueryBuilder('u')
-        .where('u.roleId = :r', { r: MEMBER_ROLE_ID })
-        .andWhere('u.createdAt >= :from AND u.createdAt <= :to', { from: fromDate, to: toDate })
-        .getCount(),
-      this.userRepository.count({ where: { roleId: ADMIN_ROLE_ID } }),
-    ]);
+  private applyMemberGenderFilter(
+    qb: ReturnType<Repository<User>['createQueryBuilder']>,
+    gender?: string,
+  ) {
+    if (gender === 'male') {
+      qb.andWhere('mp.gender = :memberGender', { memberGender: 'Male' });
+    } else if (gender === 'female') {
+      qb.andWhere('mp.gender = :memberGender', { memberGender: 'Female' });
+    } else if (gender === 'not-set') {
+      qb.andWhere('(mp.gender IS NULL OR TRIM(mp.gender) = \'\')');
+    }
+    return qb;
+  }
+
+  private memberAnalyticsQb(fromDate: Date, toDate: Date, gender?: string) {
+    const qb = this.userRepository
+      .createQueryBuilder('u')
+      .leftJoin(MemberProfile, 'mp', 'mp.userId = u.id')
+      .where('u.roleId = :r', { r: MEMBER_ROLE_ID })
+      .andWhere('u.createdAt >= :from AND u.createdAt <= :to', {
+        from: fromDate,
+        to: toDate,
+      });
+    return this.applyMemberGenderFilter(qb, gender);
+  }
+
+  private async membersReport(
+    fromDate: Date,
+    toDate: Date,
+    gender?: string,
+  ): Promise<ReportSummaryResponse> {
+    const baseQb = () => this.memberAnalyticsQb(fromDate, toDate, gender);
+
+    const [newInRange, maleCount, femaleCount, notSetCount, profileComplete, withRegs] =
+      await Promise.all([
+        baseQb().getCount(),
+        this.memberAnalyticsQb(fromDate, toDate, gender)
+          .andWhere('mp.gender = :g', { g: 'Male' })
+          .getCount(),
+        this.memberAnalyticsQb(fromDate, toDate, gender)
+          .andWhere('mp.gender = :g', { g: 'Female' })
+          .getCount(),
+        this.memberAnalyticsQb(fromDate, toDate, gender)
+          .andWhere('(mp.gender IS NULL OR TRIM(mp.gender) = \'\')')
+          .getCount(),
+        baseQb().andWhere('mp.profile_completed = 1').getCount(),
+        baseQb()
+          .andWhere(
+            `EXISTS (
+              SELECT 1 FROM event_registrations er
+              WHERE er.member_id = u.id AND er.status != 'cancelled'
+            )`,
+          )
+          .getCount(),
+      ]);
+
+    const totalAllTime = await this.userRepository.count({
+      where: { roleId: MEMBER_ROLE_ID },
+    });
 
     const { trendMonths, trendValues } = await this.monthlyTrend(
       (start, end) =>
-        this.userRepository
-          .createQueryBuilder('u')
-          .where('u.roleId = :r', { r: MEMBER_ROLE_ID })
-          .andWhere('u.createdAt >= :s AND u.createdAt <= :e', { s: start, e: end })
-          .getCount(),
+        this.memberAnalyticsQb(start, end, gender).getCount(),
       fromDate,
       toDate,
     );
 
-    const statusRows = await this.userRepository
-      .createQueryBuilder('u')
-      .select('u.status', 'label')
-      .addSelect('COUNT(*)', 'value')
-      .where('u.roleId = :r', { r: MEMBER_ROLE_ID })
-      .groupBy('u.status')
-      .getRawMany<{ label: string; value: string }>();
+    const genderBreakdown = [
+      { label: 'Male', value: maleCount },
+      { label: 'Female', value: femaleCount },
+      { label: 'Not set', value: notSetCount },
+    ].filter((row) => row.value > 0);
 
-    const recent = await this.userRepository
-      .createQueryBuilder('u')
-      .where('u.roleId = :r', { r: MEMBER_ROLE_ID })
-      .andWhere('u.createdAt >= :from AND u.createdAt <= :to', { from: fromDate, to: toDate })
-      .orderBy('u.createdAt', 'DESC')
-      .take(25)
-      .getMany();
+    const activityBreakdown = [
+      { label: 'Joined an event', value: withRegs },
+      { label: 'No registrations yet', value: Math.max(0, newInRange - withRegs) },
+    ].filter((row) => row.value > 0);
+
+    const breakdown =
+      genderBreakdown.length > 0 ? genderBreakdown : activityBreakdown;
 
     return {
-      ...this.baseResponse('user-growth', fromDate, toDate, 'members'),
+      ...this.baseResponse('members', fromDate, toDate, 'members'),
       kpis: [
-        { key: 'total', label: 'Total members', value: total },
-        { key: 'active', label: 'Active', value: active },
-        { key: 'new', label: 'New in range', value: newInRange },
-        { key: 'admins', label: 'Admins', value: admins },
+        { key: 'new', label: 'New in period', value: newInRange },
+        { key: 'male', label: 'Male', value: maleCount },
+        { key: 'female', label: 'Female', value: femaleCount },
+        { key: 'profileComplete', label: 'Profile complete', value: profileComplete },
+        { key: 'total', label: 'All-time members', value: totalAllTime },
       ],
       trendMonths,
       trendValues,
-      breakdown: statusRows.map((r) => ({
-        label: r.label || 'unknown',
-        value: Number(r.value),
-      })),
-      rows: recent.map((u) => ({
-        name: u.fullName,
-        email: u.email,
-        status: u.status,
-        joined: u.createdAt,
-      })),
+      breakdown,
+      rows: [],
     };
   }
 
@@ -276,16 +316,27 @@ export class AdminReportsService {
   }
 
   private async eventsReport(fromDate: Date, toDate: Date): Promise<ReportSummaryResponse> {
-    const [total, draft, published, cancelled, newInRange] = await Promise.all([
-      this.eventRepository.count(),
+    const [draft, published, newInRange, signUpsInRange, publishedInRange] = await Promise.all([
       this.eventRepository.count({ where: { status: 'draft' } }),
       this.eventRepository.count({ where: { status: 'published' } }),
-      this.eventRepository.count({ where: { status: 'cancelled' } }),
       this.eventRepository
         .createQueryBuilder('e')
         .where('e.createdAt >= :from AND e.createdAt <= :to', { from: fromDate, to: toDate })
         .getCount(),
+      this.registrationRepository
+        .createQueryBuilder('r')
+        .where('r.createdAt >= :from AND r.createdAt <= :to', { from: fromDate, to: toDate })
+        .andWhere('r.status != :c', { c: 'cancelled' })
+        .getCount(),
+      this.eventRepository
+        .createQueryBuilder('e')
+        .where('e.createdAt >= :from AND e.createdAt <= :to', { from: fromDate, to: toDate })
+        .andWhere('e.status = :s', { s: 'published' })
+        .getCount(),
     ]);
+
+    const avgSignUps =
+      publishedInRange > 0 ? Math.round((signUpsInRange / publishedInRange) * 10) / 10 : 0;
 
     const { trendMonths, trendValues } = await this.monthlyTrend(
       (start, end) =>
@@ -297,41 +348,63 @@ export class AdminReportsService {
       toDate,
     );
 
-    const categoryRows = await this.eventRepository
-      .createQueryBuilder('e')
-      .leftJoin(Interest, 'i', 'i.id = e.interestId')
-      .select('COALESCE(i.name, :unknown)', 'label')
-      .addSelect('COUNT(*)', 'value')
-      .where('e.createdAt >= :from AND e.createdAt <= :to', { from: fromDate, to: toDate })
-      .setParameter('unknown', 'Uncategorized')
-      .groupBy('i.name')
-      .orderBy('value', 'DESC')
-      .getRawMany<{ label: string; value: string }>();
-
-    const recent = await this.eventRepository
-      .createQueryBuilder('e')
-      .where('e.createdAt >= :from AND e.createdAt <= :to', { from: fromDate, to: toDate })
-      .orderBy('e.createdAt', 'DESC')
-      .take(25)
-      .getMany();
+    const [statusRows, categoryRows, topEventRows] = await Promise.all([
+      this.eventRepository
+        .createQueryBuilder('e')
+        .select('e.status', 'label')
+        .addSelect('COUNT(*)', 'value')
+        .where('e.createdAt >= :from AND e.createdAt <= :to', { from: fromDate, to: toDate })
+        .groupBy('e.status')
+        .getRawMany<{ label: string; value: string }>(),
+      this.eventRepository
+        .createQueryBuilder('e')
+        .leftJoin(Interest, 'i', 'i.id = e.interestId')
+        .select('COALESCE(i.name, :unknown)', 'label')
+        .addSelect('COUNT(*)', 'value')
+        .where('e.createdAt >= :from AND e.createdAt <= :to', { from: fromDate, to: toDate })
+        .setParameter('unknown', 'Uncategorized')
+        .groupBy('i.name')
+        .orderBy('value', 'DESC')
+        .getRawMany<{ label: string; value: string }>(),
+      this.registrationRepository
+        .createQueryBuilder('r')
+        .innerJoin(Event, 'e', 'e.id = r.eventId')
+        .select('e.id', 'eventId')
+        .addSelect('e.title', 'title')
+        .addSelect('e.status', 'status')
+        .addSelect('COUNT(*)', 'registrations')
+        .where('r.createdAt >= :from AND r.createdAt <= :to', { from: fromDate, to: toDate })
+        .andWhere('r.status != :c', { c: 'cancelled' })
+        .groupBy('e.id')
+        .addGroupBy('e.title')
+        .addGroupBy('e.status')
+        .orderBy('registrations', 'DESC')
+        .take(15)
+        .getRawMany<{ eventId: string; title: string; status: string; registrations: string }>(),
+    ]);
 
     return {
       ...this.baseResponse('events', fromDate, toDate, 'events'),
       kpis: [
-        { key: 'total', label: 'Total events', value: total },
-        { key: 'published', label: 'Published', value: published },
-        { key: 'draft', label: 'Draft', value: draft },
         { key: 'new', label: 'New in range', value: newInRange },
+        { key: 'published', label: 'Published (all-time)', value: published },
+        { key: 'signUps', label: 'Sign-ups in range', value: signUpsInRange },
+        { key: 'avgSignUps', label: 'Avg sign-ups / published', value: avgSignUps },
+        { key: 'draft', label: 'Draft', value: draft },
       ],
       trendMonths,
       trendValues,
-      breakdown: categoryRows.map((r) => ({ label: r.label, value: Number(r.value) })),
-      rows: recent.map((e) => ({
+      breakdown: statusRows.map((r) => ({
+        label: r.label || 'unknown',
+        value: Number(r.value),
+      })),
+      categoryBreakdown: categoryRows.map((r) => ({ label: r.label, value: Number(r.value) })),
+      topEvents: topEventRows.map((e) => ({
         title: e.title,
         status: e.status,
-        location: e.locationName,
-        starts: e.startDatetime,
+        registrations: Number(e.registrations),
       })),
+      rows: [],
     };
   }
 
@@ -819,40 +892,23 @@ export class AdminReportsService {
     };
   }
 
-  private async logsReport(fromDate: Date, toDate: Date): Promise<ReportSummaryResponse> {
-    const [creditRows, paymentRows, suspendedUsers, cancelledEvents] = await Promise.all([
-      this.creditRequestRepository
-        .createQueryBuilder('c')
-        .where('c.status IN (:...statuses)', { statuses: ['granted', 'dismissed'] })
-        .andWhere('c.resolvedAt IS NOT NULL')
-        .andWhere('c.resolvedAt >= :from AND c.resolvedAt <= :to', { from: fromDate, to: toDate })
-        .orderBy('c.resolvedAt', 'DESC')
-        .take(100)
-        .getMany(),
-      this.paymentRequestRepository
-        .createQueryBuilder('p')
-        .where('p.status IN (:...statuses)', { statuses: ['approved', 'rejected'] })
-        .andWhere('p.updatedAt >= :from AND p.updatedAt <= :to', { from: fromDate, to: toDate })
-        .orderBy('p.updatedAt', 'DESC')
-        .take(100)
-        .getMany(),
-      this.userRepository
-        .createQueryBuilder('u')
-        .where('u.status = :status', { status: 'rejected' })
-        .andWhere('u.updatedAt >= :from AND u.updatedAt <= :to', { from: fromDate, to: toDate })
-        .andWhere('u.updatedAt > DATE_ADD(u.createdAt, INTERVAL 1 MINUTE)')
-        .orderBy('u.updatedAt', 'DESC')
-        .take(50)
-        .getMany(),
-      this.eventRepository
-        .createQueryBuilder('e')
-        .where('e.status = :status', { status: 'cancelled' })
-        .andWhere('e.updatedAt >= :from AND e.updatedAt <= :to', { from: fromDate, to: toDate })
-        .orderBy('e.updatedAt', 'DESC')
-        .take(50)
-        .getMany(),
-    ]);
+  private isMissingTableError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    return msg.includes("doesn't exist") || msg.includes('ER_NO_SUCH_TABLE');
+  }
 
+  private async safeLogQuery<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      if (this.isMissingTableError(err)) {
+        return fallback;
+      }
+      throw err;
+    }
+  }
+
+  private async logsReport(fromDate: Date, toDate: Date): Promise<ReportSummaryResponse> {
     type LogRow = {
       occurredAt: string;
       action: string;
@@ -860,7 +916,174 @@ export class AdminReportsService {
       detail: string;
     };
 
+    const range = { from: fromDate, to: toDate };
+
+    const [
+      creditRows,
+      paymentRows,
+      suspendedUsers,
+      cancelledEvents,
+      newMembers,
+      newOrganizers,
+      newEvents,
+      newRegistrations,
+    ] = await Promise.all([
+      this.safeLogQuery(
+        () =>
+          this.creditRequestRepository
+            .createQueryBuilder('c')
+            .where('c.status IN (:...statuses)', { statuses: ['granted', 'dismissed'] })
+            .andWhere('c.resolvedAt IS NOT NULL')
+            .andWhere('c.resolvedAt >= :from AND c.resolvedAt <= :to', range)
+            .orderBy('c.resolvedAt', 'DESC')
+            .take(100)
+            .getMany(),
+        [],
+      ),
+      this.safeLogQuery(
+        () =>
+          this.paymentRequestRepository
+            .createQueryBuilder('p')
+            .where('p.status IN (:...statuses)', { statuses: ['approved', 'rejected'] })
+            .andWhere('p.updatedAt >= :from AND p.updatedAt <= :to', range)
+            .orderBy('p.updatedAt', 'DESC')
+            .take(100)
+            .getMany(),
+        [],
+      ),
+      this.safeLogQuery(
+        () =>
+          this.userRepository
+            .createQueryBuilder('u')
+            .where('u.status = :status', { status: 'rejected' })
+            .andWhere('u.updatedAt >= :from AND u.updatedAt <= :to', range)
+            .andWhere('u.updatedAt > DATE_ADD(u.createdAt, INTERVAL 1 MINUTE)')
+            .orderBy('u.updatedAt', 'DESC')
+            .take(50)
+            .getMany(),
+        [],
+      ),
+      this.safeLogQuery(
+        () =>
+          this.eventRepository
+            .createQueryBuilder('e')
+            .where('e.status = :status', { status: 'cancelled' })
+            .andWhere('e.updatedAt >= :from AND e.updatedAt <= :to', range)
+            .orderBy('e.updatedAt', 'DESC')
+            .take(50)
+            .getMany(),
+        [],
+      ),
+      this.safeLogQuery(
+        () =>
+          this.userRepository
+            .createQueryBuilder('u')
+            .where('u.roleId = :r', { r: MEMBER_ROLE_ID })
+            .andWhere('u.createdAt >= :from AND u.createdAt <= :to', range)
+            .orderBy('u.createdAt', 'DESC')
+            .take(100)
+            .getMany(),
+        [],
+      ),
+      this.safeLogQuery(
+        () =>
+          this.organizerProfileRepository
+            .createQueryBuilder('p')
+            .where('p.createdAt >= :from AND p.createdAt <= :to', range)
+            .orderBy('p.createdAt', 'DESC')
+            .take(100)
+            .getMany(),
+        [],
+      ),
+      this.safeLogQuery(
+        () =>
+          this.eventRepository
+            .createQueryBuilder('e')
+            .where('e.createdAt >= :from AND e.createdAt <= :to', range)
+            .orderBy('e.createdAt', 'DESC')
+            .take(100)
+            .getMany(),
+        [],
+      ),
+      this.safeLogQuery(
+        () =>
+          this.registrationRepository
+            .createQueryBuilder('r')
+            .where('r.createdAt >= :from AND r.createdAt <= :to', range)
+            .andWhere('r.status != :cancelled', { cancelled: 'cancelled' })
+            .orderBy('r.createdAt', 'DESC')
+            .take(150)
+            .getMany(),
+        [],
+      ),
+    ]);
+
     const entries: LogRow[] = [];
+
+    const orgUserIds = newOrganizers.map((p) => p.userId);
+    const orgUsers =
+      orgUserIds.length > 0
+        ? await this.userRepository.findBy({ id: In(orgUserIds) })
+        : ([] as User[]);
+    const orgUserMap = new Map(orgUsers.map((u) => [u.id, u]));
+
+    const regMemberIds = [...new Set(newRegistrations.map((r) => r.memberId))];
+    const regEventIds = [...new Set(newRegistrations.map((r) => r.eventId))];
+    const [regMembers, regEvents] = await Promise.all([
+      regMemberIds.length > 0
+        ? this.userRepository.findBy({ id: In(regMemberIds) })
+        : Promise.resolve([] as User[]),
+      regEventIds.length > 0
+        ? this.eventRepository.findBy({ id: In(regEventIds) })
+        : Promise.resolve([] as Event[]),
+    ]);
+    const regMemberMap = new Map<number, User>(regMembers.map((u) => [u.id, u]));
+    const regEventMap = new Map<number, Event>(regEvents.map((e) => [e.id, e]));
+
+    for (const user of newMembers) {
+      entries.push({
+        occurredAt: user.createdAt.toISOString(),
+        action: 'Member joined',
+        subject: user.fullName,
+        detail: user.email,
+      });
+    }
+
+    for (const profile of newOrganizers) {
+      const user = orgUserMap.get(profile.userId);
+      entries.push({
+        occurredAt: profile.createdAt.toISOString(),
+        action: 'Organizer joined',
+        subject: profile.organizationName ?? user?.fullName ?? 'Organizer',
+        detail: `${user?.email ?? ''}${profile.verificationStatus ? ` · ${profile.verificationStatus}` : ''}`.trim(),
+      });
+    }
+
+    for (const event of newEvents) {
+      const action =
+        event.status === 'published'
+          ? 'Event published'
+          : event.status === 'draft'
+            ? 'Event draft created'
+            : 'Event created';
+      entries.push({
+        occurredAt: event.createdAt.toISOString(),
+        action,
+        subject: event.title,
+        detail: `${event.status} · organizer #${event.organizerId}${event.locationName ? ` · ${event.locationName}` : ''}`,
+      });
+    }
+
+    for (const reg of newRegistrations) {
+      const member = regMemberMap.get(reg.memberId);
+      const event = regEventMap.get(reg.eventId);
+      entries.push({
+        occurredAt: reg.createdAt.toISOString(),
+        action: 'Event registration',
+        subject: member?.fullName ?? `Member #${reg.memberId}`,
+        detail: `${event?.title ?? `Event #${reg.eventId}`} · ${reg.status}`,
+      });
+    }
 
     for (const row of creditRows) {
       entries.push({
@@ -916,33 +1139,24 @@ export class AdminReportsService {
       return acc;
     }, {});
 
+    const signUps = actionCounts['Event registration'] ?? 0;
+    const joins = (actionCounts['Member joined'] ?? 0) + (actionCounts['Organizer joined'] ?? 0);
+
     return {
       ...this.baseResponse('logs', fromDate, toDate, null),
       kpis: [
-        { key: 'entries', label: 'Log entries', value: entries.length },
-        {
-          key: 'credits',
-          label: 'Credit actions',
-          value: creditRows.length,
-        },
-        {
-          key: 'payments',
-          label: 'Payment reviews',
-          value: paymentRows.length,
-        },
-        {
-          key: 'moderation',
-          label: 'Suspensions / cancellations',
-          value: suspendedUsers.length + cancelledEvents.length,
-        },
+        { key: 'entries', label: 'Total activities', value: entries.length },
+        { key: 'joins', label: 'New sign-ups', value: joins },
+        { key: 'events', label: 'Event activity', value: newEvents.length },
+        { key: 'registrations', label: 'Registrations', value: signUps },
       ],
       trendMonths: [],
       trendValues: [],
       breakdown: Object.entries(actionCounts)
         .map(([label, value]) => ({ label, value }))
         .sort((a, b) => b.value - a.value)
-        .slice(0, 8),
-      rows: entries.slice(0, 200),
+        .slice(0, 10),
+      rows: entries.slice(0, 300),
     };
   }
 }

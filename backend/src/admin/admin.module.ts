@@ -10,6 +10,7 @@ import { OrganizerCreditRequest } from 'src/database/entities/organizer-credit-r
 import { Event } from 'src/database/entities/event.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { Interest } from 'src/database/entities/interest.entity';
+import { MemberProfile } from 'src/database/entities/member-profile.entity';
 import { OrganizerType } from 'src/database/entities/organizer-type.entity';
 import { OrganizerVerificationDocumentType } from 'src/database/entities/organizer-verification-document-type.entity';
 import { ConfigModule } from '@nestjs/config';
@@ -29,6 +30,7 @@ import { AdminReportsService } from './service/admin-reports.service';
       Event,
       EventRegistration,
       Interest,
+      MemberProfile,
       OrganizerType,
       OrganizerVerificationDocumentType,
     ]),

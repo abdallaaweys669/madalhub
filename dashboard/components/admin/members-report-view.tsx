@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Building2 } from "lucide-react";
+import { Users } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -31,88 +31,84 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import ChartContainer from "@/components/ChartContainer";
-import { AdminTableCard, ADMIN_TH } from "@/components/admin/admin-table-card";
+import { AdminTableCard, ADMIN_TH, ADMIN_ACTIONS_TH, AdminActionsCell, AdminManageButton, TruncateCell } from "@/components/admin/admin-table-card";
 import { ListPagination, ListToolbar } from "@/components/admin/list-toolbar";
-import { ReportExportButtons } from "@/components/admin/report-export-buttons";
+import { MemberDetailDialog } from "@/components/admin/admin-record-dialogs";
 import {
   getAdminReport,
   getReportSummary,
-  listOrganizers,
-  type OrganizerListRow,
+  listMembers,
+  type MemberRow,
   type ReportSummary,
 } from "@/lib/api";
 import { useAdminList } from "@/hooks/useAdminList";
 import { getReportConfig } from "@/lib/reports";
-import { DATE_PRESETS, defaultDateRange, rangeFromPreset } from "@/lib/report-dates";
-import { downloadReportCsv, type ReportDocumentPayload } from "@/lib/report-export";
 import { cn } from "@/lib/utils";
+import { ReportExportButtons } from "@/components/admin/report-export-buttons";
+import { downloadReportCsv, type ReportDocumentPayload } from "@/lib/report-export";
+import { DATE_PRESETS, defaultDateRange, rangeFromPreset } from "@/lib/report-dates";
 
-const VERIFICATION_OPTIONS = [
-  { value: "all", label: "All statuses" },
-  { value: "unverified", label: "Unverified" },
-  { value: "pending", label: "Pending" },
-  { value: "approved", label: "Approved" },
-  { value: "rejected", label: "Rejected" },
+const GENDER_OPTIONS = [
+  { value: "all", label: "All genders" },
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "not-set", label: "Not set" },
 ];
 
 const ACTIVITY_OPTIONS = [
-  { value: "all", label: "All organizers" },
-  { value: "with-events", label: "With events" },
-  { value: "no-events", label: "No events yet" },
+  { value: "all", label: "All members" },
+  { value: "with-registrations", label: "Joined an event" },
+  { value: "no-registrations", label: "No registrations yet" },
 ];
 
-const VERIFICATION_CHART_COLORS: Record<string, string> = {
-  unverified: "#94A3B8",
-  pending: "#F59E0B",
-  approved: "#22C55E",
-  rejected: "#EF4444",
-  unknown: "#CBD5E1",
+const GENDER_CHART_COLORS: Record<string, string> = {
+  Male: "#FF7B3F",
+  Female: "#6366F1",
+  "Not set": "#94A3B8",
 };
 
-function capitalizeStatus(value: string) {
-  if (!value) return "Unknown";
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-export default function OrganizersReportView() {
-  const config = getReportConfig("organizers")!;
+export default function MembersReportView() {
+  const config = getReportConfig("members")!;
   const initialRange = useMemo(() => defaultDateRange(), []);
 
   const [from, setFrom] = useState(initialRange.from);
   const [to, setTo] = useState(initialRange.to);
+  const [gender, setGender] = useState("all");
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summary, setSummary] = useState<ReportSummary | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const dateRangeValid = !from || !to || from <= to;
 
   const fetcher = useCallback(
-    (params: Parameters<typeof listOrganizers>[0]) =>
-      listOrganizers({
+    (params: Parameters<typeof listMembers>[0]) =>
+      listMembers({
         ...params,
+        gender: gender !== "all" ? gender : undefined,
         joinedFrom: dateRangeValid ? from || undefined : undefined,
         joinedTo: dateRangeValid ? to || undefined : undefined,
       }),
-    [from, to, dateRangeValid],
+    [from, to, gender, dateRangeValid],
   );
 
   const {
     searchInput,
     onSearchChange,
-    status,
-    onStatusChange,
     activity,
     onActivityChange,
     setPage,
     data,
     loading: listLoading,
-  } = useAdminList<OrganizerListRow>(fetcher);
+    reload,
+  } = useAdminList<MemberRow>(fetcher);
 
   useEffect(() => {
     if (!dateRangeValid) return;
 
     let cancelled = false;
     setSummaryLoading(true);
-    getReportSummary("organizers", from || undefined, to || undefined)
+    getReportSummary("members", from || undefined, to || undefined, gender)
       .then((result) => {
         if (!cancelled) setSummary(result);
       })
@@ -128,7 +124,7 @@ export default function OrganizersReportView() {
     return () => {
       cancelled = true;
     };
-  }, [from, to, dateRangeValid]);
+  }, [from, to, gender, dateRangeValid]);
 
   function handleFromChange(value: string) {
     setFrom(value);
@@ -137,6 +133,11 @@ export default function OrganizersReportView() {
 
   function handleToChange(value: string) {
     setTo(value);
+    setPage(1);
+  }
+
+  function handleGenderChange(value: string) {
+    setGender(value);
     setPage(1);
   }
 
@@ -159,8 +160,7 @@ export default function OrganizersReportView() {
   const pieData = useMemo(
     () =>
       (summary?.breakdown ?? []).map((item) => ({
-        name: capitalizeStatus(item.label),
-        key: item.label?.toLowerCase() || "unknown",
+        name: item.label,
         value: item.value,
       })),
     [summary],
@@ -169,36 +169,45 @@ export default function OrganizersReportView() {
   const pieTotal = pieData.reduce((sum, row) => sum + row.value, 0);
 
   async function handleExportCsv() {
-    const result = await getAdminReport("organizers", from || undefined, to || undefined);
-    downloadReportCsv("madalhub-organizers-report.csv", result.rows);
+    const result = await getAdminReport("members", from || undefined, to || undefined, {
+      gender,
+      search: searchInput.trim() || undefined,
+    });
+    downloadReportCsv("madalhub-members-report.csv", result.rows);
   }
 
-  async function buildOrganizersDocument(): Promise<ReportDocumentPayload | null> {
+  async function buildMembersDocument(): Promise<ReportDocumentPayload | null> {
     if (!dateRangeValid) return null;
-    const result = await getAdminReport("organizers", from || undefined, to || undefined);
-    const statusLabel = VERIFICATION_OPTIONS.find((o) => o.value === status)?.label ?? "All statuses";
+    const result = await getAdminReport("members", from || undefined, to || undefined, {
+      gender,
+      search: searchInput.trim() || undefined,
+    });
+    const genderLabel = GENDER_OPTIONS.find((o) => o.value === gender)?.label ?? "All genders";
     return {
-      filename: "madalhub-organizers-report",
-      title: "Organizers Report",
+      filename: "madalhub-members-report",
+      title: "Members Report",
       filterLines: [
         `Period: ${from} → ${to}`,
-        ...(status !== "all" ? [`Table filter — verification: ${statusLabel}`] : []),
-        ...(searchInput.trim() ? [`Table filter — search: ${searchInput.trim()}`] : []),
+        `Gender: ${genderLabel}`,
+        ...(searchInput.trim() ? [`Search: ${searchInput.trim()}`] : []),
       ],
       kpis: (summary?.kpis ?? []).map((k) => ({ label: k.label, value: k.value })),
-      breakdown: (summary?.breakdown ?? []).map((b) => ({
-        label: capitalizeStatus(b.label),
-        value: b.value,
-      })),
-      columns: ["Organization", "Email", "Verification", "Credits", "Joined"],
+      breakdown: (summary?.breakdown ?? []).map((b) => ({ label: b.label, value: b.value })),
+      columns: ["Name", "Email", "Gender", "Location", "Profile", "Joined"],
       rows: result.rows.map((r) => [
-        String(r.organizationName ?? ""),
+        String(r.fullName ?? ""),
         String(r.email ?? ""),
-        capitalizeStatus(String(r.verificationStatus ?? "")),
-        String(r.paidPublishCredits ?? 0),
-        r.createdAt ? new Date(String(r.createdAt)).toLocaleDateString() : "",
+        String(r.gender || "—"),
+        String(r.location || "—"),
+        String(r.profileCompleted ?? ""),
+        r.joined ? new Date(String(r.joined)).toLocaleDateString() : "",
       ]),
     };
+  }
+
+  function openMember(id: number) {
+    setSelectedId(id);
+    setDialogOpen(true);
   }
 
   return (
@@ -208,8 +217,8 @@ export default function OrganizersReportView() {
         description={config.description}
         actions={
           <div className="hidden sm:flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
-            <Building2 size={16} />
-            Organizer analytics
+            <Users size={16} />
+            Member analytics
           </div>
         }
       />
@@ -218,7 +227,7 @@ export default function OrganizersReportView() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Filters</CardTitle>
           <CardDescription>
-            Charts and directory update automatically when you change dates. Search and verification filter the table below.
+            Charts and directory update automatically when you change dates or gender. Search filters the table below.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -239,9 +248,9 @@ export default function OrganizersReportView() {
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:flex-wrap">
             <div className="space-y-2">
-              <Label htmlFor="organizers-from">From</Label>
+              <Label htmlFor="members-from">From</Label>
               <Input
-                id="organizers-from"
+                id="members-from"
                 type="date"
                 value={from}
                 onChange={(e) => handleFromChange(e.target.value)}
@@ -249,18 +258,33 @@ export default function OrganizersReportView() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="organizers-to">To</Label>
+              <Label htmlFor="members-to">To</Label>
               <Input
-                id="organizers-to"
+                id="members-to"
                 type="date"
                 value={to}
                 onChange={(e) => handleToChange(e.target.value)}
                 className="w-full sm:w-[160px]"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="members-gender">Gender</Label>
+              <select
+                id="members-gender"
+                value={gender}
+                onChange={(e) => handleGenderChange(e.target.value)}
+                className="flex h-9 w-full sm:w-[160px] rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {GENDER_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <ReportExportButtons
               onExportCsv={handleExportCsv}
-              buildDocument={buildOrganizersDocument}
+              buildDocument={buildMembersDocument}
               csvDisabled={!dateRangeValid}
             />
           </div>
@@ -270,9 +294,9 @@ export default function OrganizersReportView() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {summaryLoading
-          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
+          ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
           : summary?.kpis.map((kpi, index) => (
               <Card
                 key={kpi.key}
@@ -293,7 +317,7 @@ export default function OrganizersReportView() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Sign-ups trend</CardTitle>
-            <CardDescription>New organizers per month in the selected period</CardDescription>
+            <CardDescription>New members per month in the selected period</CardDescription>
           </CardHeader>
           <CardContent>
             {summaryLoading ? (
@@ -303,7 +327,7 @@ export default function OrganizersReportView() {
                 <ResponsiveContainer width="100%" height={240} minWidth={0} debounce={50}>
                   <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="organizersReportFill" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="membersReportFill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#FF7B3F" stopOpacity={0.3} />
                         <stop offset="100%" stopColor="#FF7B3F" stopOpacity={0} />
                       </linearGradient>
@@ -316,7 +340,7 @@ export default function OrganizersReportView() {
                       type="monotone"
                       dataKey="value"
                       stroke="#FF7B3F"
-                      fill="url(#organizersReportFill)"
+                      fill="url(#membersReportFill)"
                       strokeWidth={2.5}
                     />
                   </AreaChart>
@@ -328,14 +352,14 @@ export default function OrganizersReportView() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Verification mix</CardTitle>
-            <CardDescription>Organizers who joined in this period</CardDescription>
+            <CardTitle className="text-base">Gender mix</CardTitle>
+            <CardDescription>Members who joined in this period</CardDescription>
           </CardHeader>
           <CardContent>
             {summaryLoading ? (
               <Skeleton className="h-[240px] w-full" />
             ) : pieData.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-16 text-center">No organizers in this period</p>
+              <p className="text-sm text-muted-foreground py-16 text-center">No members in this period</p>
             ) : (
               <div className="flex flex-col gap-4">
                 <ChartContainer className="h-[160px] w-full">
@@ -350,10 +374,7 @@ export default function OrganizersReportView() {
                         paddingAngle={2}
                       >
                         {pieData.map((entry) => (
-                          <Cell
-                            key={entry.key}
-                            fill={VERIFICATION_CHART_COLORS[entry.key] ?? VERIFICATION_CHART_COLORS.unknown}
-                          />
+                          <Cell key={entry.name} fill={GENDER_CHART_COLORS[entry.name] ?? "#CBD5E1"} />
                         ))}
                       </Pie>
                       <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
@@ -363,12 +384,14 @@ export default function OrganizersReportView() {
                 <div className="space-y-2">
                   {pieData.map((item) => {
                     const pct = pieTotal > 0 ? Math.round((item.value / pieTotal) * 100) : 0;
-                    const color = VERIFICATION_CHART_COLORS[item.key] ?? VERIFICATION_CHART_COLORS.unknown;
                     return (
-                      <div key={item.key} className="space-y-1">
+                      <div key={item.name} className="space-y-1">
                         <div className="flex items-center justify-between text-sm gap-2">
                           <span className="flex items-center gap-2 text-muted-foreground">
-                            <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                            <span
+                              className="size-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: GENDER_CHART_COLORS[item.name] ?? "#CBD5E1" }}
+                            />
                             {item.name}
                           </span>
                           <span className="font-medium tabular-nums">
@@ -378,7 +401,10 @@ export default function OrganizersReportView() {
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all"
-                            style={{ width: `${pct}%`, backgroundColor: color }}
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: GENDER_CHART_COLORS[item.name] ?? "#CBD5E1",
+                            }}
                           />
                         </div>
                       </div>
@@ -391,57 +417,18 @@ export default function OrganizersReportView() {
         </Card>
       </div>
 
-      {!summaryLoading && (summary?.topCreators?.length ?? 0) > 0 ? (
-        <Card className="overflow-hidden py-0 min-w-0">
-          <CardHeader className="border-b">
-            <CardTitle className="text-base">Top creators in range</CardTitle>
-            <CardDescription>Organizers with the most events created in the selected period.</CardDescription>
-          </CardHeader>
-          <div className="max-h-[280px] overflow-auto">
-            <Table className="table-fixed w-full">
-              <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className={`${ADMIN_TH} w-[34%]`}>Organization</TableHead>
-                  <TableHead className={`${ADMIN_TH} w-[34%]`}>Email</TableHead>
-                  <TableHead className={`${ADMIN_TH} w-[12%]`}>Events</TableHead>
-                  <TableHead className={`${ADMIN_TH} w-[20%]`}>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {summary!.topCreators!.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="truncate px-3 text-sm">{String(row.organization ?? "—")}</TableCell>
-                    <TableCell className="truncate px-3 text-sm text-muted-foreground">{String(row.email ?? "—")}</TableCell>
-                    <TableCell className="px-3 text-sm tabular-nums">{String(row.events ?? "0")}</TableCell>
-                    <TableCell className="px-3">
-                      <Badge variant="secondary" className="capitalize">
-                        {String(row.status ?? "—")}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
-      ) : null}
-
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Organizer directory</h2>
+          <h2 className="text-lg font-semibold">Member directory</h2>
           <p className="text-sm text-muted-foreground">
-            Search and filter organizers in the selected join period.
+            Search and filter members in the selected join period. Use Manage for profile and registrations.
           </p>
         </div>
 
         <ListToolbar
           search={searchInput}
           onSearchChange={onSearchChange}
-          searchPlaceholder="Search org name, email…"
-          status={status}
-          onStatusChange={onStatusChange}
-          statusOptions={VERIFICATION_OPTIONS}
-          statusLabel="Verification"
+          searchPlaceholder="Search name or email…"
           activity={activity}
           onActivityChange={onActivityChange}
           activityOptions={ACTIVITY_OPTIONS}
@@ -464,19 +451,20 @@ export default function OrganizersReportView() {
         >
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className={`${ADMIN_TH} w-[22%]`}>Organization</TableHead>
-              <TableHead className={`${ADMIN_TH} w-[24%]`}>Contact</TableHead>
-              <TableHead className={`${ADMIN_TH} w-[14%]`}>Verification</TableHead>
-              <TableHead className={`${ADMIN_TH} w-[10%]`}>Credits</TableHead>
+              <TableHead className={`${ADMIN_TH} w-[18%]`}>Name</TableHead>
+              <TableHead className={`${ADMIN_TH} w-[22%]`}>Email</TableHead>
+              <TableHead className={`${ADMIN_TH} w-[10%]`}>Gender</TableHead>
+              <TableHead className={`${ADMIN_TH} w-[18%]`}>Location</TableHead>
               <TableHead className={`${ADMIN_TH} w-[10%]`}>Events</TableHead>
-              <TableHead className={`${ADMIN_TH} w-[20%]`}>Joined</TableHead>
+              <TableHead className={`${ADMIN_TH} w-[12%]`}>Joined</TableHead>
+              <TableHead className={ADMIN_ACTIONS_TH}>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {listLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <TableCell key={j} className="px-3">
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -485,38 +473,32 @@ export default function OrganizersReportView() {
               ))
             ) : !data?.items.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-16 text-muted-foreground">
-                  No organizers match these filters
+                <TableCell colSpan={7} className="text-center py-16 text-muted-foreground">
+                  No members match these filters
                 </TableCell>
               </TableRow>
             ) : (
               data.items.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="max-w-0 px-3">
-                    <p className="font-medium truncate" title={row.organizationName}>
-                      {row.organizationName}
-                    </p>
-                    {row.website ? (
-                      <p className="text-xs text-muted-foreground truncate" title={row.website}>
-                        {row.website}
-                      </p>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="max-w-0 px-3">
-                    <p className="text-sm truncate" title={row.fullName}>
-                      {row.fullName}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate" title={row.email}>
-                      {row.email}
-                    </p>
-                  </TableCell>
+                  <TruncateCell className="font-medium px-3" title={row.fullName}>
+                    {row.fullName}
+                  </TruncateCell>
+                  <TruncateCell className="text-sm px-3 text-muted-foreground" title={row.email}>
+                    {row.email}
+                  </TruncateCell>
                   <TableCell className="px-3">
-                    <Badge variant="secondary" className="capitalize bg-primary/10 text-primary border-0">
-                      {row.verificationStatus}
-                    </Badge>
+                    {row.gender ? (
+                      <Badge variant="secondary" className="capitalize bg-primary/10 text-primary border-0">
+                        {row.gender}
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
                   </TableCell>
-                  <TableCell className="text-sm tabular-nums px-3">{row.paidPublishCredits}</TableCell>
-                  <TableCell className="text-sm tabular-nums px-3">{row.eventCount ?? 0}</TableCell>
+                  <TruncateCell className="text-sm text-muted-foreground px-3" title={row.location ?? undefined}>
+                    {row.location || "—"}
+                  </TruncateCell>
+                  <TableCell className="px-3 text-sm tabular-nums">{row.registrationCount ?? 0}</TableCell>
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap px-3">
                     {new Date(row.createdAt).toLocaleDateString(undefined, {
                       year: "numeric",
@@ -524,12 +506,22 @@ export default function OrganizersReportView() {
                       day: "numeric",
                     })}
                   </TableCell>
+                  <AdminActionsCell>
+                    <AdminManageButton onClick={() => openMember(row.id)} />
+                  </AdminActionsCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </AdminTableCard>
       </div>
+
+      <MemberDetailDialog
+        memberId={selectedId}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onUpdated={() => void reload()}
+      />
     </div>
   );
 }

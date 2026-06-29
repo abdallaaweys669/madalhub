@@ -1,8 +1,8 @@
 export const REPORT_ITEMS = [
   {
-    slug: "user-growth",
-    label: "User growth",
-    description: "Member sign-ups, active users, and growth trends.",
+    slug: "members",
+    label: "Members",
+    description: "Sign-ups, gender mix, registrations, and searchable member directory.",
     exportType: "members" as const,
   },
   {
@@ -14,65 +14,58 @@ export const REPORT_ITEMS = [
   {
     slug: "events",
     label: "Events",
-    description: "Events created, published vs draft, and categories.",
+    description: "Events created, status mix, categories, top sign-ups, and event directory.",
     exportType: "events" as const,
   },
   {
-    slug: "registrations",
-    label: "Registrations",
-    description: "Event sign-ups and registration status breakdown.",
+    slug: "engagement",
+    label: "Engagement",
+    description: "Sign-ups, check-ins, attendance rates, and registration directory.",
     exportType: "registrations" as const,
-  },
-  {
-    slug: "attendance",
-    label: "Attendance",
-    description: "QR check-ins, attendance rate, and no-shows.",
-    exportType: "registrations" as const,
-  },
-  {
-    slug: "revenue",
-    label: "Revenue",
-    description: "Publish credit payments and approved revenue.",
-    exportType: "revenue" as const,
   },
   {
     slug: "verification",
     label: "Verification",
-    description: "Organizer identity review pipeline.",
+    description: "Organizer identity review pipeline and queue health.",
     exportType: null,
-  },
-  {
-    slug: "popular-events",
-    label: "Popular events",
-    description: "Most registered events in the selected period.",
-    exportType: "registrations" as const,
-  },
-  {
-    slug: "audience",
-    label: "Audience",
-    description: "Male, female, and open-audience event performance.",
-    exportType: "events" as const,
   },
   {
     slug: "location",
     label: "Location",
-    description: "Members and events by area.",
+    description: "Members and events grouped by area or city.",
     exportType: null,
   },
   {
     slug: "logs",
     label: "Logs",
-    description: "Admin activity: credits, payments, suspensions, and event cancellations.",
+    description: "Platform activity: sign-ups, events, registrations, credits, and moderation.",
     exportType: null,
   },
 ] as const;
 
+/** Legacy report slugs → redirect target */
+export const LEGACY_REPORT_REDIRECTS: Record<string, string> = {
+  "user-growth": "/reports/members",
+  registrations: "/reports/engagement",
+  attendance: "/reports/engagement?tab=attendance",
+  "popular-events": "/reports/events",
+  revenue: "/payments",
+  audience: "/reports/members",
+};
+
 export type ReportSlug = (typeof REPORT_ITEMS)[number]["slug"];
 
 export function getReportConfig(slug: string) {
+  if (slug === "user-growth") {
+    return REPORT_ITEMS.find((r) => r.slug === "members") ?? null;
+  }
   return REPORT_ITEMS.find((r) => r.slug === slug) ?? null;
 }
 
 export function isReportSlug(slug: string): slug is ReportSlug {
   return REPORT_ITEMS.some((r) => r.slug === slug);
+}
+
+export function getLegacyReportRedirect(slug: string): string | null {
+  return LEGACY_REPORT_REDIRECTS[slug] ?? null;
 }

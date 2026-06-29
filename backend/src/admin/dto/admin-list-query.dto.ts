@@ -10,10 +10,23 @@ export class AdminListQueryDto {
   @IsString()
   status?: string;
 
-  /** Organizers list: `with-events` | `no-events` */
+  /** Organizers: `with-events` | `no-events`. Members: `with-registrations` | `no-registrations`. */
   @IsOptional()
   @IsString()
   activity?: string;
+
+  /** Members list: all | male | female | not-set */
+  @IsOptional()
+  @IsString()
+  gender?: string;
+
+  @IsOptional()
+  @IsString()
+  joinedFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  joinedTo?: string;
 
   @IsOptional()
   @Type(() => Number)

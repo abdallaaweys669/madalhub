@@ -13,6 +13,7 @@ import { OrganizerCreditRequest } from 'src/database/entities/organizer-credit-r
 import { Event } from 'src/database/entities/event.entity';
 import { EventRegistration } from 'src/database/entities/event-registration.entity';
 import { Interest } from 'src/database/entities/interest.entity';
+import { MemberProfile } from 'src/database/entities/member-profile.entity';
 import { OrganizerType } from 'src/database/entities/organizer-type.entity';
 import { OrganizerVerificationDocumentType } from 'src/database/entities/organizer-verification-document-type.entity';
 import { Repository } from 'typeorm';
@@ -639,31 +640,98 @@ export class AdminService {
     const { page, limit, skip } = this.paginate(query);
     const qb = this.userRepository
       .createQueryBuilder('u')
+      .leftJoin(MemberProfile, 'mp', 'mp.userId = u.id')
       .where('u.roleId = :roleId', { roleId: MEMBER_ROLE_ID });
 
     if (query.search?.trim()) {
       const s = `%${query.search.trim()}%`;
       qb.andWhere('(u.fullName LIKE :s OR u.email LIKE :s)', { s });
     }
-    if (query.status?.trim()) {
-      qb.andWhere('u.status = :status', { status: query.status.trim() });
+
+    const gender = query.gender?.trim().toLowerCase();
+    if (gender === 'male') {
+      qb.andWhere('mp.gender = :memberGender', { memberGender: 'Male' });
+    } else if (gender === 'female') {
+      qb.andWhere('mp.gender = :memberGender', { memberGender: 'Female' });
+    } else if (gender === 'not-set') {
+      qb.andWhere('(mp.gender IS NULL OR TRIM(mp.gender) = \'\')');
+    }
+
+    if (query.joinedFrom) {
+      const from = new Date(query.joinedFrom);
+      if (!Number.isNaN(from.getTime())) {
+        qb.andWhere('u.createdAt >= :joinedFrom', { joinedFrom: from });
+      }
+    }
+    if (query.joinedTo) {
+      const to = new Date(`${query.joinedTo}T23:59:59.999`);
+      if (!Number.isNaN(to.getTime())) {
+        qb.andWhere('u.createdAt <= :joinedTo', { joinedTo: to });
+      }
+    }
+
+    if (query.activity === 'with-registrations') {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM event_registrations er
+          WHERE er.member_id = u.id AND er.status != 'cancelled'
+        )`,
+      );
+    } else if (query.activity === 'no-registrations') {
+      qb.andWhere(
+        `NOT EXISTS (
+          SELECT 1 FROM event_registrations er
+          WHERE er.member_id = u.id AND er.status != 'cancelled'
+        )`,
+      );
     }
 
     qb.orderBy('u.createdAt', 'DESC');
     const total = await qb.getCount();
     const rows = await qb.skip(skip).take(limit).getMany();
 
+    const memberIds = rows.map((u) => u.id);
+    const profiles = memberIds.length
+      ? await this.userRepository.manager
+          .getRepository(MemberProfile)
+          .createQueryBuilder('mp')
+          .where('mp.userId IN (:...ids)', { ids: memberIds })
+          .getMany()
+      : [];
+    const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+
+    const regCounts = new Map<number, number>();
+    if (memberIds.length) {
+      const countRows = await this.registrationRepository
+        .createQueryBuilder('r')
+        .select('r.memberId', 'memberId')
+        .addSelect('COUNT(*)', 'cnt')
+        .where('r.memberId IN (:...ids)', { ids: memberIds })
+        .andWhere("r.status != 'cancelled'")
+        .groupBy('r.memberId')
+        .getRawMany<{ memberId: string; cnt: string }>();
+      countRows.forEach((row) => {
+        regCounts.set(Number(row.memberId), Number(row.cnt));
+      });
+    }
+
     return this.toPaginated(
-      rows.map((u) => ({
-        id: u.id,
-        fullName: u.fullName,
-        email: u.email,
-        phone: u.phone,
-        location: u.location,
-        status: u.status,
-        emailVerified: !!u.emailVerifiedAt,
-        createdAt: u.createdAt,
-      })),
+      rows.map((u) => {
+        const profile = profileMap.get(u.id);
+        return {
+          id: u.id,
+          fullName: u.fullName,
+          email: u.email,
+          phone: u.phone,
+          location: u.location,
+          gender: profile?.gender ?? null,
+          profileCompleted: profile?.profileCompleted ?? false,
+          registrationCount: regCounts.get(u.id) ?? 0,
+          status: u.status,
+          emailVerified: !!u.emailVerifiedAt,
+          createdAt: u.createdAt,
+        };
+      }),
       total,
       page,
       limit,
@@ -696,6 +764,18 @@ export class AdminService {
       qb.andWhere(
         'NOT EXISTS (SELECT 1 FROM events e WHERE e.organizer_id = p.user_id)',
       );
+    }
+    if (query.joinedFrom) {
+      const from = new Date(query.joinedFrom);
+      if (!Number.isNaN(from.getTime())) {
+        qb.andWhere('p.createdAt >= :joinedFrom', { joinedFrom: from });
+      }
+    }
+    if (query.joinedTo) {
+      const to = new Date(`${query.joinedTo}T23:59:59.999`);
+      if (!Number.isNaN(to.getTime())) {
+        qb.andWhere('p.createdAt <= :joinedTo', { joinedTo: to });
+      }
     }
 
     qb.orderBy('p.createdAt', 'DESC');
@@ -753,6 +833,18 @@ export class AdminService {
     if (query.status?.trim()) {
       qb.andWhere('e.status = :status', { status: query.status.trim() });
     }
+    if (query.joinedFrom) {
+      const from = new Date(query.joinedFrom);
+      if (!Number.isNaN(from.getTime())) {
+        qb.andWhere('e.createdAt >= :joinedFrom', { joinedFrom: from });
+      }
+    }
+    if (query.joinedTo) {
+      const to = new Date(`${query.joinedTo}T23:59:59.999`);
+      if (!Number.isNaN(to.getTime())) {
+        qb.andWhere('e.createdAt <= :joinedTo', { joinedTo: to });
+      }
+    }
 
     qb.orderBy('e.createdAt', 'DESC');
     const total = await qb.getCount();
@@ -799,6 +891,18 @@ export class AdminService {
     }
     if (query.memberId) {
       qb.andWhere('r.memberId = :memberId', { memberId: query.memberId });
+    }
+    if (query.joinedFrom) {
+      const from = new Date(query.joinedFrom);
+      if (!Number.isNaN(from.getTime())) {
+        qb.andWhere('r.createdAt >= :joinedFrom', { joinedFrom: from });
+      }
+    }
+    if (query.joinedTo) {
+      const to = new Date(`${query.joinedTo}T23:59:59.999`);
+      if (!Number.isNaN(to.getTime())) {
+        qb.andWhere('r.createdAt <= :joinedTo', { joinedTo: to });
+      }
     }
 
     qb.orderBy('r.createdAt', 'DESC');
@@ -1244,24 +1348,53 @@ export class AdminService {
 
     switch (query.type) {
       case 'members': {
-        const rows = await this.userRepository
+        const qb = this.userRepository
           .createQueryBuilder('u')
+          .leftJoin(MemberProfile, 'mp', 'mp.userId = u.id')
           .where('u.roleId = :r', { r: MEMBER_ROLE_ID })
-          .andWhere('u.createdAt >= :from AND u.createdAt <= :to', { from, to })
-          .orderBy('u.createdAt', 'DESC')
-          .getMany();
+          .andWhere('u.createdAt >= :from AND u.createdAt <= :to', { from, to });
+
+        if (query.search?.trim()) {
+          const s = `%${query.search.trim()}%`;
+          qb.andWhere('(u.fullName LIKE :s OR u.email LIKE :s)', { s });
+        }
+        const gender = query.gender?.trim().toLowerCase();
+        if (gender === 'male') {
+          qb.andWhere('mp.gender = :memberGender', { memberGender: 'Male' });
+        } else if (gender === 'female') {
+          qb.andWhere('mp.gender = :memberGender', { memberGender: 'Female' });
+        } else if (gender === 'not-set') {
+          qb.andWhere('(mp.gender IS NULL OR TRIM(mp.gender) = \'\')');
+        }
+
+        const rows = await qb.orderBy('u.createdAt', 'DESC').getMany();
+        const memberIds = rows.map((u) => u.id);
+        const profiles = memberIds.length
+          ? await this.userRepository.manager
+              .getRepository(MemberProfile)
+              .createQueryBuilder('mp')
+              .where('mp.userId IN (:...ids)', { ids: memberIds })
+              .getMany()
+          : [];
+        const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+
         return {
           type: query.type,
           from: from.toISOString(),
           to: to.toISOString(),
           total: rows.length,
-          rows: rows.map((u) => ({
-            id: u.id,
-            fullName: u.fullName,
-            email: u.email,
-            status: u.status,
-            createdAt: u.createdAt,
-          })),
+          rows: rows.map((u) => {
+            const profile = profileMap.get(u.id);
+            return {
+              id: u.id,
+              fullName: u.fullName,
+              email: u.email,
+              gender: profile?.gender ?? '',
+              location: u.location ?? '',
+              profileCompleted: profile?.profileCompleted ? 'yes' : 'no',
+              joined: u.createdAt,
+            };
+          }),
         };
       }
       case 'organizers': {

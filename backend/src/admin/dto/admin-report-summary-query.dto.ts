@@ -1,6 +1,7 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export const REPORT_SUMMARY_TYPES = [
+  'members',
   'user-growth',
   'organizers',
   'events',
@@ -27,4 +28,9 @@ export class AdminReportSummaryQueryDto {
   @IsOptional()
   @IsString()
   to?: string;
+
+  /** members report: all | male | female | not-set */
+  @IsOptional()
+  @IsString()
+  gender?: string;
 }

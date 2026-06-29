@@ -11,4 +11,12 @@ export class AdminReportQueryDto {
   @IsOptional()
   @IsString()
   to?: string;
+
+  @IsOptional()
+  @IsString()
+  gender?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

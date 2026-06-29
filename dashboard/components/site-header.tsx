@@ -57,7 +57,7 @@ export function SiteHeader() {
                 <>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>
-                    <BreadcrumbLink render={<Link href="/reports/user-growth" />}>Reports</BreadcrumbLink>
+                    <BreadcrumbLink render={<Link href="/reports/members" />}>Reports</BreadcrumbLink>
                   </BreadcrumbItem>
                 </>
               )}

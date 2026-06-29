@@ -10,6 +10,9 @@ export type ListParams = {
   search?: string;
   status?: string;
   activity?: string;
+  gender?: string;
+  joinedFrom?: string;
+  joinedTo?: string;
   eventId?: number;
   memberId?: number;
   page?: number;
@@ -21,6 +24,9 @@ export function buildListQuery(params: ListParams): string {
   if (params.search?.trim()) q.set("search", params.search.trim());
   if (params.status?.trim() && params.status !== "all") q.set("status", params.status.trim());
   if (params.activity?.trim() && params.activity !== "all") q.set("activity", params.activity.trim());
+  if (params.gender?.trim() && params.gender !== "all") q.set("gender", params.gender.trim());
+  if (params.joinedFrom?.trim()) q.set("joinedFrom", params.joinedFrom.trim());
+  if (params.joinedTo?.trim()) q.set("joinedTo", params.joinedTo.trim());
   if (params.eventId) q.set("eventId", String(params.eventId));
   if (params.memberId) q.set("memberId", String(params.memberId));
   if (params.page) q.set("page", String(params.page));

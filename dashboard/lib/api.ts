@@ -326,6 +326,9 @@ export interface MemberRow {
   email: string;
   phone: string | null;
   location: string | null;
+  gender: string | null;
+  profileCompleted: boolean;
+  registrationCount: number;
   status: string;
   emailVerified: boolean;
   createdAt: string;
@@ -418,14 +421,36 @@ export interface ReportSummary {
   breakdown: { label: string; value: number }[];
   rows: Record<string, unknown>[];
   topCreators?: Record<string, unknown>[];
+  topEvents?: Record<string, unknown>[];
+  categoryBreakdown?: { label: string; value: number }[];
   exportType: ReportType | null;
 }
 
-export function getReportSummary(type: string, from?: string, to?: string) {
+export function getReportSummary(
+  type: string,
+  from?: string,
+  to?: string,
+  gender?: string,
+) {
+  const q = new URLSearchParams({ type: type === "user-growth" ? "members" : type });
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  if (gender && gender !== "all") q.set("gender", gender);
+  return request<ReportSummary>("GET", `/admin/reports/summary?${q.toString()}`);
+}
+
+export function getAdminReport(
+  type: ReportType,
+  from?: string,
+  to?: string,
+  opts?: { gender?: string; search?: string },
+) {
   const q = new URLSearchParams({ type });
   if (from) q.set("from", from);
   if (to) q.set("to", to);
-  return request<ReportSummary>("GET", `/admin/reports/summary?${q.toString()}`);
+  if (opts?.gender && opts.gender !== "all") q.set("gender", opts.gender);
+  if (opts?.search?.trim()) q.set("search", opts.search.trim());
+  return request<{ rows: Record<string, unknown>[] }>("GET", `/admin/reports?${q.toString()}`);
 }
 
 export function getAdminAnalytics() {
@@ -559,14 +584,4 @@ export function updateVerificationDocumentType(
 
 export function deleteVerificationDocumentType(id: number) {
   return request<{ ok: boolean }>("DELETE", `/admin/verification-document-types/${id}`);
-}
-
-export function getAdminReport(type: ReportType, from?: string, to?: string) {
-  const q = new URLSearchParams({ type });
-  if (from) q.set("from", from);
-  if (to) q.set("to", to);
-  return request<{ type: string; total: number; totalUsd?: number; rows: Record<string, unknown>[] }>(
-    "GET",
-    `/admin/reports?${q.toString()}`,
-  );
 }
