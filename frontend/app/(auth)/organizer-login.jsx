@@ -12,7 +12,8 @@ import TextField from '@/features/auth/components/TextField';
 import PasswordField from '@/features/auth/components/PasswordField';
 import useAuth from '@/auth/useAuth';
 import organizerApi from '@/api/organizer';
-import { getOrganizerEntryHref } from '@/navigation/organizerGate';
+import { jwtDecode } from 'jwt-decode';
+import { resolveOrganizerEntryHref } from '@/navigation/organizerGate';
 import {
   INVALID_LOGIN_CREDENTIALS,
   getLoginErrors,
@@ -57,7 +58,9 @@ export default function OrganizerLoginScreen() {
 
   const routeOrganizerAfterLogin = async (result) => {
     await loginAsOrganizer(result.token, result.organizerStatus, result.rejectionReason);
-    router.replace(getOrganizerEntryHref(result.organizerStatus));
+    const decoded = jwtDecode(result.token);
+    const userId = decoded?.id ?? decoded?.sub;
+    router.replace(await resolveOrganizerEntryHref(result.organizerStatus, userId));
   };
 
   const onSubmit = async () => {

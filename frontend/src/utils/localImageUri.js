@@ -12,6 +12,28 @@ function withFileScheme(uri) {
 }
 
 /**
+ * Prefer a cached file:// URI for cover previews (large data: URIs often fail in Image on Android).
+ */
+export async function prepareCoverPreviewFromPicker(asset) {
+  if (!asset) return null;
+
+  const rawUri = typeof asset.uri === 'string' ? asset.uri.trim() : '';
+  if (/^file:\/\//i.test(rawUri)) return rawUri;
+
+  if (rawUri) {
+    const copied = await normalizeLocalImageUri(rawUri);
+    if (copied) return copied;
+  }
+
+  const mime = asset.mimeType || asset.type || 'image/jpeg';
+  if (typeof asset.base64 === 'string' && asset.base64.length > 0 && asset.base64.length < 600_000) {
+    return `data:${mime};base64,${asset.base64}`;
+  }
+
+  return rawUri || null;
+}
+
+/**
  * Instant in-app preview from an ImagePicker asset (base64 is most reliable on Android).
  */
 export function buildPickerPreviewUri(asset) {
@@ -35,17 +57,18 @@ export async function normalizeLocalImageUri(uri) {
 
   if (/^data:/i.test(trimmed)) return trimmed;
   if (/^file:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('/')) return `file://${trimmed}`;
 
   const cacheDir = FileSystem.cacheDirectory;
   if (!cacheDir) return withFileScheme(trimmed);
 
   const lower = trimmed.toLowerCase();
   const extension = lower.includes('.png') ? 'png' : 'jpg';
-  const dest = `${cacheDir}picked-image-${Date.now()}.${extension}`;
+  const dest = `${cacheDir}event-cover-${Date.now()}.${extension}`;
 
   try {
     await FileSystem.copyAsync({ from: trimmed, to: dest });
-    return withFileScheme(dest) || dest;
+    return dest.startsWith('file://') ? dest : `file://${dest}`;
   } catch (copyError) {
     try {
       const base64 = await FileSystem.readAsStringAsync(trimmed, {
@@ -54,7 +77,7 @@ export async function normalizeLocalImageUri(uri) {
       await FileSystem.writeAsStringAsync(dest, base64, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      return withFileScheme(dest) || dest;
+      return dest.startsWith('file://') ? dest : `file://${dest}`;
     } catch (readError) {
       console.warn('[normalizeLocalImageUri]', copyError?.message || readError?.message || copyError);
       return withFileScheme(trimmed);

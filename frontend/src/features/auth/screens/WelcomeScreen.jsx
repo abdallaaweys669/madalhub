@@ -19,7 +19,7 @@ import useAuth from '@/auth/useAuth';
 import { COLORS } from '@/constants/loginSignin/authStyles';
 import { getMemberTabsReturnHref } from '@/navigation/memberTabsReturn';
 import { GUEST_EXPLORE_HREF, markGuestWelcomeSeen } from '@/navigation/guestWelcome';
-import { getOrganizerEntryHref } from '@/navigation/organizerGate';
+import { resolveOrganizerEntryHref } from '@/navigation/organizerGate';
 import WelcomeAuthActions from '@/features/auth/components/welcome/WelcomeAuthActions';
 import {
   authFontAssets,
@@ -35,7 +35,7 @@ export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const { firstLaunch } = useLocalSearchParams();
-  const { isLoggedIn, isOrganizer, organizerStatus } = useAuth();
+  const { isLoggedIn, isOrganizer, organizerStatus, user } = useAuth();
 
   const [fontsLoaded] = useFonts(authFontAssets);
 
@@ -48,11 +48,11 @@ export default function WelcomeScreen() {
     router.replace(GUEST_EXPLORE_HREF);
   }, [router]);
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     resetNavigationGuard();
 
     if (isLoggedIn && isOrganizer) {
-      router.replace(getOrganizerEntryHref(organizerStatus));
+      router.replace(await resolveOrganizerEntryHref(organizerStatus, user?.id));
       return;
     }
 

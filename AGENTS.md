@@ -149,7 +149,7 @@ Organizers **cannot access the dashboard** until their account is `approved`. Th
 | `unverified` | `(organizer-status)/welcome` -> 5-step wizard |
 | `pending` | `(organizer-status)/pending-verification` (logout only) |
 | `rejected` | `(organizer-status)/verification-failed` -> `resubmit-summary` (tap flagged sections or Start Again) -> `verify` |
-| `approved` | `(organizer-status)/verification-approved` (once per session) -> `(organizer)/(tabs)` |
+| `approved` | `(organizer-status)/verification-approved` (first time only) -> `(organizer)/(tabs)` |
 
 **Live status on waiting screens:** `(organizer-status)/_layout.jsx` wraps `OrganizerVerificationStatusProvider`, which polls `GET /organizer/status` every ~12s while pending/rejected/approved status screens are focused. Admin approve/reject auto-navigates to the correct screen; rejected screens refresh the admin note without reload.
 
@@ -188,7 +188,7 @@ Once approved, organizers can create and edit **drafts** anytime; **publish** is
 | `approved`, has credits | Publish live instantly (uses 1 credit) | Publish when credits = 0 |
 | `approved`, no credits | Drafts, request credits from admin | Publish |
 
-**Frontend routing:** `getOrganizerEntryHref()` in `src/navigation/organizerGate.js` returns the correct status screen. Approved organizers see `verification-approved` once per session, then the dashboard.
+**Frontend routing:** `getOrganizerEntryHref()` in `src/navigation/organizerGate.js` returns the correct status screen. Approved organizers see `verification-approved` **once ever** when newly approved (persisted per user in AsyncStorage). Organizers who already have events skip it automatically.
 
 **Organizer app shell:** Route group `(organizer)/(tabs)/` — bottom tabs **Home · Events · Inbox · Profile**
 (tab route file remains `organization.jsx`). Shared chrome lives in `OrganizerTabScaffold`

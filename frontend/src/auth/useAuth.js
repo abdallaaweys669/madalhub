@@ -5,6 +5,7 @@ import { jwtDecode } from 'jwt-decode';
 import { setAuthToken } from '../api/client';
 import authApi from '../api/auth';
 import { normalizeUser } from './normalizeUser';
+import { hydrateOrganizerApprovedScreen } from '../navigation/organizerGate';
 
 const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
@@ -64,6 +65,7 @@ export default () => {
 
   const loginAsOrganizer = async (authToken, orgStatus, orgReason = null) => {
     const decodedUser = jwtDecode(authToken);
+    const userId = decodedUser?.id ?? decodedUser?.sub;
     setAuthToken(authToken);
     await authStorage.storeToken(authToken);
     await authStorage.storeUserRole(ROLE_ORGANIZER);
@@ -72,6 +74,10 @@ export default () => {
     setRejectionReason(orgReason);
     await authStorage.storeOrganizerStatus(orgStatus);
     await authStorage.storeRejectionReason(orgReason);
+
+    if (userId != null) {
+      await hydrateOrganizerApprovedScreen(userId);
+    }
 
     setUser(normalizeUser(decodedUser));
 

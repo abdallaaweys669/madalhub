@@ -26,10 +26,19 @@ import useAuth from '@/auth/useAuth';
 import { getPublishEligibility } from '@/api/organizer';
 import { resolveOrganizerPublishGate } from '@/utils/organizerPublish';
 import { formatEventDateLabel, formatEventTimeLabel } from '@/utils/formatEventSchedule';
+import {
+  formatScheduleDay,
+  formatScheduleTime,
+  getDefaultSchedule,
+  getEventScheduleIssues,
+  getEventScheduleMismatchIssues,
+  getScheduleWarningCopy,
+  shouldRequireFutureStart,
+} from '@/utils/eventScheduleValidation';
 import { EVENT_FORMAT_OPTIONS } from '@/constants/eventFormats';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
-import WysiwygHeader from '@/components/createEvent/WysiwygHeader';
+import CreateEventCover from '@/components/createEvent/CreateEventCover';
 import WysiwygInfoCard from '@/components/createEvent/WysiwygInfoCard';
 import WysiwygLocation from '@/components/createEvent/WysiwygLocation';
 import CategoryFormatSheet from '@/components/createEvent/CategoryFormatSheet';
@@ -52,26 +61,68 @@ function formatRelativeSaveTime(date) {
   return `Saved ${mins} minutes ago`;
 }
 
-function getDefaultSchedule() {
-  const start = new Date();
-  start.setMinutes(0, 0, 0);
-  start.setHours(start.getHours() + 1);
-  const end = new Date(start);
-  end.setHours(end.getHours() + 1);
-  return { start, end };
-}
-
-function formatScheduleDateTime(date) {
-  if (!(date instanceof Date) || !Number.isFinite(date.getTime())) return null;
-  const day = date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-  const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  return `${day} · ${time}`;
-}
-
 function addHours(date, hours) {
   const next = new Date(date);
   next.setHours(next.getHours() + hours);
   return next;
+}
+
+function bumpEndAfterStart(nextStart, currentEnd) {
+  if (!currentEnd || currentEnd.getTime() <= nextStart.getTime()) {
+    return addHours(nextStart, 1);
+  }
+  return currentEnd;
+}
+
+const SCHEDULE_CHIP = {
+  base: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  date: { flex: 1.2 },
+  time: { flex: 0.9 },
+  active: { borderColor: '#FF7A00', backgroundColor: '#FFF7ED' },
+};
+
+function ScheduleDateTimeRow({ label, date, activePicker, role, onPressDate, onPressTime }) {
+  const dateKey = `${role}-date`;
+  const timeKey = `${role}-time`;
+
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={{ fontWeight: '600', color: '#374151', marginBottom: 6 }}>{label}</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable
+          onPress={onPressDate}
+          style={[
+            SCHEDULE_CHIP.base,
+            SCHEDULE_CHIP.date,
+            activePicker === dateKey ? SCHEDULE_CHIP.active : null,
+          ]}
+        >
+          <Text style={{ color: date ? '#111827' : '#9CA3AF', fontSize: 15 }}>
+            {date ? formatScheduleDay(date) : 'Date'}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={onPressTime}
+          style={[
+            SCHEDULE_CHIP.base,
+            SCHEDULE_CHIP.time,
+            activePicker === timeKey ? SCHEDULE_CHIP.active : null,
+          ]}
+        >
+          <Text style={{ color: date ? '#111827' : '#9CA3AF', fontSize: 15 }}>
+            {date ? formatScheduleTime(date) : 'Time'}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 function getPublishValidationIssues({
@@ -83,26 +134,19 @@ function getPublishValidationIssues({
   ticketPaid,
   eventFormat,
   people,
+  loadedScheduleMs,
 }) {
   const issues = [];
-  const startTime = startDate?.getTime?.();
-  const endTime = endDate?.getTime?.();
 
   if (!values.title.trim()) issues.push('Add a clear event title.');
   if (!values.description.trim()) issues.push('Add a short event description.');
   if (!values.interestId) issues.push('Choose the event category.');
 
-  if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) {
-    issues.push('Choose when your event starts and ends.');
-  } else {
-    const oneMinuteAgo = Date.now() - 60 * 1000;
-    if (startTime < oneMinuteAgo) {
-      issues.push('Start date and time must be in the future.');
-    }
-    if (endTime <= startTime) {
-      issues.push('End date and time must be after the start date and time.');
-    }
-  }
+  issues.push(
+    ...getEventScheduleIssues(startDate, endDate, {
+      requireFutureStart: shouldRequireFutureStart(startDate, endDate, loadedScheduleMs),
+    }),
+  );
 
   if (locationMode === 'venue' && !values.locationName.trim()) {
     issues.push('Add a venue name or choose Location TBD.');
@@ -168,6 +212,8 @@ export default function CreateEventScreen() {
 
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
+  const [draftStartDate, setDraftStartDate] = useState(null);
+  const [draftEndDate, setDraftEndDate] = useState(null);
 
   const [interests, setInterests] = useState([]);
   const [people, setPeople] = useState([]);
@@ -180,6 +226,7 @@ export default function CreateEventScreen() {
   const [fetchLoading, setFetchLoading] = useState(Boolean(routeEventId));
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [remoteStatus, setRemoteStatus] = useState(null);
+  const [loadedScheduleMs, setLoadedScheduleMs] = useState(null);
 
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [categorySheetOpen, setCategorySheetOpen] = useState(false);
@@ -195,12 +242,17 @@ export default function CreateEventScreen() {
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [publishSuccessOpen, setPublishSuccessOpen] = useState(false);
   const [publishWarningOpen, setPublishWarningOpen] = useState(false);
+  const [scheduleWarningOpen, setScheduleWarningOpen] = useState(false);
+  const [scheduleWarningCopy, setScheduleWarningCopy] = useState({
+    title: '',
+    message: '',
+    details: [],
+  });
   const [publishErrorMessage, setPublishErrorMessage] = useState('');
   const [publishSuccessKind, setPublishSuccessKind] = useState('published');
   const [sponsorNamePrompt, setSponsorNamePrompt] = useState(null);
   const [sponsorDraftName, setSponsorDraftName] = useState('');
-  const [activeScheduleField, setActiveScheduleField] = useState(null);
-  const [androidPickerStep, setAndroidPickerStep] = useState(null);
+  const [activeSchedulePicker, setActiveSchedulePicker] = useState(null);
 
   const categoryLabel = useMemo(() => interests.find((x) => String(x.id) === String(values.interestId))?.name || null, [interests, values.interestId]);
   const filteredCategories = useMemo(() => {
@@ -220,11 +272,37 @@ export default function CreateEventScreen() {
         ticketPaid,
         eventFormat,
         people,
+        loadedScheduleMs,
       }),
-    [values, startDate, endDate, locationMode, onlineLink, ticketPaid, eventFormat, people],
+    [values, startDate, endDate, locationMode, onlineLink, ticketPaid, eventFormat, people, loadedScheduleMs],
   );
 
   const canPublish = publishValidationIssues.length === 0;
+
+  const requireFutureStart = useMemo(
+    () => shouldRequireFutureStart(startDate, endDate, loadedScheduleMs),
+    [startDate, endDate, loadedScheduleMs],
+  );
+
+  const draftRequireFutureStart = useMemo(
+    () => shouldRequireFutureStart(draftStartDate, draftEndDate, loadedScheduleMs),
+    [draftStartDate, draftEndDate, loadedScheduleMs],
+  );
+
+  const draftScheduleMismatchIssues = useMemo(() => {
+    if (!scheduleModalOpen) return [];
+    return getEventScheduleMismatchIssues(draftStartDate, draftEndDate, {
+      requireFutureStart: draftRequireFutureStart,
+    });
+  }, [scheduleModalOpen, draftStartDate, draftEndDate, draftRequireFutureStart]);
+
+  const scheduleMismatchIssues = useMemo(
+    () =>
+      getEventScheduleMismatchIssues(startDate, endDate, {
+        requireFutureStart,
+      }),
+    [startDate, endDate, requireFutureStart],
+  );
 
   const rosterForCard = useMemo(
     () => people.filter((p) => p.fullName.trim()).map((p) => ({ id: p.key, displayName: p.fullName, role: p.role, title: p.title, photoUrl: p.photoPath || null })),
@@ -287,6 +365,11 @@ export default function CreateEventScreen() {
         setSponsorRows(Array.isArray(data.sponsors) ? data.sponsors.map((s, i) => ({ key: `s-${s.id ?? i}`, name: s.name || '', logoPath: s.logo || null })) : []);
         if (data.startsAt || data.startDatetime) setStartDate(new Date(data.startsAt ?? data.startDatetime));
         if (data.endsAt || data.endDatetime) setEndDate(new Date(data.endsAt ?? data.endDatetime));
+        const loadedStart = data.startsAt || data.startDatetime ? new Date(data.startsAt ?? data.startDatetime) : null;
+        const loadedEnd = data.endsAt || data.endDatetime ? new Date(data.endsAt ?? data.endDatetime) : null;
+        if (loadedStart && loadedEnd && Number.isFinite(loadedStart.getTime()) && Number.isFinite(loadedEnd.getTime())) {
+          setLoadedScheduleMs({ start: loadedStart.getTime(), end: loadedEnd.getTime() });
+        }
       } catch {
         Alert.alert('Error', 'Failed to load event details');
       } finally {
@@ -353,7 +436,11 @@ export default function CreateEventScreen() {
 
   const onPickCover = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Allow photo library access to choose a cover image.');
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images',
       quality: 0.85,
@@ -371,7 +458,10 @@ export default function CreateEventScreen() {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setCoverImagePath(path);
     } catch (error) {
-      Alert.alert('Upload failed', error?.message || 'Could not upload cover image. Your preview is kept — try again or save draft later.');
+      Alert.alert(
+        'Upload failed',
+        error?.message || 'Could not upload cover image. Your preview is kept — try again or save draft later.',
+      );
     } finally {
       setCoverUploading(false);
     }
@@ -507,7 +597,11 @@ export default function CreateEventScreen() {
 
   const onPublishPress = async () => {
     if (!canPublish) {
-      setPublishWarningOpen(true);
+      if (scheduleMismatchIssues.length > 0) {
+        showScheduleWarning(scheduleMismatchIssues);
+      } else {
+        setPublishWarningOpen(true);
+      }
       return;
     }
     if (remoteStatus === 'published') {
@@ -542,63 +636,101 @@ export default function CreateEventScreen() {
   };
 
   const closeSchedulePicker = () => {
-    setActiveScheduleField(null);
-    setAndroidPickerStep(null);
+    setActiveSchedulePicker(null);
   };
 
-  const openSchedulePicker = (field) => {
-    setActiveScheduleField(field);
-    if (Platform.OS === 'android') setAndroidPickerStep('date');
+  const openScheduleModal = () => {
+    closeSchedulePicker();
+    const { start, end } = getDefaultSchedule();
+    setDraftStartDate(startDate ?? start);
+    setDraftEndDate(endDate ?? end);
+    setScheduleModalOpen(true);
   };
+
+  const openSchedulePicker = (pickerKey) => {
+    const { start, end } = getDefaultSchedule();
+    if (pickerKey.startsWith('start') && !draftStartDate) setDraftStartDate(start);
+    if (pickerKey.startsWith('end') && !draftEndDate) setDraftEndDate(end);
+    setActiveSchedulePicker(pickerKey);
+  };
+
+  const showScheduleWarning = (issues) => {
+    if (!issues.length) return;
+    setScheduleWarningCopy(getScheduleWarningCopy(issues));
+    setScheduleWarningOpen(true);
+  };
+
+  const confirmSchedule = () => {
+    closeSchedulePicker();
+    const issues = getEventScheduleIssues(draftStartDate, draftEndDate, {
+      requireFutureStart: draftRequireFutureStart,
+    });
+    if (issues.length) {
+      return;
+    }
+    setStartDate(draftStartDate);
+    setEndDate(draftEndDate);
+    setScheduleModalOpen(false);
+  };
+
+  const schedulePickerConfig = useMemo(() => {
+    if (!activeSchedulePicker) return null;
+
+    const [role, part] = activeSchedulePicker.split('-');
+    const defaults = getDefaultSchedule();
+    const isStart = role === 'start';
+    const value = isStart
+      ? draftStartDate || defaults.start
+      : draftEndDate || draftStartDate || defaults.end;
+
+    let minimumDate;
+    if (part === 'date') {
+      if (isStart) {
+        minimumDate = draftRequireFutureStart ? new Date() : undefined;
+      } else if (draftStartDate) {
+        minimumDate = draftRequireFutureStart
+          ? draftStartDate.getTime() > Date.now()
+            ? draftStartDate
+            : new Date()
+          : draftStartDate;
+      } else {
+        minimumDate = draftRequireFutureStart ? new Date() : undefined;
+      }
+    }
+
+    return { role, part, value, minimumDate };
+  }, [activeSchedulePicker, draftStartDate, draftEndDate, draftRequireFutureStart]);
 
   const handleScheduleChange = (event, selectedDate) => {
-    if (!activeScheduleField) return;
+    if (!activeSchedulePicker || !selectedDate) return;
     if (Platform.OS === 'android' && event?.type !== 'set') {
       closeSchedulePicker();
       return;
     }
-    if (!selectedDate) return;
 
-    if (Platform.OS === 'ios') {
-      if (activeScheduleField === 'start') {
-        setStartDate(selectedDate);
-        setEndDate((prev) => {
-          if (!prev || prev.getTime() <= selectedDate.getTime()) {
-            return addHours(selectedDate, 1);
-          }
-          return prev;
-        });
+    const [role, part] = activeSchedulePicker.split('-');
+
+    if (part === 'date') {
+      if (role === 'start') {
+        const nextStart = applyDatePart(draftStartDate, selectedDate, 'start');
+        setDraftStartDate(nextStart);
+        setDraftEndDate((prev) => bumpEndAfterStart(nextStart, prev));
       } else {
-        setEndDate(selectedDate);
+        setDraftEndDate((prev) => applyDatePart(prev, selectedDate, 'end'));
       }
+      if (Platform.OS === 'android') closeSchedulePicker();
       return;
     }
 
-    if (androidPickerStep === 'date') {
-      if (activeScheduleField === 'start') {
-        setStartDate((prev) => applyDatePart(prev, selectedDate, 'start'));
-      } else {
-        setEndDate((prev) => applyDatePart(prev, selectedDate, 'end'));
-      }
-      setAndroidPickerStep('time');
-      return;
-    }
-
-    if (activeScheduleField === 'start') {
-      setStartDate((prev) => {
-        const nextStart = applyTimePart(prev, selectedDate, 'start');
-        setEndDate((endPrev) => {
-          if (!endPrev || endPrev.getTime() <= nextStart.getTime()) {
-            return addHours(nextStart, 1);
-          }
-          return endPrev;
-        });
-        return nextStart;
-      });
+    if (role === 'start') {
+      const nextStart = applyTimePart(draftStartDate, selectedDate, 'start');
+      setDraftStartDate(nextStart);
+      setDraftEndDate((prev) => bumpEndAfterStart(nextStart, prev));
     } else {
-      setEndDate((prev) => applyTimePart(prev, selectedDate, 'end'));
+      setDraftEndDate((prev) => applyTimePart(prev, selectedDate, 'end'));
     }
-    closeSchedulePicker();
+
+    if (Platform.OS === 'android') closeSchedulePicker();
   };
 
   if (fetchLoading) {
@@ -607,13 +739,26 @@ export default function CreateEventScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <WysiwygHeader
-        coverPath={coverImagePath}
-        coverPreviewUri={coverPreviewUri}
-        onBack={() => router.back()}
-        onPickCover={onPickCover}
-        coverUploading={coverUploading}
-      />
+      <Pressable
+        onPress={() => router.back()}
+        style={[
+          eventStyles.iconButtonMeetup,
+          {
+            position: 'absolute',
+            top: insets.top + 8,
+            left: 20,
+            zIndex: 30,
+            borderWidth: 1,
+            borderColor: '#E5E7EB',
+            backgroundColor: 'rgba(255,255,255,0.95)',
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <Feather name="arrow-left" size={20} color="#111827" />
+      </Pressable>
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -628,26 +773,35 @@ export default function CreateEventScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + 150 }}
           bounces={false}
         >
-          <View style={eventStyles.contentContainer}>
+          <CreateEventCover
+            coverPreviewUri={coverPreviewUri}
+            coverPath={coverImagePath}
+            onPickCover={onPickCover}
+            uploading={coverUploading}
+          />
+
+          <View style={[eventStyles.contentContainer, { paddingTop: 12 }]}>
             <WysiwygInfoCard
               title={values.title}
               description={values.description}
               datePrimary={
                 startDate
                   ? formatEventDateLabel(startDate, endDate)
-                  : 'Tap to set date'
+                  : 'Tap to set date and time'
               }
               dateSecondary={
                 startDate && endDate
                   ? formatEventTimeLabel(startDate, endDate)
-                  : 'Choose start and end time'
+                  : 'Set start and end times'
               }
+              scheduleUnset={!startDate}
+              scheduleWarning={scheduleMismatchIssues[0] || null}
               categoryLabel={categoryLabel}
               formatLabel={eventFormat}
               deliveryMode={locationMode === 'online' ? 'online' : 'in-person'}
               onChangeTitle={(v) => setValues((p) => ({ ...p, title: v }))}
               onChangeDescription={(v) => setValues((p) => ({ ...p, description: v }))}
-              onPressEditDate={() => setScheduleModalOpen(true)}
+              onPressEditDate={openScheduleModal}
               onPressCategory={() => {
                 setSheetMode('category');
                 setCategorySheetOpen(true);
@@ -814,7 +968,7 @@ export default function CreateEventScreen() {
         onPublish={onPublishPress}
         publishLabel={remoteStatus === 'published' ? 'Save Changes' : 'Publish Event'}
         loading={loading}
-        disabledPublish={!canPublish && remoteStatus !== 'published'}
+        disabledPublish={!canPublish}
         bottomInset={insets.bottom}
       />
 
@@ -822,10 +976,7 @@ export default function CreateEventScreen() {
         visible={scheduleModalOpen}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          closeSchedulePicker();
-          setScheduleModalOpen(false);
-        }}
+        onRequestClose={confirmSchedule}
       >
         <Pressable
           style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.42)' }}
@@ -850,44 +1001,58 @@ export default function CreateEventScreen() {
               Set when your event starts and ends.
             </Text>
 
-            <Text style={{ fontWeight: '600', color: '#374151', marginBottom: 6 }}>Starts</Text>
-            <Pressable
-              onPress={() => openSchedulePicker('start')}
-              style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, padding: 12, marginBottom: 14 }}
-            >
-              <Text style={{ color: startDate ? '#111827' : '#9CA3AF' }}>
-                {formatScheduleDateTime(startDate) || 'Tap to set start'}
-              </Text>
-            </Pressable>
+            {draftScheduleMismatchIssues.length > 0 ? (
+              <View
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 14,
+                  borderWidth: 1,
+                  borderColor: '#FECACA',
+                }}
+              >
+                <Text style={{ color: '#991B1B', fontSize: 13, fontWeight: '700', marginBottom: 4 }}>
+                  {getScheduleWarningCopy(draftScheduleMismatchIssues).title}
+                </Text>
+                {draftScheduleMismatchIssues.map((issue) => (
+                  <Text key={issue} style={{ color: '#DC2626', fontSize: 13, lineHeight: 18 }}>
+                    {issue}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
 
-            <Text style={{ fontWeight: '600', color: '#374151', marginBottom: 6 }}>Ends</Text>
-            <Pressable
-              onPress={() => openSchedulePicker('end')}
-              style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, padding: 12, marginBottom: 14 }}
-            >
-              <Text style={{ color: endDate ? '#111827' : '#9CA3AF' }}>
-                {formatScheduleDateTime(endDate) || 'Tap to set end'}
-              </Text>
-            </Pressable>
+            <ScheduleDateTimeRow
+              label="Starts"
+              role="start"
+              date={draftStartDate}
+              activePicker={activeSchedulePicker}
+              onPressDate={() => openSchedulePicker('start-date')}
+              onPressTime={() => openSchedulePicker('start-time')}
+            />
 
-            {activeScheduleField ? (
+            <ScheduleDateTimeRow
+              label="Ends"
+              role="end"
+              date={draftEndDate}
+              activePicker={activeSchedulePicker}
+              onPressDate={() => openSchedulePicker('end-date')}
+              onPressTime={() => openSchedulePicker('end-time')}
+            />
+
+            {schedulePickerConfig ? (
               <DateTimePicker
-                value={
-                  activeScheduleField === 'start'
-                    ? startDate || getDefaultSchedule().start
-                    : endDate || startDate || getDefaultSchedule().end
-                }
-                mode={Platform.OS === 'ios' ? 'datetime' : androidPickerStep || 'date'}
+                value={schedulePickerConfig.value}
+                mode={schedulePickerConfig.part === 'date' ? 'date' : 'time'}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                minimumDate={schedulePickerConfig.minimumDate}
                 onChange={handleScheduleChange}
               />
             ) : null}
 
             <Pressable
-              onPress={() => {
-                closeSchedulePicker();
-                setScheduleModalOpen(false);
-              }}
+              onPress={confirmSchedule}
               style={{
                 marginTop: 8,
                 backgroundColor: '#FF7A00',
@@ -957,6 +1122,16 @@ export default function CreateEventScreen() {
         onRemovePhoto={() => { setDraftPhotoPick(null); setDraftPerson((d) => ({ ...d, photoPath: null })); }}
         onSave={savePersonFromModal}
         onDelete={removeEditingPerson}
+      />
+
+      <AppPopup
+        visible={scheduleWarningOpen}
+        variant="warning"
+        title={scheduleWarningCopy.title}
+        message={scheduleWarningCopy.message}
+        details={scheduleWarningCopy.details}
+        primaryLabel="OK"
+        onPrimary={() => setScheduleWarningOpen(false)}
       />
 
       <AppPopup

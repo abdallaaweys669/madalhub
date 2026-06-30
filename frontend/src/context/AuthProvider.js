@@ -5,6 +5,7 @@ import { jwtDecode } from 'jwt-decode';
 import { setAuthToken } from '../api/client';
 import authApi from '../api/auth';
 import { normalizeUser } from '../auth/normalizeUser';
+import { hydrateOrganizerApprovedScreen, prepareOrganizerApprovedScreenGate } from '../navigation/organizerGate';
 
 const ROLE_MEMBER = 1;
 const ROLE_ORGANIZER = 2;
@@ -47,8 +48,12 @@ export const AuthProvider = ({ children }) => {
         const profile = await authApi.getMe();
         normalizedUser = normalizeUser(decodedUser, profile);
         if (role === ROLE_ORGANIZER) {
-          setOrganizerStatus(profile.organizerStatus ?? 'pending');
+          const orgStatus = profile.organizerStatus ?? 'pending';
+          setOrganizerStatus(orgStatus);
           setRejectionReason(profile.rejectionReason ?? null);
+          if (normalizedUser?.id != null) {
+            await prepareOrganizerApprovedScreenGate(normalizedUser.id, orgStatus);
+          }
         }
       } catch (error) {
         console.log('Unable to fetch profile during hydration, logging out.', error?.message);

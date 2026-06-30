@@ -18,6 +18,8 @@ export default function WysiwygInfoCard({
   onPressCategory,
   onPressFormat,
   onPressDeliveryMode,
+  scheduleWarning,
+  scheduleUnset = false,
 }) {
   const [expanded, setExpanded] = useState(false);
   const isOnline = deliveryMode === 'online';
@@ -62,9 +64,16 @@ export default function WysiwygInfoCard({
         <View style={eventStyles.infoIconBg}>
           <Feather name="calendar" size={18} color="#FF7A00" />
         </View>
-        <View>
-          <Text style={eventStyles.infoText}>{datePrimary}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[eventStyles.infoText, scheduleUnset && { color: '#9CA3AF' }]}>
+            {datePrimary}
+          </Text>
           <Text style={eventStyles.infoSubText}>{dateSecondary}</Text>
+          {scheduleWarning ? (
+            <Text style={{ color: '#DC2626', fontSize: 12, marginTop: 4, lineHeight: 16 }}>
+              {scheduleWarning}
+            </Text>
+          ) : null}
         </View>
       </Pressable>
     </View>

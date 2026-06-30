@@ -4,7 +4,8 @@ import { useFocusEffect, useSegments } from 'expo-router';
 
 import { getOrganizerStatus } from '@/api/organizer';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
-import { getOrganizerEntryHref } from '@/navigation/organizerGate';
+import useAuth from '@/auth/useAuth';
+import { resolveOrganizerEntryHref } from '@/navigation/organizerGate';
 
 const POLL_INTERVAL_MS = 12_000;
 
@@ -45,6 +46,7 @@ function isOnScreenForStatus(segment, status) {
  */
 export default function useOrganizerVerificationStatusSync({ onStatusSnapshot } = {}) {
   const router = useGuardedRouter();
+  const { user } = useAuth();
   const segments = useSegments();
   const segment = getStatusSegment(segments);
   const onSnapshotRef = useRef(onStatusSnapshot);
@@ -68,7 +70,7 @@ export default function useOrganizerVerificationStatusSync({ onStatusSnapshot } 
           onSnapshotRef.current?.(data);
 
           if (!isOnScreenForStatus(segment, status)) {
-            router.replace(getOrganizerEntryHref(status));
+            router.replace(await resolveOrganizerEntryHref(status, data.userId ?? user?.id));
           }
         } catch {
           // Ignore transient poll errors — next tick will retry.
@@ -87,6 +89,6 @@ export default function useOrganizerVerificationStatusSync({ onStatusSnapshot } 
         if (intervalId) clearInterval(intervalId);
         subscription.remove();
       };
-    }, [router, segment]),
+    }, [router, segment, user?.id]),
   );
 }

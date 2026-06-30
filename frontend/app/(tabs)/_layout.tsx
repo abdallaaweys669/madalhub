@@ -14,7 +14,7 @@ const ROLE_ORGANIZER = 2;
 
 export default function TabLayout() {
   const colors = useThemeColors();
-  const { isHydrated, isLoggedIn, profileCompleted, userRole, organizerStatus } = useAuth();
+  const { isHydrated, isLoggedIn, profileCompleted, userRole, organizerStatus, user } = useAuth();
   const { unreadCount } = useMemberNotificationBadge();
   const notifBadge = unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined;
 
@@ -44,7 +44,7 @@ export default function TabLayout() {
   }
 
   if (userRole === ROLE_ORGANIZER) {
-    return <Redirect href={getOrganizerEntryHref(organizerStatus)} />;
+    return <Redirect href={getOrganizerEntryHref(organizerStatus, user?.id)} />;
   }
 
   return (

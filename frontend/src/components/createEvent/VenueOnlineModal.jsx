@@ -126,7 +126,7 @@ export default function VenueOnlineModal({
             <Text style={styles.mapCardSub} numberOfLines={2}>
               {locationPin
                 ? 'Members can open directions to this spot.'
-                : 'Search or drop a pin if you want turn-by-turn directions.'}
+                : 'We detect where you are, then you confirm or search for a venue.'}
             </Text>
           </View>
           <Feather name="chevron-right" size={18} color="#9CA3AF" />

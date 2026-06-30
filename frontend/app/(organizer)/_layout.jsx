@@ -3,7 +3,6 @@ import { Redirect, Stack } from 'expo-router';
 
 import useAuth from '@/auth/useAuth';
 import { OrganizerNotificationBadgeProvider } from '@/features/organizer/hooks/OrganizerNotificationBadgeContext';
-import { getOrganizerEntryHref } from '@/navigation/organizerGate';
 import { getOrganizerStatus } from '@/api/organizer';
 
 const ROLE_ORGANIZER = 2;

@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -48,6 +50,51 @@ const INSTITUTION_KEYWORDS = [
 ];
 
 const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() || '';
+const SUGGESTIONS_MAX_HEIGHT = Math.round(Dimensions.get('window').height * 0.42);
+const NEARBY_SEARCH_RADIUS_M = 50000;
+const MAX_SUGGESTIONS = 15;
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const earthRadius = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistanceMeters(meters) {
+  if (!Number.isFinite(meters)) return '';
+  if (meters < 1000) return `${Math.max(1, Math.round(meters))} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function attachDistanceAndSort(places, origin) {
+  if (!origin) return places;
+  return places
+    .map((place) => {
+      if (!Number.isFinite(place.latitude) || !Number.isFinite(place.longitude)) {
+        return place;
+      }
+      return {
+        ...place,
+        distanceMeters: haversineMeters(
+          origin.latitude,
+          origin.longitude,
+          place.latitude,
+          place.longitude,
+        ),
+      };
+    })
+    .sort((a, b) => {
+      const aHasCoords = Number.isFinite(a.latitude);
+      const bHasCoords = Number.isFinite(b.latitude);
+      if (aHasCoords !== bHasCoords) return aHasCoords ? -1 : 1;
+      return (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity);
+    });
+}
 
 export default function LocationPickerModal({
   visible,
@@ -71,6 +118,9 @@ export default function LocationPickerModal({
     name: '',
     address: '',
   });
+  const [nearbySuggestion, setNearbySuggestion] = useState(null);
+  const [nearbyPromptVisible, setNearbyPromptVisible] = useState(false);
+  const [searchOrigin, setSearchOrigin] = useState(null);
 
   const looksLikePlusCode = (value = '') => {
     const v = String(value || '').trim();
@@ -110,7 +160,7 @@ export default function LocationPickerModal({
     const haystack = normalizeSearchText(`${place?.name || ''} ${place?.address || ''}`);
     const tokens = normalizeSearchText(query)
       .split(' ')
-      .filter((token) => token.length >= 3 && !INSTITUTION_KEYWORDS.includes(token));
+      .filter((token) => token.length >= 2 && !INSTITUTION_KEYWORDS.includes(token));
     if (tokens.length === 0) return true;
     return tokens.some((token) => haystack.includes(token));
   };
@@ -153,6 +203,32 @@ export default function LocationPickerModal({
       longitude: null,
     };
   };
+
+  const parseGooglePlaceResult = (item) => {
+    const latitude = Number(item?.geometry?.location?.lat);
+    const longitude = Number(item?.geometry?.location?.lng);
+    const placeId = String(item?.place_id || '').trim();
+    const name = String(item?.name || '').trim();
+    if (!placeId || !name || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return null;
+    }
+    if (!isCoordinateInSomalia(latitude, longitude)) return null;
+    return {
+      id: `google-place-${placeId}`,
+      source: 'google',
+      placeId,
+      name,
+      address: String(item?.formatted_address || item?.vicinity || '').trim(),
+      latitude,
+      longitude,
+    };
+  };
+
+  const getSearchBiasOrigin = () =>
+    searchOrigin ||
+    (nearbySuggestion
+      ? { latitude: nearbySuggestion.latitude, longitude: nearbySuggestion.longitude }
+      : null);
 
   const parsePhotonResult = (feature) => {
     const coordinates = Array.isArray(feature?.geometry?.coordinates)
@@ -203,29 +279,84 @@ export default function LocationPickerModal({
   const dedupePlaces = (places) => {
     const seen = new Set();
     return places.filter((place) => {
+      if (place.placeId) {
+        const key = `pid:${place.placeId}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }
       const addressKey = String(place.address || '').toLowerCase();
       const key = addressKey
         ? `${place.name.toLowerCase()}-${addressKey}`
-        : `${place.name.toLowerCase()}-${place.latitude.toFixed(4)}-${place.longitude.toFixed(4)}`;
+        : Number.isFinite(place.latitude)
+          ? `${place.name.toLowerCase()}-${place.latitude.toFixed(4)}-${place.longitude.toFixed(4)}`
+          : `${place.name.toLowerCase()}-${place.id}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
   };
 
-  const fetchGoogleAutocomplete = async (query, types = 'establishment') => {
+  const fetchGooglePlaceSearch = async (endpoint, params) => {
     if (!GOOGLE_PLACES_API_KEY) return [];
+
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/place/${endpoint}/json?${params.toString()}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!response.ok) {
+      throw new Error(`Google ${endpoint} failed: ${response.status}`);
+    }
+
+    const payload = await response.json();
+    if (payload?.status && !['OK', 'ZERO_RESULTS'].includes(payload.status)) {
+      console.warn(`Google ${endpoint} status:`, payload.status, payload?.error_message);
+      return [];
+    }
+
+    const rows = Array.isArray(payload?.results) ? payload.results : [];
+    return rows.map(parseGooglePlaceResult).filter(Boolean);
+  };
+
+  const fetchGoogleNearbySearch = async (query, origin) => {
+    if (!origin) return [];
+
+    const params = new URLSearchParams({
+      location: `${origin.latitude},${origin.longitude}`,
+      radius: String(NEARBY_SEARCH_RADIUS_M),
+      keyword: query,
+      key: GOOGLE_PLACES_API_KEY,
+      language: 'en',
+    });
+    return fetchGooglePlaceSearch('nearbysearch', params);
+  };
+
+  const fetchGoogleTextSearch = async (query, origin) => {
+    const params = new URLSearchParams({
+      query,
+      key: GOOGLE_PLACES_API_KEY,
+      language: 'en',
+    });
+    if (origin) {
+      params.set('location', `${origin.latitude},${origin.longitude}`);
+      params.set('radius', String(NEARBY_SEARCH_RADIUS_M));
+    }
+    return fetchGooglePlaceSearch('textsearch', params);
+  };
+
+  const fetchGoogleAutocomplete = async (query, origin) => {
+    if (!GOOGLE_PLACES_API_KEY) return [];
+
+    const biasLat = origin?.latitude ?? MOGADISHU_REGION.latitude;
+    const biasLng = origin?.longitude ?? MOGADISHU_REGION.longitude;
 
     const params = new URLSearchParams({
       input: query,
       key: GOOGLE_PLACES_API_KEY,
       language: 'en',
-      components: 'country:so',
-      location: `${MOGADISHU_REGION.latitude},${MOGADISHU_REGION.longitude}`,
-      radius: '900000',
-      strictbounds: 'true',
+      location: `${biasLat},${biasLng}`,
+      radius: String(NEARBY_SEARCH_RADIUS_M),
     });
-    if (types) params.set('types', types);
 
     const response = await fetch(
       `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`,
@@ -244,12 +375,16 @@ export default function LocationPickerModal({
     return predictions.map(parseGooglePrediction).filter(Boolean);
   };
 
-  const fetchGoogleSuggestions = async (query) => {
+  const fetchGoogleSuggestions = async (query, origin) => {
     if (!GOOGLE_PLACES_API_KEY) return [];
 
-    const establishmentResults = await fetchGoogleAutocomplete(query, 'establishment');
-    if (establishmentResults.length > 0) return establishmentResults;
-    return fetchGoogleAutocomplete(query, '');
+    const [nearbyResults, textResults, autocompleteResults] = await Promise.all([
+      origin ? fetchGoogleNearbySearch(query, origin) : Promise.resolve([]),
+      fetchGoogleTextSearch(query, origin),
+      fetchGoogleAutocomplete(query, origin),
+    ]);
+
+    return dedupePlaces([...nearbyResults, ...textResults, ...autocompleteResults]);
   };
 
   const fetchGooglePlaceDetails = async (place) => {
@@ -288,10 +423,14 @@ export default function LocationPickerModal({
     };
   };
 
-  const fetchOpenStreetMapSuggestions = async (query) => {
+  const fetchOpenStreetMapSuggestions = async (query, origin) => {
+    const lat = origin?.latitude ?? MOGADISHU_REGION.latitude;
+    const lng = origin?.longitude ?? MOGADISHU_REGION.longitude;
+    const delta = 0.35;
+    const viewbox = `${lng - delta},${lat + delta},${lng + delta},${lat - delta}`;
     const encoded = encodeURIComponent(query);
     const url =
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=12&countrycodes=so&bounded=1&viewbox=40.9,12.2,51.5,-1.7&q=${encoded}`;
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=15&countrycodes=so&bounded=1&viewbox=${viewbox}&q=${encoded}`;
     const response = await fetch(url, {
       headers: {
         Accept: 'application/json',
@@ -304,10 +443,12 @@ export default function LocationPickerModal({
     return Array.isArray(rows) ? rows.map(parseSearchResult).filter(Boolean) : [];
   };
 
-  const fetchPhotonSuggestions = async (query) => {
+  const fetchPhotonSuggestions = async (query, origin) => {
+    const lat = origin?.latitude ?? MOGADISHU_REGION.latitude;
+    const lon = origin?.longitude ?? MOGADISHU_REGION.longitude;
     const encoded = encodeURIComponent(query);
     const url =
-      `https://photon.komoot.io/api/?q=${encoded}&limit=12&bbox=40.9,-1.7,51.5,12.2`;
+      `https://photon.komoot.io/api/?q=${encoded}&limit=15&lat=${lat}&lon=${lon}`;
     const response = await fetch(url, {
       headers: {
         Accept: 'application/json',
@@ -355,21 +496,24 @@ export default function LocationPickerModal({
     const cleanQuery = query.trim();
     if (!cleanQuery) return [];
 
+    const origin = getSearchBiasOrigin();
+
     if (GOOGLE_PLACES_API_KEY) {
       try {
-        const googlePlaces = await fetchGoogleSuggestions(cleanQuery);
-        if (googlePlaces.length > 0) return googlePlaces.slice(0, 8);
+        const googlePlaces = await fetchGoogleSuggestions(cleanQuery, origin);
+        if (googlePlaces.length > 0) {
+          return attachDistanceAndSort(googlePlaces, origin).slice(0, MAX_SUGGESTIONS);
+        }
       } catch (error) {
         console.warn('Google place suggestions failed', error);
       }
     }
 
-    const shouldUseGeocodeFallback = cleanQuery.split(/\s+/).length >= 2 || cleanQuery.length >= 12;
     const queryVariants = buildSuggestionQueries(cleanQuery);
     const [osmResults, photonResults, geocodeResult] = await Promise.all([
-      Promise.allSettled(queryVariants.map(fetchOpenStreetMapSuggestions)),
-      Promise.allSettled(queryVariants.map(fetchPhotonSuggestions)),
-      shouldUseGeocodeFallback ? fetchGeocodeSuggestions(cleanQuery) : Promise.resolve([]),
+      Promise.allSettled(queryVariants.map((variant) => fetchOpenStreetMapSuggestions(variant, origin))),
+      Promise.allSettled(queryVariants.map((variant) => fetchPhotonSuggestions(variant, origin))),
+      cleanQuery.length >= 3 ? fetchGeocodeSuggestions(cleanQuery) : Promise.resolve([]),
     ]);
 
     const osmPlaces = osmResults.flatMap((result) =>
@@ -379,52 +523,71 @@ export default function LocationPickerModal({
       result.status === 'fulfilled' ? result.value : [],
     );
     const geocodePlaces = geocodeResult;
-    const realPlaces = dedupePlaces([...osmPlaces, ...photonPlaces]).filter((place) =>
-      isRelevantPlace(place, cleanQuery),
-    );
-    const fallbackPlaces = realPlaces.length > 1 ? [] : geocodePlaces;
-    return dedupePlaces([...realPlaces, ...fallbackPlaces]).slice(0, 8);
+    const merged = dedupePlaces([...osmPlaces, ...photonPlaces, ...geocodePlaces]);
+    const filtered = merged.filter((place) => isRelevantPlace(place, cleanQuery));
+    const results = filtered.length > 0 ? filtered : merged;
+    return attachDistanceAndSort(results, origin).slice(0, MAX_SUGGESTIONS);
   };
 
-  const reverseGeocode = async (latitude, longitude) => {
+  const resolveAddressFromCoords = async (latitude, longitude) => {
     try {
       const geocodeList = await Location.reverseGeocodeAsync({ latitude, longitude });
       if (geocodeList && geocodeList.length > 0) {
         const place = geocodeList[0];
         const constructedAddress = formatReverseAddress(place);
 
-        let nextDetails;
         if (areaMode) {
-          // Area mode: show district, region, city — no street or venue names
-          nextDetails = {
+          return {
             name: constructedAddress || 'Unknown Area',
             address: '',
           };
-        } else {
-          const rawName = (place.name || '').trim();
-          const friendlyName = !looksLikePlusCode(rawName)
-            ? rawName
-            : ((place.streetName || place.street || place.district || place.subregion || place.city || 'Selected Location').trim());
-          nextDetails = {
-            name: friendlyName || 'Selected Location',
-            address: constructedAddress,
-          };
         }
 
-        setAddressDetails(nextDetails);
-        return nextDetails;
+        const rawName = (place.name || '').trim();
+        const friendlyName = !looksLikePlusCode(rawName)
+          ? rawName
+          : ((place.streetName || place.street || place.district || place.subregion || place.city || 'Selected Location').trim());
+
+        return {
+          name: friendlyName || 'Selected Location',
+          address: constructedAddress,
+        };
       }
     } catch (e) {
-      console.warn("Reverse geocode failed", e);
+      console.warn('Reverse geocode failed', e);
     }
-    const fallback = areaMode
+
+    return areaMode
       ? { name: 'Unknown Area', address: '' }
       : { name: 'Selected Location', address: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` };
-    setAddressDetails(fallback);
-    return fallback;
+  };
+
+  const formatNearbyPromptLine = (details) => {
+    if (!details) return 'Your current area';
+    const areaLine = String(details.address || '').trim();
+    if (areaLine) return areaLine;
+    return String(details.name || 'Your current area').trim();
+  };
+
+  const centerMapOn = (coord, options = {}) => {
+    const nextRegion = {
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      latitudeDelta: options.latitudeDelta ?? 0.025,
+      longitudeDelta: options.longitudeDelta ?? 0.025,
+    };
+    setRegion(nextRegion);
+    mapRef.current?.animateToRegion(nextRegion, 350);
+  };
+
+  const reverseGeocode = async (latitude, longitude) => {
+    const nextDetails = await resolveAddressFromCoords(latitude, longitude);
+    setAddressDetails(nextDetails);
+    return nextDetails;
   };
 
   const setPin = async (coord, options = {}) => {
+    setNearbyPromptVisible(false);
     const nextRegion = {
       latitude: coord.latitude,
       longitude: coord.longitude,
@@ -452,7 +615,7 @@ export default function LocationPickerModal({
     }
   };
 
-  const useCurrentLocation = async ({ silent = false } = {}) => {
+  const detectNearbyLocation = async ({ silent = false } = {}) => {
     setLoading(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -460,31 +623,66 @@ export default function LocationPickerModal({
         if (!silent) {
           Alert.alert('Permission needed', 'Allow location access or search for the venue instead.');
         }
-        return false;
+        return null;
       }
 
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      await setPin({
+      const coord = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
+      };
+      const details = await resolveAddressFromCoords(coord.latitude, coord.longitude);
+      centerMapOn(coord);
+      setSearchOrigin(coord);
+      setNearbySuggestion({
+        ...coord,
+        name: details.name,
+        address: details.address,
       });
-      return true;
+      setNearbyPromptVisible(true);
+      return coord;
     } catch (error) {
       console.warn('Could not fetch location', error);
       if (!silent) {
         Alert.alert('Location unavailable', 'Search for the venue or tap the map to place the pin.');
       }
-      return false;
+      return null;
     } finally {
       setLoading(false);
     }
   };
 
+  const acceptNearbyVenue = async () => {
+    if (!nearbySuggestion) return;
+    await setPin(
+      { latitude: nearbySuggestion.latitude, longitude: nearbySuggestion.longitude },
+      {
+        venueName: nearbySuggestion.name,
+        venueAddress: nearbySuggestion.address,
+      },
+    );
+  };
+
+  const dismissNearbyPrompt = () => {
+    setNearbyPromptVisible(false);
+  };
+
+  const useCurrentLocation = async () => {
+    await detectNearbyLocation({ silent: false });
+  };
+
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      setNearbySuggestion(null);
+      setNearbyPromptVisible(false);
+      setSearchOrigin(null);
+      return;
+    }
 
     (async () => {
       setInitialLoading(true);
+      setNearbySuggestion(null);
+      setNearbyPromptVisible(false);
       const latitude = Number(initialLocation?.latitude);
       const longitude = Number(initialLocation?.longitude);
       if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
@@ -494,6 +692,7 @@ export default function LocationPickerModal({
           address: initialLocation?.address || '',
         });
         await setPin({ latitude, longitude });
+        setSearchOrigin({ latitude, longitude });
         setInitialLoading(false);
         return;
       }
@@ -504,7 +703,7 @@ export default function LocationPickerModal({
       setMarkerCoord(null);
       setAddressDetails({ name: '', address: '' });
       setRegion(MOGADISHU_REGION);
-      await useCurrentLocation({ silent: true });
+      await detectNearbyLocation({ silent: true });
       setInitialLoading(false);
     })();
   }, [visible]);
@@ -535,18 +734,21 @@ export default function LocationPickerModal({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [visible, searchQuery, showSuggestions]);
+  }, [visible, searchQuery, showSuggestions, searchOrigin, nearbySuggestion]);
 
   const handleMapPress = async (e) => {
     const coord = e.nativeEvent.coordinate;
     setShowSuggestions(false);
+    dismissNearbyPrompt();
     await setPin(coord);
   };
 
   const selectSuggestion = async (place) => {
-    const resolvedPlace = place.source === 'google'
-      ? await fetchGooglePlaceDetails(place)
-      : place;
+    dismissNearbyPrompt();
+    const resolvedPlace =
+      place.source === 'google' && place.placeId && !Number.isFinite(place.latitude)
+        ? await fetchGooglePlaceDetails(place)
+        : place;
 
     if (!resolvedPlace) {
       Alert.alert('Place unavailable', 'Could not verify this place inside Somalia. Please choose another suggestion.');
@@ -628,7 +830,11 @@ export default function LocationPickerModal({
           </TouchableOpacity>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.title}>{areaMode ? 'Set your area' : 'Set venue pin'}</Text>
-            <Text style={styles.subtitle}>{areaMode ? 'Search a district or drag the map to your area' : 'Search, use your location, or tap the map'}</Text>
+            <Text style={styles.subtitle}>
+              {areaMode
+                ? 'Search a district or drag the map to your area'
+                : 'We read where you are first — confirm or search for a venue'}
+            </Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
@@ -666,13 +872,29 @@ export default function LocationPickerModal({
                     setSearchQuery(value);
                     setShowSuggestions(true);
                   }}
-                  onFocus={() => setShowSuggestions(true)}
+                  onFocus={() => {
+                    setShowSuggestions(true);
+                    dismissNearbyPrompt();
+                  }}
                   onSubmitEditing={handleSearch}
                   returnKeyType="search"
-                  placeholder="Search venue, hotel, hall..."
+                  placeholder="Search places nearby..."
                   placeholderTextColor="#9CA3AF"
                   style={styles.searchInput}
                 />
+                {searchQuery.length > 0 ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSearchQuery('');
+                      setSuggestions([]);
+                      setShowSuggestions(false);
+                    }}
+                    style={styles.searchClearBtn}
+                    hitSlop={8}
+                  >
+                    <Feather name="x" size={18} color="#9CA3AF" />
+                  </TouchableOpacity>
+                ) : null}
                 <TouchableOpacity
                   onPress={handleSearch}
                   disabled={loading || !searchQuery.trim()}
@@ -686,51 +908,102 @@ export default function LocationPickerModal({
                 </TouchableOpacity>
               </View>
               {showSuggestions && searchQuery.trim().length >= 2 ? (
-                <View style={styles.suggestionsCard}>
+                <View style={[styles.suggestionsCard, { maxHeight: SUGGESTIONS_MAX_HEIGHT }]}>
                   {suggestionsLoading ? (
                     <View style={styles.suggestionStatusRow}>
                       <ActivityIndicator size="small" color="#FF7B3F" />
-                      <Text style={styles.suggestionStatusText}>Finding matching places...</Text>
+                      <Text style={styles.suggestionStatusText}>Finding places near you...</Text>
                     </View>
                   ) : suggestions.length > 0 ? (
-                    suggestions.map((place) => (
-                      <TouchableOpacity
-                        key={place.id}
-                        style={styles.suggestionRow}
-                        activeOpacity={0.85}
-                        onPress={() => selectSuggestion(place)}
-                      >
-                        <View style={styles.suggestionIcon}>
-                          <Feather
-                            name={place.source === 'google' ? 'navigation' : 'map-pin'}
-                            size={15}
-                            color="#EA580C"
-                          />
-                        </View>
-                        <View style={styles.suggestionTextWrap}>
-                          <Text style={styles.suggestionTitle} numberOfLines={1}>
-                            {place.name}
-                          </Text>
-                          <Text style={styles.suggestionAddress} numberOfLines={2}>
-                            {place.address || 'Use this venue name in Somalia'}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))
+                    <ScrollView
+                      keyboardShouldPersistTaps="handled"
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                    >
+                      {suggestions.map((place) => (
+                        <TouchableOpacity
+                          key={place.id}
+                          style={styles.suggestionRow}
+                          activeOpacity={0.85}
+                          onPress={() => selectSuggestion(place)}
+                        >
+                          <View style={styles.suggestionLeading}>
+                            <View style={styles.suggestionIcon}>
+                              <Feather
+                                name={place.source === 'google' ? 'map-pin' : 'map-pin'}
+                                size={15}
+                                color="#EA580C"
+                              />
+                            </View>
+                            {Number.isFinite(place.distanceMeters) ? (
+                              <Text style={styles.suggestionDistance}>
+                                {formatDistanceMeters(place.distanceMeters)}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <View style={styles.suggestionTextWrap}>
+                            <Text style={styles.suggestionTitle} numberOfLines={1}>
+                              {place.name}
+                            </Text>
+                            <Text style={styles.suggestionAddress} numberOfLines={2}>
+                              {place.address || 'Nearby place'}
+                            </Text>
+                          </View>
+                          <Feather name="corner-up-left" size={16} color="#CBD5E1" />
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
                   ) : (
                     <View style={styles.suggestionStatusRow}>
                       <Feather name="info" size={15} color="#9CA3AF" />
                       <Text style={styles.suggestionStatusText}>
-                        No verified Somalia places found yet. Try the full venue name.
+                        {GOOGLE_PLACES_API_KEY
+                          ? 'No nearby places found. Try another name or tap the map.'
+                          : 'No places found nearby. Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY for full search, or tap the map.'}
                       </Text>
                     </View>
                   )}
                 </View>
               ) : null}
-              <TouchableOpacity style={styles.currentLocationBtn} onPress={() => useCurrentLocation()}>
-                <Feather name="navigation" size={18} color="#FF7B3F" />
-                <Text style={styles.currentLocationText}>Use current location</Text>
-              </TouchableOpacity>
+              {nearbyPromptVisible && nearbySuggestion && !markerCoord ? (
+                <View style={styles.nearbyPromptCard}>
+                  <View style={styles.nearbyPromptHeader}>
+                    <View style={styles.nearbyPromptIcon}>
+                      <Feather name="navigation" size={16} color="#EA580C" />
+                    </View>
+                    <View style={styles.nearbyPromptTextWrap}>
+                      <Text style={styles.nearbyPromptEyebrow}>You&apos;re here</Text>
+                      <Text style={styles.nearbyPromptPlace} numberOfLines={2}>
+                        {formatNearbyPromptLine(nearbySuggestion)}
+                      </Text>
+                      <Text style={styles.nearbyPromptQuestion}>
+                        {areaMode ? 'Is this the area you want to use?' : 'Is this your event venue?'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.nearbyPromptActions}>
+                    <TouchableOpacity
+                      style={styles.nearbyPromptSecondaryBtn}
+                      activeOpacity={0.85}
+                      onPress={dismissNearbyPrompt}
+                    >
+                      <Text style={styles.nearbyPromptSecondaryText}>No, search instead</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.nearbyPromptPrimaryBtn}
+                      activeOpacity={0.85}
+                      onPress={acceptNearbyVenue}
+                    >
+                      <Text style={styles.nearbyPromptPrimaryText}>Yes, pin here</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.currentLocationBtn} onPress={useCurrentLocation}>
+                  <Feather name="crosshair" size={18} color="#FF7B3F" />
+                  <Text style={styles.currentLocationText}>Refresh my location</Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
         </View>
@@ -832,6 +1105,13 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontSize: 15,
   },
+  searchClearBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
   searchButton: {
     minWidth: 54,
     height: 36,
@@ -871,6 +1151,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
+  suggestionLeading: {
+    width: 52,
+    alignItems: 'center',
+    marginRight: 4,
+  },
   suggestionIcon: {
     width: 32,
     height: 32,
@@ -878,7 +1163,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+  },
+  suggestionDistance: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    textAlign: 'center',
   },
   suggestionTextWrap: {
     flex: 1,
@@ -929,6 +1220,95 @@ const styles = StyleSheet.create({
     color: '#EA580C',
     fontWeight: '800',
     fontSize: 12,
+  },
+  nearbyPromptCard: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 18,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
+    zIndex: 5,
+  },
+  nearbyPromptHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 12,
+  },
+  nearbyPromptIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nearbyPromptTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nearbyPromptEyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EA580C',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
+  nearbyPromptPlace: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+    lineHeight: 22,
+  },
+  nearbyPromptQuestion: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  nearbyPromptActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  nearbyPromptSecondaryBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  nearbyPromptSecondaryText: {
+    color: '#374151',
+    fontWeight: '700',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  nearbyPromptPrimaryBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: '#FF7B3F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  nearbyPromptPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,

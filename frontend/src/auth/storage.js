@@ -143,6 +143,28 @@ const storeGuestWelcomeSeen = async () => {
   }
 };
 
+const getOrganizerApprovedScreenSeenKey = (userId) =>
+  `organizerApprovedScreenSeen:${userId}`;
+
+const getOrganizerApprovedScreenSeen = async (userId) => {
+  if (userId == null) return false;
+  try {
+    return (await AsyncStorage.getItem(getOrganizerApprovedScreenSeenKey(userId))) === 'true';
+  } catch (error) {
+    console.log('Error getting organizer approved screen seen state', error);
+    return false;
+  }
+};
+
+const storeOrganizerApprovedScreenSeen = async (userId) => {
+  if (userId == null) return;
+  try {
+    await AsyncStorage.setItem(getOrganizerApprovedScreenSeenKey(userId), 'true');
+  } catch (error) {
+    console.log('Error storing organizer approved screen seen state', error);
+  }
+};
+
 const clearAll = async () => {
   try {
     await Promise.all([
@@ -172,5 +194,7 @@ export default {
   getRejectionReason,
   getGuestWelcomeSeen,
   storeGuestWelcomeSeen,
+  getOrganizerApprovedScreenSeen,
+  storeOrganizerApprovedScreenSeen,
   clearAll,
 };

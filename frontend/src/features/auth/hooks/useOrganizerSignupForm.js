@@ -4,7 +4,8 @@ import useGuardedRouter from '@/hooks/useGuardedRouter';
 import organizerApi from '@/api/organizer';
 import useAuth from '@/auth/useAuth';
 import useAuthSignupForm from '@/features/auth/hooks/useAuthSignupForm';
-import { getOrganizerEntryHref } from '@/navigation/organizerGate';
+import { jwtDecode } from 'jwt-decode';
+import { resolveOrganizerEntryHref } from '@/navigation/organizerGate';
 import {
   getSignupPayload,
   inferFieldErrorsFromMessage,
@@ -37,7 +38,9 @@ export default function useOrganizerSignupForm() {
       });
 
       await loginAsOrganizer(result.token, result.organizerStatus, result.rejectionReason);
-      router.replace(getOrganizerEntryHref(result.organizerStatus));
+      const decoded = jwtDecode(result.token);
+      const userId = decoded?.id ?? decoded?.sub;
+      router.replace(await resolveOrganizerEntryHref(result.organizerStatus, userId));
     } catch (error) {
       const message = error?.message || 'Registration failed. Please try again.';
       const inferredErrors = inferFieldErrorsFromMessage(message);

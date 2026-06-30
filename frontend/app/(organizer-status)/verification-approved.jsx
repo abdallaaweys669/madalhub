@@ -9,7 +9,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import useGuardedRouter from '@/hooks/useGuardedRouter';
-import { markApprovedScreenShown } from '@/navigation/organizerGate';
+import useAuth from '@/auth/useAuth';
+import { markApprovedScreenShown, resolveOrganizerUserId } from '@/navigation/organizerGate';
 import ApprovedSvg from '@/assets/approved.svg';
 
 const ORANGE = '#FF7B3F';
@@ -17,12 +18,16 @@ const GREEN = '#16A34A';
 
 export default function VerificationApprovedScreen() {
   const router = useGuardedRouter();
+  const { user } = useAuth();
   const { width } = useWindowDimensions();
   const heroSize = Math.min(width - 32, 380);
 
   const goToDashboard = () => {
-    markApprovedScreenShown();
-    router.replace('/(organizer)/(tabs)');
+    void (async () => {
+      const userId = await resolveOrganizerUserId(user);
+      await markApprovedScreenShown(userId);
+      router.replace('/(organizer)/(tabs)');
+    })();
   };
 
   return (
