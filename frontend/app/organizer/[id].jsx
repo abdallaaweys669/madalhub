@@ -15,18 +15,22 @@ import useGuardedRouter from '@/hooks/useGuardedRouter';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
+import useAuth from '@/auth/useAuth';
 import organizerApi from '@/api/organizer';
 import VerificationBadgeWhite from '@/assets/verification badge white mode.svg';
 import { ExploreEventCard } from '@/components/explore/ExploreEventCard';
 import {
   OrganizerAvatar,
-  OrganizerInfoRow,
   StatTile,
   formatCount,
 } from '@/components/organizer/OrganizerProfileChrome';
+import OrganizerPublicAbout from '@/components/organizer/OrganizerPublicAbout';
+import OrganizerSocialIconRow from '@/components/organizer/OrganizerSocialIconRow';
 import { spacing } from '@/theme';
 import { COLORS } from '@/theme/colors';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
+import { getFilledOrganizerSocialLinks } from '@/utils/socialLinks';
+import { openOrganizerContactEmail } from '@/utils/organizerContact';
 
 function formatOrganizerEventDateTime(event) {
   const startDate = new Date(event.startsAt ?? Date.now());
@@ -82,6 +86,7 @@ function toExploreCardEvent(event) {
 export default function PublicOrganizerProfileScreen() {
   const router = useGuardedRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { id } = useLocalSearchParams();
   const organizerId = Number(Array.isArray(id) ? id[0] : id);
 
@@ -172,10 +177,7 @@ export default function PublicOrganizerProfileScreen() {
 
   const handleOpenWebsite = async () => {
     const raw = String(profile?.website || '').trim();
-    if (!raw) {
-      Alert.alert('No website', 'This organizer has not added a website yet.');
-      return;
-    }
+    if (!raw) return;
     const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     try {
       await Linking.openURL(url);
@@ -184,8 +186,11 @@ export default function PublicOrganizerProfileScreen() {
     }
   };
 
-  const handleContact = () => {
-    Alert.alert('Coming soon', 'Messaging organizers will be available in a future update.');
+  const handleContactEmail = () => {
+    void openOrganizerContactEmail(profile?.email, {
+      organizerName: displayName,
+      visitorName: user?.fullName || user?.name,
+    });
   };
 
   if (!Number.isFinite(organizerId) || organizerId <= 0) {
@@ -219,6 +224,8 @@ export default function PublicOrganizerProfileScreen() {
   }
 
   const websiteLabel = String(profile?.website || '').trim();
+  const hasWebsite = Boolean(websiteLabel);
+  const hasSocial = getFilledOrganizerSocialLinks(profile).length > 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F5F5F5' }}>
@@ -269,39 +276,45 @@ export default function PublicOrganizerProfileScreen() {
           ))}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-          <Pressable
-            onPress={handleShare}
-            style={({ pressed }) => ({
-              flex: 1,
-              minHeight: 48,
-              borderRadius: 14,
-              backgroundColor: COLORS.primary,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text style={{ color: COLORS.card, fontWeight: '800', fontSize: 15 }}>Share profile</Text>
-          </Pressable>
-          <Pressable
-            onPress={websiteLabel ? handleOpenWebsite : handleContact}
-            style={({ pressed }) => ({
-              flex: 1,
-              minHeight: 48,
-              borderRadius: 14,
-              borderWidth: 2,
-              borderColor: COLORS.primary,
-              backgroundColor: COLORS.card,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: pressed ? 0.88 : 1,
-            })}
-          >
-            <Text style={{ color: COLORS.textPrimary, fontWeight: '800', fontSize: 15 }}>
-              {websiteLabel ? 'Visit website' : 'Contact'}
-            </Text>
-          </Pressable>
+        <View style={{ marginBottom: hasSocial && !hasWebsite ? 12 : 16 }}>
+          <View style={{ flexDirection: hasWebsite ? 'row' : 'column', gap: 10 }}>
+            <Pressable
+              onPress={handleShare}
+              style={({ pressed }) => ({
+                flex: hasWebsite ? 1 : undefined,
+                width: hasWebsite ? undefined : '100%',
+                minHeight: 48,
+                borderRadius: 14,
+                backgroundColor: COLORS.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text style={{ color: COLORS.card, fontWeight: '800', fontSize: 15 }}>Share profile</Text>
+            </Pressable>
+            {hasWebsite ? (
+              <Pressable
+                onPress={handleOpenWebsite}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  minHeight: 48,
+                  borderRadius: 14,
+                  borderWidth: 2,
+                  borderColor: COLORS.primary,
+                  backgroundColor: COLORS.card,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.88 : 1,
+                })}
+              >
+                <Text style={{ color: COLORS.textPrimary, fontWeight: '800', fontSize: 15 }}>Visit website</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {!hasWebsite && hasSocial ? (
+            <OrganizerSocialIconRow profile={profile} style={{ marginTop: 14, marginBottom: 0 }} />
+          ) : null}
         </View>
 
         <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.border, marginBottom: 14 }}>
@@ -403,31 +416,13 @@ export default function PublicOrganizerProfileScreen() {
             )}
           </>
         ) : (
-          <View style={{ marginBottom: 16 }}>
-            <Text allowFontScaling={false} style={{ color: COLORS.textSecondary, fontSize: 14, lineHeight: 22, marginBottom: 12 }}>
-              {profile.organizationDescription || 'This organizer has not added a description yet.'}
-            </Text>
-            <View style={{ height: 1, backgroundColor: COLORS.border, marginVertical: 8 }} />
-            <OrganizerInfoRow skipEmpty icon="globe" label="WEBSITE" value={profile.website || ''} />
-            <OrganizerInfoRow skipEmpty icon="map-pin" label="LOCATION" value={profile.location || ''} />
-            <Pressable
-              onPress={websiteLabel ? handleOpenWebsite : handleContact}
-              style={({ pressed }) => ({
-                marginTop: 20,
-                minHeight: 48,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: COLORS.textPrimary,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Text style={{ fontWeight: '700', fontSize: 15, color: COLORS.textPrimary }}>
-                {websiteLabel ? 'Open website' : 'Contact organizer'}
-              </Text>
-            </Pressable>
-          </View>
+          <OrganizerPublicAbout
+            profile={profile}
+            isVerified={isVerified}
+            onContactEmail={String(profile?.email || '').includes('@') ? handleContactEmail : undefined}
+            onOpenWebsite={hasWebsite ? handleOpenWebsite : undefined}
+            onBrowseEvents={() => setMainTab('events')}
+          />
         )}
       </ScrollView>
     </View>

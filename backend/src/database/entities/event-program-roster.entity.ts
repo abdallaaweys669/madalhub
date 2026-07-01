@@ -26,6 +26,21 @@ export class EventProgramRoster {
   @Column({ name: 'photo_url', type: 'varchar', length: 500, nullable: true })
   photoUrl!: string | null;
 
+  @Column({ name: 'social_website', type: 'varchar', length: 512, nullable: true })
+  socialWebsite!: string | null;
+
+  @Column({ name: 'social_linkedin', type: 'varchar', length: 512, nullable: true })
+  socialLinkedin!: string | null;
+
+  @Column({ name: 'social_instagram', type: 'varchar', length: 512, nullable: true })
+  socialInstagram!: string | null;
+
+  @Column({ name: 'social_facebook', type: 'varchar', length: 512, nullable: true })
+  socialFacebook!: string | null;
+
+  @Column({ name: 'social_tiktok', type: 'varchar', length: 512, nullable: true })
+  socialTiktok!: string | null;
+
   @Column({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder!: number;
 

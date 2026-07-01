@@ -1,51 +1,98 @@
-import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { getLineupCarouselMetrics } from '@/components/eventDetail/lineupCarouselLayout';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
-const CARD_WIDTH = 124;
-const LOGO_HEIGHT = 88;
-
-function SponsorCard({ sponsor, onPress }) {
+function SponsorCard({ sponsor, metrics, onPress }) {
   const name = sponsor.name?.trim() || 'Sponsor';
+  const radius = Math.round(metrics.avatarSize * 0.2);
 
   return (
-    <Pressable onPress={onPress} style={styles.card}>
-      <View style={styles.logoWrap}>
+    <Pressable onPress={onPress} style={[styles.card, { width: metrics.cardWidth }]}>
+      <View
+        style={[
+          styles.logoRing,
+          { width: metrics.avatarSize + 6, height: metrics.avatarSize + 6 },
+        ]}
+      >
         {sponsor.image?.uri ? (
-          <Image source={{ uri: sponsor.image.uri }} style={styles.logo} resizeMode="contain" />
+          <Image
+            source={{ uri: sponsor.image.uri }}
+            style={{ width: metrics.avatarSize, height: metrics.avatarSize, borderRadius: radius }}
+            resizeMode="contain"
+          />
         ) : (
-          <Feather name="image" size={28} color="#9CA3AF" />
+          <View
+            style={{
+              width: metrics.avatarSize,
+              height: metrics.avatarSize,
+              borderRadius: radius,
+              backgroundColor: '#F8FAFC',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Feather name="image" size={Math.round(metrics.avatarSize * 0.28)} color="#94A3B8" />
+          </View>
         )}
       </View>
-      <View style={styles.textBlock}>
-        <Text style={styles.name} numberOfLines={2}>
-          {name}
-        </Text>
-      </View>
+      <Text style={styles.name} numberOfLines={2}>
+        {name}
+      </Text>
     </Pressable>
   );
 }
 
 export default function WysiwygSponsors({ sponsors, onPressAddSponsor, onEditSponsor }) {
+  const { width: windowWidth } = useWindowDimensions();
+  const metrics = useMemo(() => getLineupCarouselMetrics(windowWidth), [windowWidth]);
+
   return (
     <View>
       <View style={styles.headerRow}>
         <Text style={[eventStyles.sectionTitle, styles.sectionTitle]}>Sponsors</Text>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.row}
+        decelerationRate="fast"
+        snapToInterval={metrics.itemStride}
+      >
         {sponsors.map((s) => (
-          <SponsorCard key={s.id} sponsor={s} onPress={() => onEditSponsor?.(s.id)} />
+          <View key={s.id} style={{ marginRight: metrics.cardGap }}>
+            <SponsorCard sponsor={s} metrics={metrics} onPress={() => onEditSponsor?.(s.id)} />
+          </View>
         ))}
 
-        <Pressable onPress={onPressAddSponsor} style={styles.addCard}>
-          <View style={styles.addLogoWrap}>
-            <Feather name="plus" size={28} color="#EA580C" />
+        <Pressable
+          onPress={onPressAddSponsor}
+          style={[styles.addCard, { width: metrics.cardWidth }]}
+        >
+          <View
+            style={[
+              styles.addLogoRing,
+              { width: metrics.avatarSize + 6, height: metrics.avatarSize + 6 },
+            ]}
+          >
+            <View
+              style={{
+                width: metrics.avatarSize,
+                height: metrics.avatarSize,
+                borderRadius: Math.round(metrics.avatarSize * 0.2),
+                backgroundColor: '#FFF7ED',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Feather name="plus" size={22} color="#EA580C" />
+            </View>
           </View>
-          <View style={styles.textBlock}>
-            <Text style={styles.addLabel}>Add sponsor</Text>
-          </View>
+          <Text style={styles.addLabel} numberOfLines={2}>
+            Add sponsor
+          </Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -65,68 +112,52 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   row: {
-    gap: 12,
+    paddingRight: 6,
     paddingBottom: 4,
   },
   card: {
-    width: CARD_WIDTH,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-    overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    alignItems: 'center',
   },
-  logoWrap: {
-    width: CARD_WIDTH,
-    height: LOGO_HEIGHT,
-    backgroundColor: '#F8FAFC',
+  logoRing: {
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
-  },
-  logo: {
-    width: '100%',
-    height: '100%',
-  },
-  textBlock: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 10,
-    minHeight: 44,
-    justifyContent: 'center',
+    padding: 4,
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   name: {
-    fontSize: 13,
+    marginTop: 5,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#111111',
-    lineHeight: 17,
+    color: '#111827',
+    lineHeight: 14,
     textAlign: 'center',
   },
   addCard: {
-    width: CARD_WIDTH,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#FDBA74',
-    backgroundColor: '#FFFBF5',
-    overflow: 'hidden',
+    alignItems: 'center',
   },
-  addLogoWrap: {
-    width: CARD_WIDTH,
-    height: LOGO_HEIGHT,
+  addLogoRing: {
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#FDBA74',
+    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#FFFBF5',
   },
   addLabel: {
-    fontSize: 13,
+    marginTop: 5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#EA580C',
     textAlign: 'center',
+    lineHeight: 14,
   },
 });

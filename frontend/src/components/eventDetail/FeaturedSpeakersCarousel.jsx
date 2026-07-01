@@ -1,28 +1,29 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
+  FlatList,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
 import { styles as detailStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
+import { formatRosterRoleLabel } from '@/utils/eventRosterByFormat';
+import { getLineupCarouselMetrics } from '@/components/eventDetail/lineupCarouselLayout';
 
-const CARD_WIDTH = 124;
-const IMAGE_HEIGHT = 124;
-const CARD_GAP = 12;
-
-function SpeakerPhoto({ person }) {
+function SpeakerAvatar({ person, size }) {
   const uri = resolveApiAssetUrl(person.photoUrl);
+
   if (uri) {
     return (
       <Image
         source={{ uri }}
-        style={styles.photo}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
         resizeMode="cover"
         accessibilityLabel={person.displayName}
       />
@@ -30,31 +31,43 @@ function SpeakerPhoto({ person }) {
   }
 
   return (
-    <View style={styles.photoFallback}>
-      <MemberInitialAvatar name={person.displayName || 'Speaker'} size={52} borderWidth={0} />
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: '#FFF7ED',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <MemberInitialAvatar
+        name={person.displayName || 'Speaker'}
+        size={Math.round(size * 0.38)}
+        borderWidth={0}
+      />
     </View>
   );
 }
 
-function SpeakerCard({ person, onPress }) {
-  const subtitle =
-    typeof person.title === 'string' && person.title.trim() ? person.title.trim() : '';
+function SpeakerCard({ person, onPress, showRole = false, metrics }) {
+  const roleLabel = showRole ? formatRosterRoleLabel(person.role) : '';
 
   const card = (
-    <View style={styles.card}>
-      <View style={styles.imageWrap}>
-        <SpeakerPhoto person={person} />
+    <View style={[styles.card, { width: metrics.cardWidth }]}>
+      <View style={[styles.avatarRing, { width: metrics.avatarSize + 6, height: metrics.avatarSize + 6 }]}>
+        <SpeakerAvatar person={person} size={metrics.avatarSize} />
       </View>
-      <View style={styles.textBlock}>
-        <Text style={styles.name} numberOfLines={2}>
-          {person.displayName}
-        </Text>
-        {subtitle ? (
-          <Text style={styles.subtitle} numberOfLines={2}>
-            {subtitle}
+      {roleLabel ? (
+        <View style={styles.rolePill}>
+          <Text style={styles.rolePillText} numberOfLines={1}>
+            {roleLabel}
           </Text>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
+      <Text style={styles.name} numberOfLines={2}>
+        {person.displayName}
+      </Text>
     </View>
   );
 
@@ -64,41 +77,151 @@ function SpeakerCard({ person, onPress }) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`View photo of ${person.displayName}`}
-      style={({ pressed }) => [pressed ? styles.cardPressed : null]}
+      accessibilityLabel={`View ${person.displayName}`}
+      style={({ pressed }) => [pressed && styles.cardPressed]}
     >
       {card}
     </Pressable>
   );
 }
 
-const FeaturedSpeakersCarousel = ({ roster, onSpeakerPress, showTitle = true, ListFooterComponent = null }) => {
-  if (!roster?.length && !ListFooterComponent) return null;
+const FeaturedSpeakersCarousel = ({
+  roster,
+  onSpeakerPress,
+  showTitle = true,
+  sectionTitle = 'Featured Speakers',
+  showRole = false,
+  autoScroll = true,
+  ListFooterComponent = null,
+}) => {
+  const { width: windowWidth } = useWindowDimensions();
+  const metrics = useMemo(() => getLineupCarouselMetrics(windowWidth), [windowWidth]);
+  const listRef = useRef(null);
+  const offsetRef = useRef(0);
+  const isInteractingRef = useRef(false);
+  const resumeTimeoutRef = useRef(null);
 
-  const cards = (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.scrollContent}
-      decelerationRate="fast"
-    >
-      {roster.map((person, index) => (
-        <SpeakerCard
-          key={person.id ?? `${person.displayName}-${index}`}
-          person={person}
-          onPress={onSpeakerPress ? () => onSpeakerPress(person, index) : undefined}
-        />
-      ))}
-      {ListFooterComponent}
-    </ScrollView>
+  const shouldAutoSlide = autoScroll && roster?.length >= 5;
+  const loopData = useMemo(() => {
+    if (!roster?.length) return [];
+    if (!shouldAutoSlide) {
+      return roster.map((person, index) => ({
+        ...person,
+        loopKey: `${person.id ?? person.displayName}-${index}`,
+        sourceIndex: index,
+      }));
+    }
+
+    return [...roster, ...roster].map((person, index) => ({
+      ...person,
+      loopKey: `${person.id ?? person.displayName}-loop-${index}`,
+      sourceIndex: index % roster.length,
+    }));
+  }, [roster, shouldAutoSlide]);
+
+  const loopWidth = shouldAutoSlide ? roster.length * metrics.itemStride : 0;
+
+  useEffect(() => {
+    if (!shouldAutoSlide) return undefined;
+
+    const timer = setInterval(() => {
+      if (isInteractingRef.current || !listRef.current) return;
+      const nextOffset = offsetRef.current + 0.28;
+      offsetRef.current = nextOffset >= loopWidth ? nextOffset - loopWidth : nextOffset;
+      listRef.current.scrollToOffset({ offset: offsetRef.current, animated: false });
+    }, 16);
+
+    return () => clearInterval(timer);
+  }, [loopWidth, shouldAutoSlide]);
+
+  useEffect(
+    () => () => {
+      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+    },
+    [],
   );
 
-  if (!showTitle) return <View style={styles.section}>{cards}</View>;
+  if (!roster?.length && !ListFooterComponent) return null;
+
+  const pauseAutoScroll = () => {
+    if (!shouldAutoSlide) return;
+    isInteractingRef.current = true;
+    if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+  };
+
+  const resumeAutoScroll = () => {
+    if (!shouldAutoSlide) return;
+    resumeTimeoutRef.current = setTimeout(() => {
+      isInteractingRef.current = false;
+    }, 1400);
+  };
+
+  const showEdgeFade = (roster?.length ?? 0) > 3;
+
+  const carousel = (
+    <View style={styles.carouselShell}>
+      <FlatList
+        ref={listRef}
+        data={loopData}
+        horizontal
+        keyExtractor={(item) => item.loopKey}
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        decelerationRate="fast"
+        snapToInterval={metrics.itemStride}
+        contentContainerStyle={styles.scrollContent}
+        scrollEnabled={(roster?.length ?? 0) > 1}
+        onScroll={(event) => {
+          if (shouldAutoSlide) {
+            offsetRef.current = event.nativeEvent.contentOffset.x;
+          }
+        }}
+        onScrollBeginDrag={pauseAutoScroll}
+        onScrollEndDrag={resumeAutoScroll}
+        onMomentumScrollEnd={resumeAutoScroll}
+        renderItem={({ item, index }) => (
+          <View style={{ marginRight: metrics.cardGap }}>
+            <SpeakerCard
+              person={item}
+              showRole={showRole}
+              metrics={metrics}
+              onPress={
+                onSpeakerPress
+                  ? () => onSpeakerPress(item, item.sourceIndex ?? index)
+                  : undefined
+              }
+            />
+          </View>
+        )}
+        ListFooterComponent={ListFooterComponent}
+      />
+      {showEdgeFade ? (
+        <>
+          <LinearGradient
+            pointerEvents="none"
+            colors={['#FFFFFF', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.fadeLeft}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(255,255,255,0)', '#FFFFFF']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.fadeRight}
+          />
+        </>
+      ) : null}
+    </View>
+  );
+
+  if (!showTitle) return <View style={styles.section}>{carousel}</View>;
 
   return (
     <View style={styles.section}>
-      <Text style={detailStyles.sectionTitle}>Featured Speakers</Text>
-      {cards}
+      <Text style={detailStyles.sectionTitle}>{sectionTitle}</Text>
+      {carousel}
     </View>
   );
 };
@@ -107,59 +230,72 @@ const styles = StyleSheet.create({
   section: {
     marginTop: 8,
   },
+  carouselShell: {
+    position: 'relative',
+  },
   scrollContent: {
-    gap: CARD_GAP,
-    paddingRight: 4,
-    paddingBottom: 4,
+    paddingRight: 6,
+    paddingVertical: 4,
+  },
+  fadeLeft: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 18,
+    zIndex: 1,
+  },
+  fadeRight: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 22,
+    zIndex: 1,
   },
   card: {
-    width: CARD_WIDTH,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-    overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    alignItems: 'center',
   },
   cardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.98 }],
+    opacity: 0.88,
+    transform: [{ scale: 0.96 }],
   },
-  imageWrap: {
-    width: CARD_WIDTH,
-    height: IMAGE_HEIGHT,
-    backgroundColor: '#FFF7ED',
-  },
-  photo: {
-    width: '100%',
-    height: '100%',
-  },
-  photoFallback: {
-    flex: 1,
+  avatarRing: {
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#EA580C',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  rolePill: {
+    marginTop: 6,
+    maxWidth: '100%',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
     backgroundColor: '#FFF7ED',
   },
-  textBlock: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 10,
+  rolePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#EA580C',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   name: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#111111',
-    lineHeight: 17,
-  },
-  subtitle: {
-    marginTop: 4,
+    marginTop: 5,
     fontSize: 11,
-    color: '#6B7280',
-    lineHeight: 15,
+    fontWeight: '700',
+    color: '#111827',
+    lineHeight: 14,
+    textAlign: 'center',
+    width: '100%',
   },
 });
 

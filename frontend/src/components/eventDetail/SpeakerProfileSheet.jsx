@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
 import { MemberInitialAvatar } from '@/components/member/MemberInitialAvatar';
+import SpeakerSocialIconRow from '@/components/eventDetail/SpeakerSocialIconRow';
 import { resolveApiAssetUrl } from '@/utils/mediaUrl';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -95,6 +96,8 @@ function SpeakerSlide({ person }) {
             {subtitle}
           </Text>
         ) : null}
+
+        <SpeakerSocialIconRow person={person} />
       </View>
     </View>
   );

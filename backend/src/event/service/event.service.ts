@@ -490,6 +490,11 @@ export class EventService {
     }
   }
 
+  private isSpeakerRosterRole(role: string) {
+    const normalized = String(role || '').trim().toLowerCase();
+    return normalized === 'speaker' || normalized === 'keynote';
+  }
+
   private async syncEventRoster(
     eventId: number,
     roster: {
@@ -498,21 +503,32 @@ export class EventService {
       title?: string | null;
       sortOrder?: number;
       photoUrl?: string | null;
+      socialWebsite?: string | null;
+      socialLinkedin?: string | null;
+      socialInstagram?: string | null;
+      socialFacebook?: string | null;
+      socialTiktok?: string | null;
     }[],
   ) {
     await this.eventProgramRosterRepo.delete({ eventId });
     const rows = roster
       .filter((r) => r?.displayName?.trim() && r?.role?.trim())
-      .map((r, idx) =>
-        this.eventProgramRosterRepo.create({
+      .map((r, idx) => {
+        const speakerLinks = this.isSpeakerRosterRole(r.role);
+        return this.eventProgramRosterRepo.create({
           eventId,
           role: r.role.trim(),
           displayName: r.displayName.trim(),
           title: r.title?.trim() || null,
           photoUrl: r.photoUrl?.trim() || null,
+          socialWebsite: speakerLinks ? r.socialWebsite?.trim() || null : null,
+          socialLinkedin: speakerLinks ? r.socialLinkedin?.trim() || null : null,
+          socialInstagram: speakerLinks ? r.socialInstagram?.trim() || null : null,
+          socialFacebook: speakerLinks ? r.socialFacebook?.trim() || null : null,
+          socialTiktok: speakerLinks ? r.socialTiktok?.trim() || null : null,
           sortOrder: r.sortOrder ?? idx,
-        }),
-      );
+        });
+      });
     if (rows.length > 0) {
       await this.eventProgramRosterRepo.save(rows);
     }
@@ -1910,6 +1926,11 @@ export class EventService {
           title: r.title,
           photoUrl: r.photoUrl,
           sortOrder: r.sortOrder,
+          socialWebsite: r.socialWebsite,
+          socialLinkedin: r.socialLinkedin,
+          socialInstagram: r.socialInstagram,
+          socialFacebook: r.socialFacebook,
+          socialTiktok: r.socialTiktok,
         })) ?? [],
       sessions: canViewRunSheet
         ? sessionRows?.map((s) => ({

@@ -107,6 +107,26 @@ export class OrganizerService {
     };
   }
 
+  private async resolveOrganizerTypeLabel(
+    profile: OrganizerProfile | null,
+  ): Promise<string | null> {
+    if (!profile) return null;
+
+    if (profile.organizerTypeId) {
+      const rows = await this.organizerProfileRepository.query(
+        `SELECT name FROM organizer_types WHERE id = ? AND is_active = 1 LIMIT 1`,
+        [profile.organizerTypeId],
+      );
+      const name = rows?.[0]?.name;
+      if (typeof name === 'string' && name.trim()) {
+        return name.trim();
+      }
+    }
+
+    const other = profile.organizerTypeOther?.trim();
+    return other || null;
+  }
+
   private countUpcomingPublishedEvents(
     events: Pick<Event, 'status' | 'startDatetime' | 'endDatetime'>[],
   ) {
@@ -641,6 +661,7 @@ export class OrganizerService {
 
     const eventsQb = this.eventRepository
       .createQueryBuilder('event')
+      .leftJoin('interests', 'interest', 'interest.id = event.interest_id')
       .select('event.id', 'id')
       .addSelect('event.title', 'title')
       .addSelect('event.description', 'description')
@@ -652,6 +673,10 @@ export class OrganizerService {
       .addSelect('event.total_price', 'totalPrice')
       .addSelect('event.is_physical', 'isPhysical')
       .addSelect('event.cover_image', 'coverImage')
+      .addSelect('event.event_format', 'eventFormat')
+      .addSelect('event.interest_id', 'interestId')
+      .addSelect('interest.name', 'interestName')
+      .addSelect('event.created_at', 'createdAt')
       .where('event.organizer_id = :organizerId', { organizerId: userId })
       .orderBy('event.created_at', 'DESC');
 
@@ -671,6 +696,10 @@ export class OrganizerService {
       totalPrice: number | string;
       isPhysical: number | boolean;
       coverImage: string | null;
+      eventFormat: string | null;
+      interestId: number | string | null;
+      interestName: string | null;
+      createdAt: Date | string | null;
     }>();
 
     const events = eventRows.map((row) => ({
@@ -685,6 +714,10 @@ export class OrganizerService {
       totalPrice: Number(row.totalPrice ?? 0),
       isPhysical: row.isPhysical === true || row.isPhysical === 1,
       coverImage: row.coverImage ?? null,
+      eventFormat: row.eventFormat ?? null,
+      interestId: row.interestId != null ? Number(row.interestId) : null,
+      interestName: row.interestName ?? null,
+      createdAt: row.createdAt ? new Date(row.createdAt) : null,
     }));
 
     const registrationCountByEventId = new Map<number, number>();
@@ -714,6 +747,10 @@ export class OrganizerService {
       totalPrice: event.totalPrice,
       isPhysical: event.isPhysical,
       coverImage: event.coverImage ?? null,
+      eventFormat: event.eventFormat ?? null,
+      interestId: event.interestId ?? null,
+      interestName: event.interestName ?? null,
+      createdAt: event.createdAt ?? null,
       registrationCount: registrationCountByEventId.get(event.id) ?? 0,
     }));
   }
@@ -749,6 +786,8 @@ export class OrganizerService {
 
     const upcomingEventsCount = this.countUpcomingPublishedEvents(events);
 
+    const organizerTypeLabel = await this.resolveOrganizerTypeLabel(organizerProfile);
+
     return {
       userId: user.id,
       fullName: user.fullName,
@@ -758,7 +797,11 @@ export class OrganizerService {
       organizationName: organizerProfile?.organizationName ?? null,
       organizationDescription:
         organizerProfile?.organizationDescription ?? null,
+      organizerTypeLabel,
+      memberSince: organizerProfile?.createdAt ?? null,
       website: organizerProfile?.website ?? null,
+      instagram: organizerProfile?.instagram ?? null,
+      facebook: organizerProfile?.facebook ?? null,
       verificationStatus: organizerProfile?.verificationStatus ?? 'pending',
       rejectionReason: organizerProfile?.rejectionReason ?? null,
       eventsCount,
@@ -791,6 +834,8 @@ export class OrganizerService {
       user.fullName ||
       'Organizer';
 
+    const organizerTypeLabel = await this.resolveOrganizerTypeLabel(organizerProfile);
+
     return {
       organizerId: user.id,
       fullName: user.fullName,
@@ -800,7 +845,11 @@ export class OrganizerService {
       organizationName: organizerProfile?.organizationName ?? null,
       organizationDescription:
         organizerProfile?.organizationDescription ?? null,
+      organizerTypeLabel,
+      email: user.email ?? null,
       website: organizerProfile?.website ?? null,
+      instagram: organizerProfile?.instagram ?? null,
+      facebook: organizerProfile?.facebook ?? null,
       verificationStatus: organizerProfile?.verificationStatus ?? 'pending',
       eventsCount: metrics.eventsCount,
       attendeesTotal: metrics.attendeesTotal,

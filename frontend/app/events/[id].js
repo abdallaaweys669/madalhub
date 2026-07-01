@@ -23,8 +23,9 @@ import EventOrganizerRow from '@/components/eventDetail/EventOrganizerRow';
 import EventActions from '@/components/eventDetail/EventActions';
 import EventBottomBar from '@/components/eventDetail/EventBottomBar';
 import EditAttendanceSheet from '@/components/eventDetail/EditAttendanceSheet';
-import FeaturedSpeakersCarousel from '@/components/eventDetail/FeaturedSpeakersCarousel';
+import EventLineupSections from '@/components/eventDetail/EventLineupSections';
 import SpeakerProfileSheet from '@/components/eventDetail/SpeakerProfileSheet';
+import { filterRosterByFormat } from '@/utils/eventRosterByFormat';
 import EventDirectionsMapModal from '@/components/eventDetail/EventDirectionsMapModal';
 import FloatingDirectionsButton from '@/components/eventDetail/FloatingDirectionsButton';
 import SponsorCarousel from '@/components/eventDetail/SponsorCarousel';
@@ -254,6 +255,7 @@ const EventDetailScreen = () => {
         }))
         .filter((row) => row.name || row.image)
     : [];
+  const displayRoster = filterRosterByFormat(event.roster, event.eventFormat);
   
   const displayPrice =
     event.priceType === 'Paid'
@@ -373,8 +375,9 @@ const EventDetailScreen = () => {
             verified={event.organizerVerificationStatus === 'approved'}
           />
 
-          <FeaturedSpeakersCarousel
+          <EventLineupSections
             roster={event.roster}
+            eventFormat={event.eventFormat}
             onSpeakerPress={(_, index) => openSpeakerSheet(index)}
           />
 
@@ -419,7 +422,7 @@ const EventDetailScreen = () => {
 
       <SpeakerProfileSheet
         visible={speakerSheet.visible}
-        roster={Array.isArray(event?.roster) ? event.roster : []}
+        roster={displayRoster}
         initialIndex={speakerSheet.index}
         onClose={() => setSpeakerSheet({ visible: false, index: 0 })}
       />

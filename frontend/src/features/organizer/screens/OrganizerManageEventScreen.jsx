@@ -355,7 +355,7 @@ export default function OrganizerManageEventScreen() {
           <ActionRow
             icon="users"
             title="Waitlist"
-            subtitle="Auto-fill spots when someone cancels (enable in event editor)"
+            subtitle="When your event is full, members can join the waitlist automatically"
             onPress={() => router.push({ pathname: '/(organizer)/edit-event', params: { eventId } })}
           />
           <ActionRow

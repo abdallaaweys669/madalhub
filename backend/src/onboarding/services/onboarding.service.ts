@@ -293,7 +293,15 @@ export class OnboardingService {
     }
 
     if (dto.website !== undefined) {
-      profile.website = dto.website;
+      profile.website = dto.website?.trim() || null;
+    }
+
+    if (dto.instagram !== undefined) {
+      profile.instagram = dto.instagram?.trim() || null;
+    }
+
+    if (dto.facebook !== undefined) {
+      profile.facebook = dto.facebook?.trim() || null;
     }
 
     const savedProfile = await this.organizerProfileRepository.save(profile);
@@ -304,6 +312,8 @@ export class OnboardingService {
       organizationName: savedProfile.organizationName ?? null,
       organizationDescription: savedProfile.organizationDescription ?? null,
       website: savedProfile.website ?? null,
+      instagram: savedProfile.instagram ?? null,
+      facebook: savedProfile.facebook ?? null,
       verificationStatus: savedProfile.verificationStatus,
       profileCompleted: this.isProfileComplete(savedProfile),
     };

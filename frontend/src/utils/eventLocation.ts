@@ -1,3 +1,5 @@
+import { formatResolvedAreaLineFromGeocode } from '@/utils/somaliaDistrictMatch';
+
 const PLUS_CODE_PATTERN = /\b[2-9CFGHJMPQRVWX]{4,}\+[2-9CFGHJMPQRVWX]{2,}\b/gi;
 const TRAILING_COUNTRIES = new Set(['somalia', 'kenya', 'ethiopia', 'djibouti', 'uganda']);
 
@@ -71,6 +73,9 @@ type GeocodePlace = {
 /** Area line from expo-location reverse geocode (map pin): district, region, city. */
 export function formatAreaLineFromGeocode(place?: GeocodePlace | null) {
   if (!place) return '';
+  const resolved = formatResolvedAreaLineFromGeocode(place);
+  if (resolved) return resolved;
+
   const candidates = uniqueParts(
     [place.district, place.subregion, place.region, place.city].filter(
       (p): p is string => typeof p === 'string' && Boolean(p.trim()),

@@ -14,6 +14,8 @@ export default function OrganizerTabScaffold({
   children,
   showFab = true,
   orgName = '',
+  orgTypeLabel = '',
+  homeMode = false,
 }) {
   const insets = useSafeAreaInsets();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -25,6 +27,9 @@ export default function OrganizerTabScaffold({
       <View style={{ paddingTop: insets.top, backgroundColor: '#FFFFFF' }}>
         <OrganizerAppHeader
           title={title}
+          orgName={orgName}
+          orgTypeLabel={orgTypeLabel}
+          homeMode={homeMode}
           unreadCount={unreadCount}
           onMenuPress={() => setDrawerOpen(true)}
         />

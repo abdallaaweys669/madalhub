@@ -33,6 +33,26 @@ export class EventRosterEntryDto {
   @IsOptional()
   @IsString()
   photoUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  socialWebsite?: string | null;
+
+  @IsOptional()
+  @IsString()
+  socialLinkedin?: string | null;
+
+  @IsOptional()
+  @IsString()
+  socialInstagram?: string | null;
+
+  @IsOptional()
+  @IsString()
+  socialFacebook?: string | null;
+
+  @IsOptional()
+  @IsString()
+  socialTiktok?: string | null;
 }
 
 export class CreateEventDto {

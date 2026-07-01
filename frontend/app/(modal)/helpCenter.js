@@ -29,8 +29,7 @@ export default function HelpCenterScreen() {
 
       <Block title="Saving & joining" colors={colors}>
         Use the bookmark on a card to save an event for later — it appears under Profile → Saved. When registration
-        is open, tap Register on the event page. If an event is full, waitlist options may appear when the organizer
-        enables them.
+        is open, tap Register on the event page. If an event is full, you can join the waitlist and get notified when a spot opens.
       </Block>
 
       <Block title="Your profile" colors={colors}>

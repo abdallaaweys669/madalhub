@@ -12,4 +12,12 @@ export class UpdateOrganizerProfileDto {
   @IsOptional()
   @IsString()
   website?: string;
+
+  @IsOptional()
+  @IsString()
+  instagram?: string | null;
+
+  @IsOptional()
+  @IsString()
+  facebook?: string | null;
 }

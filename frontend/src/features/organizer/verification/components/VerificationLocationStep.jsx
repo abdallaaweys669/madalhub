@@ -11,7 +11,8 @@ import * as ExpoLocation from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import LocationSvg from '@/assets/location2.svg';
 import { logApiError } from '@/api/logApiError';
-import { SOMALIA_DISTRICTS } from '@/features/onboarding/screens/Location';
+import { SOMALIA_DISTRICTS } from '@/constants/somaliaDistricts';
+import { resolveSomaliaDistrictFromGeocode, reverseGeocodePlaceFromCoords } from '@/utils/somaliaDistrictMatch';
 
 const ORANGE = '#FF7B3F';
 const INPUT_BORDER = 'rgba(255,123,63,0.28)';
@@ -55,40 +56,22 @@ export default function VerificationLocationStep({ value, onChange }) {
         const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
 
-        const pos = await ExpoLocation.getCurrentPositionAsync({});
-        const geo = await ExpoLocation.reverseGeocodeAsync(pos.coords);
+        const pos = await ExpoLocation.getCurrentPositionAsync({
+          accuracy: ExpoLocation.Accuracy.High,
+        });
+        const place = await reverseGeocodePlaceFromCoords(
+          pos.coords.latitude,
+          pos.coords.longitude,
+        );
 
-        if (geo[0]) {
-          const { district, subregion, region, city: geoCity, country } = geo[0];
-          const districtName = district || subregion || '';
-          const regionName = region || '';
-          const countryName = country || DEFAULT_COUNTRY;
-          const normalize = (s) =>
-            s
-              .toLowerCase()
-              .replace(/degmada\s*/g, '')
-              .replace(/(.)\1+/g, '$1')
-              .trim();
-          const gpsDistrict = normalize(districtName);
-          const gpsRegion = normalize(regionName);
-
-          const match = SOMALIA_DISTRICTS.find((d) => {
-            const listDistrict = normalize(d.district);
-            const listRegion = normalize(d.region);
-            const districtMatch =
-              listDistrict === gpsDistrict ||
-              listDistrict.includes(gpsDistrict) ||
-              gpsDistrict.includes(listDistrict);
-            const regionMatch =
-              !regionName ||
-              listRegion === gpsRegion ||
-              listRegion.includes(gpsRegion) ||
-              gpsRegion.includes(listRegion);
-            return districtMatch && regionMatch;
-          });
-          const cityName = match?.city || geoCity || '';
+        if (place) {
+          const countryName = place.country || DEFAULT_COUNTRY;
+          const match = resolveSomaliaDistrictFromGeocode(place);
           const detected = formatOrganizerLocation(
-            { city: cityName || districtName, country: countryName },
+            {
+              city: match?.city || place.city || place.district || place.subregion,
+              country: countryName,
+            },
             countryName,
           );
           if (detected) {

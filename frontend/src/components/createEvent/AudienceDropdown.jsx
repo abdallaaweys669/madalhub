@@ -4,9 +4,21 @@ import { Feather } from '@expo/vector-icons';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
 const AUDIENCE_OPTIONS = [
-  { key: 'all', label: 'Everyone' },
-  { key: 'male', label: 'Male' },
-  { key: 'female', label: 'Female' },
+  {
+    key: 'all',
+    label: 'Open to all',
+    description: 'Anyone can discover and join this event.',
+  },
+  {
+    key: 'female',
+    label: 'Female members only',
+    description: 'For members who selected Female in their profile.',
+  },
+  {
+    key: 'male',
+    label: 'Male members only',
+    description: 'For members who selected Male in their profile.',
+  },
 ];
 
 export default function AudienceDropdown({ value = 'all', onChange }) {
@@ -15,9 +27,9 @@ export default function AudienceDropdown({ value = 'all', onChange }) {
 
   return (
     <View style={{ marginTop: 24 }}>
-      <Text style={eventStyles.sectionTitle}>Audience</Text>
+      <Text style={eventStyles.sectionTitle}>Who can join?</Text>
       <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 10 }}>
-        Who can discover and join this event.
+        Choose who can discover and register for this event.
       </Text>
       <Pressable
         onPress={() => setOpen(true)}
@@ -53,7 +65,7 @@ export default function AudienceDropdown({ value = 'all', onChange }) {
               paddingBottom: 24,
             }}
           >
-            <Text style={{ fontSize: 17, fontWeight: '800', marginBottom: 12 }}>Audience</Text>
+            <Text style={{ fontSize: 17, fontWeight: '800', marginBottom: 12 }}>Who can join?</Text>
             {AUDIENCE_OPTIONS.map((option) => {
               const active = option.key === value;
               return (
@@ -64,19 +76,21 @@ export default function AudienceDropdown({ value = 'all', onChange }) {
                     setOpen(false);
                   }}
                   style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
                     paddingVertical: 14,
                     paddingHorizontal: 4,
                     borderBottomWidth: 1,
                     borderBottomColor: '#F3F4F6',
                   }}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: active ? '800' : '600', color: active ? '#EA580C' : '#111827' }}>
-                    {option.label}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 16, fontWeight: active ? '800' : '600', color: active ? '#EA580C' : '#111827' }}>
+                      {option.label}
+                    </Text>
+                    {active ? <Feather name="check" size={18} color="#EA580C" /> : null}
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 4, lineHeight: 18, paddingRight: 28 }}>
+                    {option.description}
                   </Text>
-                  {active ? <Feather name="check" size={18} color="#EA580C" /> : null}
                 </Pressable>
               );
             })}

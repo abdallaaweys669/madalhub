@@ -15,7 +15,12 @@ import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatAreaLineFromGeocode } from '@/utils/eventLocation';
+import {
+  formatDetectedLocationFromGeocode,
+  formatResolvedAreaLineFromGeocode,
+  resolveSomaliaDistrictFromGeocode,
+  reverseGeocodePlaceFromCoords,
+} from '@/utils/somaliaDistrictMatch';
 
 const MOGADISHU_REGION = {
   latitude: 2.0469,
@@ -529,30 +534,32 @@ export default function LocationPickerModal({
     return attachDistanceAndSort(results, origin).slice(0, MAX_SUGGESTIONS);
   };
 
+  const buildAddressDetailsFromPlace = (place) => {
+    const resolvedAreaLine = formatResolvedAreaLineFromGeocode(place);
+    const match = resolveSomaliaDistrictFromGeocode(place);
+
+    if (areaMode) {
+      return {
+        name: resolvedAreaLine || 'Unknown Area',
+        address: '',
+      };
+    }
+
+    const rawName = (place.name || '').trim();
+    const friendlyName = !looksLikePlusCode(rawName)
+      ? rawName
+      : ((match?.district || place.streetName || place.street || place.district || place.subregion || place.city || 'Selected Location').trim());
+
+    return {
+      name: match?.district || friendlyName || 'Selected Location',
+      address: resolvedAreaLine || formatReverseAddress(place),
+    };
+  };
+
   const resolveAddressFromCoords = async (latitude, longitude) => {
     try {
-      const geocodeList = await Location.reverseGeocodeAsync({ latitude, longitude });
-      if (geocodeList && geocodeList.length > 0) {
-        const place = geocodeList[0];
-        const constructedAddress = formatReverseAddress(place);
-
-        if (areaMode) {
-          return {
-            name: constructedAddress || 'Unknown Area',
-            address: '',
-          };
-        }
-
-        const rawName = (place.name || '').trim();
-        const friendlyName = !looksLikePlusCode(rawName)
-          ? rawName
-          : ((place.streetName || place.street || place.district || place.subregion || place.city || 'Selected Location').trim());
-
-        return {
-          name: friendlyName || 'Selected Location',
-          address: constructedAddress,
-        };
-      }
+      const place = await reverseGeocodePlaceFromCoords(latitude, longitude);
+      if (place) return buildAddressDetailsFromPlace(place);
     } catch (e) {
       console.warn('Reverse geocode failed', e);
     }
@@ -562,7 +569,11 @@ export default function LocationPickerModal({
       : { name: 'Selected Location', address: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` };
   };
 
-  const formatNearbyPromptLine = (details) => {
+  const formatNearbyPromptLine = (details, place) => {
+    if (place) {
+      const resolved = formatDetectedLocationFromGeocode(place);
+      if (resolved) return resolved;
+    }
     if (!details) return 'Your current area';
     const areaLine = String(details.address || '').trim();
     if (areaLine) return areaLine;
@@ -626,18 +637,22 @@ export default function LocationPickerModal({
         return null;
       }
 
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const coord = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       };
-      const details = await resolveAddressFromCoords(coord.latitude, coord.longitude);
+      const place = await reverseGeocodePlaceFromCoords(coord.latitude, coord.longitude);
+      const details = place
+        ? buildAddressDetailsFromPlace(place)
+        : { name: 'Selected Location', address: '' };
       centerMapOn(coord);
       setSearchOrigin(coord);
       setNearbySuggestion({
         ...coord,
         name: details.name,
         address: details.address,
+        geocodePlace: place,
       });
       setNearbyPromptVisible(true);
       return coord;
@@ -974,7 +989,7 @@ export default function LocationPickerModal({
                     <View style={styles.nearbyPromptTextWrap}>
                       <Text style={styles.nearbyPromptEyebrow}>You&apos;re here</Text>
                       <Text style={styles.nearbyPromptPlace} numberOfLines={2}>
-                        {formatNearbyPromptLine(nearbySuggestion)}
+                        {formatNearbyPromptLine(nearbySuggestion, nearbySuggestion.geocodePlace)}
                       </Text>
                       <Text style={styles.nearbyPromptQuestion}>
                         {areaMode ? 'Is this the area you want to use?' : 'Is this your event venue?'}

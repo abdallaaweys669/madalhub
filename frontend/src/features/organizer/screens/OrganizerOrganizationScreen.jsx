@@ -99,14 +99,14 @@ export default function OrganizerOrganizationScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         contentContainerStyle={{ padding: 14, paddingBottom: 48 }}
       >
-        <View style={{ alignItems: 'center', marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
           <Pressable onPress={openEditProfile} style={{ position: 'relative' }}>
-            <OrganizerAvatar uri={avatarUri} name={displayName} />
+            <OrganizerAvatar uri={avatarUri} name={displayName} size={76} />
             <View
               style={{
                 position: 'absolute',
-                right: 0,
-                bottom: 0,
+                right: -2,
+                bottom: -2,
                 width: 28,
                 height: 28,
                 borderRadius: 14,
@@ -120,30 +120,28 @@ export default function OrganizerOrganizationScreen() {
               <Feather name="edit-2" size={14} color="#FFFFFF" />
             </View>
           </Pressable>
-          <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontSize: 22, fontWeight: '900', color: COLORS.textPrimary }}>{displayName}</Text>
-            {badge.label === 'Verified' ? <VerificationBadgeWhite width={16} height={16} style={{ marginLeft: 8 }} /> : null}
+
+          <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <Text
+                numberOfLines={2}
+                style={{ fontSize: 18, fontWeight: '800', color: COLORS.textPrimary, flexShrink: 1 }}
+              >
+                {displayName}
+              </Text>
+              {status === 'approved' ? (
+                <VerificationBadgeWhite width={18} height={18} />
+              ) : null}
+            </View>
+            <Text style={{ color: COLORS.textMuted, fontSize: 14, marginTop: 4 }} numberOfLines={1}>
+              {email}
+            </Text>
+            {status !== 'approved' ? (
+              <Text style={{ marginTop: 4, color: badge.color, fontWeight: '600', fontSize: 13 }}>
+                {badge.label}
+              </Text>
+            ) : null}
           </View>
-          <Text style={{ color: COLORS.textSecondary, marginTop: 4 }}>{email}</Text>
-          <Text style={{ marginTop: 8, color: badge.color, fontWeight: '700' }}>{badge.label}</Text>
-          <Pressable
-            onPress={openEditProfile}
-            style={({ pressed }) => ({
-              marginTop: 14,
-              paddingHorizontal: 18,
-              paddingVertical: 10,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: COLORS.primary,
-              backgroundColor: pressed ? '#FFF7ED' : '#FFFFFF',
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
-            })}
-          >
-            <Feather name="edit-3" size={16} color={COLORS.primary} />
-            <Text style={{ color: COLORS.primary, fontWeight: '800', fontSize: 14 }}>Edit profile</Text>
-          </Pressable>
         </View>
 
         <View style={{ flexDirection: 'row', marginBottom: 16 }}>

@@ -1,8 +1,17 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 import EventMetaChipsRow from '@/components/event/EventMetaChipsRow';
+import { Feather } from '@expo/vector-icons';
+
+const EXPANDED_DESCRIPTION_MIN_HEIGHT = 140;
+
+function descriptionNeedsToggle(description) {
+  const text = String(description ?? '');
+  if (!text.trim()) return false;
+  if (text.length > 120) return true;
+  return text.split('\n').length > 4;
+}
 
 export default function WysiwygInfoCard({
   title,
@@ -22,7 +31,25 @@ export default function WysiwygInfoCard({
   scheduleUnset = false,
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [descriptionHeight, setDescriptionHeight] = useState(EXPANDED_DESCRIPTION_MIN_HEIGHT);
   const isOnline = deliveryMode === 'online';
+  const showToggle = useMemo(() => descriptionNeedsToggle(description), [description]);
+
+  const expandDescription = () => {
+    const lineCount = String(description).split('\n').length;
+    const estimatedHeight = Math.max(EXPANDED_DESCRIPTION_MIN_HEIGHT, lineCount * 20 + 8);
+    setDescriptionHeight(estimatedHeight);
+    setExpanded(true);
+  };
+
+  const handleDescriptionSizeChange = (event) => {
+    if (!expanded || !showToggle) return;
+    const nextHeight = Math.max(
+      EXPANDED_DESCRIPTION_MIN_HEIGHT,
+      Math.ceil(event.nativeEvent.contentSize.height),
+    );
+    setDescriptionHeight(nextHeight);
+  };
 
   return (
     <View style={eventStyles.infoBlock}>
@@ -45,19 +72,58 @@ export default function WysiwygInfoCard({
         style={[eventStyles.title, { paddingVertical: 0 }]}
       />
 
-      <View style={eventStyles.descriptionWrap}>
-        <TextInput
-          value={description}
-          onChangeText={onChangeDescription}
-          multiline
-          placeholder="Tap to add a description attendees will read."
-          placeholderTextColor="#9CA3AF"
-          style={[eventStyles.description, { minHeight: expanded ? 100 : 70 }]}
-        />
-      </View>
-      <Pressable onPress={() => setExpanded((prev) => !prev)}>
-        <Text style={eventStyles.readMore}>{expanded ? 'See less' : 'See more'}</Text>
-      </Pressable>
+      {!expanded && showToggle ? (
+        <Pressable
+          onPress={expandDescription}
+          accessibilityRole="button"
+          accessibilityLabel="Expand description"
+          style={eventStyles.descriptionWrap}
+        >
+          <Text style={eventStyles.description} numberOfLines={4}>
+            {description}
+          </Text>
+        </Pressable>
+      ) : (
+        <View style={eventStyles.descriptionWrap}>
+          <TextInput
+            value={description}
+            onChangeText={onChangeDescription}
+            multiline
+            scrollEnabled={false}
+            onContentSizeChange={handleDescriptionSizeChange}
+            placeholder="Tap to add a description attendees will read."
+            placeholderTextColor="#9CA3AF"
+            style={[
+              eventStyles.description,
+              showToggle && expanded
+                ? {
+                    height: descriptionHeight,
+                    minHeight: EXPANDED_DESCRIPTION_MIN_HEIGHT,
+                    paddingVertical: 0,
+                  }
+                : {
+                    minHeight: 70,
+                    paddingVertical: 0,
+                  },
+            ]}
+          />
+        </View>
+      )}
+      {showToggle ? (
+        <Pressable
+          onPress={() => {
+            if (expanded) {
+              setExpanded(false);
+              return;
+            }
+            expandDescription();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'See less description' : 'See more description'}
+        >
+          <Text style={eventStyles.readMore}>{expanded ? 'See less' : 'See more'}</Text>
+        </Pressable>
+      ) : null}
 
       <View style={eventStyles.infoSpacing} />
       <Pressable onPress={onPressEditDate} style={eventStyles.infoRow}>

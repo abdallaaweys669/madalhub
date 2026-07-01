@@ -38,15 +38,17 @@ export function StatTile({ label, value }) {
 }
 
 /** Circular / initials avatar — shared between self + public organizer profiles. */
-export function OrganizerAvatar({ uri, name }) {
+export function OrganizerAvatar({ uri, name, size = 88 }) {
+  const radius = size / 2;
+
   if (uri) {
     return (
       <Image
         source={{ uri }}
         style={{
-          width: 88,
-          height: 88,
-          borderRadius: 44,
+          width: size,
+          height: size,
+          borderRadius: radius,
           borderWidth: 2,
           borderColor: COLORS.card,
           backgroundColor: COLORS.card,
@@ -58,9 +60,9 @@ export function OrganizerAvatar({ uri, name }) {
   return (
     <View
       style={{
-        width: 88,
-        height: 88,
-        borderRadius: 44,
+        width: size,
+        height: size,
+        borderRadius: radius,
         borderWidth: 2,
         borderColor: COLORS.card,
         backgroundColor: COLORS.primarySoft,
@@ -68,7 +70,7 @@ export function OrganizerAvatar({ uri, name }) {
         justifyContent: 'center',
       }}
     >
-      <Text allowFontScaling={false} style={{ color: COLORS.primary, fontSize: 30, fontWeight: '800' }}>
+      <Text allowFontScaling={false} style={{ color: COLORS.primary, fontSize: Math.round(size * 0.34), fontWeight: '800' }}>
         {initialsFromName(name)}
       </Text>
     </View>

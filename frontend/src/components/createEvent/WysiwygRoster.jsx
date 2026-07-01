@@ -1,34 +1,57 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import FeaturedSpeakersCarousel from '@/components/eventDetail/FeaturedSpeakersCarousel';
+import EventLineupSections from '@/components/eventDetail/EventLineupSections';
+import { getLineupCarouselMetrics } from '@/components/eventDetail/lineupCarouselLayout';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
+import { getRosterSectionMeta } from '@/utils/eventRosterByFormat';
 
 export default function WysiwygRoster({ roster, eventFormat, onPressAdd, onPressPerson }) {
+  const { width: windowWidth } = useWindowDimensions();
+  const metrics = useMemo(() => getLineupCarouselMetrics(windowWidth), [windowWidth]);
+  const sectionMeta = useMemo(() => getRosterSectionMeta(eventFormat), [eventFormat]);
+  const showSubsectionTitles = eventFormat === 'panel';
+
   const addCard = (
-    <Pressable onPress={onPressAdd} style={styles.addCard} accessibilityRole="button" accessibilityLabel="Add speaker">
-      <View style={styles.addIconWrap}>
-        <Feather name="plus" size={28} color="#EA580C" />
+    <Pressable
+      onPress={onPressAdd}
+      style={[styles.addCard, { width: metrics.cardWidth }]}
+      accessibilityRole="button"
+      accessibilityLabel={sectionMeta.addLabel}
+    >
+      <View
+        style={[
+          styles.addAvatarRing,
+          { width: metrics.avatarSize + 6, height: metrics.avatarSize + 6 },
+        ]}
+      >
+        <View
+          style={[
+            styles.addAvatarInner,
+            { width: metrics.avatarSize, height: metrics.avatarSize, borderRadius: metrics.avatarSize / 2 },
+          ]}
+        >
+          <Feather name="plus" size={22} color="#EA580C" />
+        </View>
       </View>
-      <Text style={styles.addLabel}>Add speaker</Text>
+      <Text style={styles.addLabel} numberOfLines={2}>
+        {sectionMeta.addLabel}
+      </Text>
     </Pressable>
   );
 
   return (
     <View>
       <View style={styles.headerRow}>
-        <Text style={[eventStyles.sectionTitle, styles.sectionTitle]}>Featured Speakers</Text>
+        <Text style={[eventStyles.sectionTitle, styles.sectionTitle]}>{sectionMeta.title}</Text>
       </View>
-      <Text style={styles.helper}>
-        Add speakers, panelists, moderators, or hosts — same cards attendees see on the event page.
-      </Text>
-      {eventFormat === 'panel' ? (
-        <Text style={styles.helper}>Panels work best with at least two panelists and one moderator.</Text>
-      ) : null}
+      <Text style={styles.helper}>{sectionMeta.helper}</Text>
 
-      <FeaturedSpeakersCarousel
+      <EventLineupSections
         roster={roster}
-        showTitle={false}
+        eventFormat={eventFormat}
+        showTitle={showSubsectionTitles}
+        autoScroll={false}
         onSpeakerPress={(person) => onPressPerson?.(person)}
         ListFooterComponent={addCard}
       />
@@ -55,29 +78,28 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   addCard: {
-    width: 124,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#FDBA74',
-    backgroundColor: '#FFFBF5',
-    overflow: 'hidden',
     alignItems: 'center',
-    paddingBottom: 12,
   },
-  addIconWrap: {
-    width: 124,
-    height: 124,
+  addAvatarRing: {
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#FDBA74',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFBF5',
+  },
+  addAvatarInner: {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFF7ED',
   },
   addLabel: {
-    marginTop: 8,
-    fontSize: 13,
+    marginTop: 5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#EA580C',
     textAlign: 'center',
-    paddingHorizontal: 8,
+    lineHeight: 14,
   },
 });

@@ -36,6 +36,17 @@ import {
   shouldRequireFutureStart,
 } from '@/utils/eventScheduleValidation';
 import { EVENT_FORMAT_OPTIONS } from '@/constants/eventFormats';
+import { formatKeyToDisplayLabel } from '@/constants/eventFormatLabels';
+import {
+  getDefaultRosterRole,
+  getRosterFormatMismatchIssues,
+} from '@/utils/eventRosterByFormat';
+import {
+  buildSpeakerRosterSocialLinksPayload,
+  getEmptySocialLinkValues,
+  isSpeakerRosterRole,
+  pickRosterSpeakerSocialInputs,
+} from '@/utils/socialLinks';
 import { styles as eventStyles } from '@/constants/eventDetails_styles/eventDetails.styles';
 
 import CreateEventCover from '@/components/createEvent/CreateEventCover';
@@ -165,6 +176,8 @@ function getPublishValidationIssues({
     if (moderators.length < 1) issues.push('Panel events need at least 1 moderator.');
   }
 
+  issues.push(...getRosterFormatMismatchIssues(eventFormat, people));
+
   return issues;
 }
 
@@ -208,7 +221,6 @@ export default function CreateEventScreen() {
   const [locationPin, setLocationPin] = useState(null);
   const [ticketPaid, setTicketPaid] = useState(false);
   const [audienceGender, setAudienceGender] = useState('all');
-  const [enableWaitlist, setEnableWaitlist] = useState(false);
 
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
@@ -238,7 +250,13 @@ export default function CreateEventScreen() {
   const [editingPersonKey, setEditingPersonKey] = useState(null);
   const [personSaving, setPersonSaving] = useState(false);
   const [draftPhotoPick, setDraftPhotoPick] = useState(null);
-  const [draftPerson, setDraftPerson] = useState({ fullName: '', role: 'speaker', title: '', photoPath: null });
+  const [draftPerson, setDraftPerson] = useState({
+    fullName: '',
+    role: 'speaker',
+    title: '',
+    photoPath: null,
+    socialLinks: getEmptySocialLinkValues(),
+  });
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [publishSuccessOpen, setPublishSuccessOpen] = useState(false);
   const [publishWarningOpen, setPublishWarningOpen] = useState(false);
@@ -361,7 +379,18 @@ export default function CreateEventScreen() {
         setAudienceGender(['all', 'female', 'male'].includes(data.audienceGender) ? data.audienceGender : 'all');
         setRemoteStatus(data.status ?? null);
         setTicketPaid(Number(data.price ?? data.totalPrice ?? 0) > 0);
-        setPeople(Array.isArray(data.roster) ? data.roster.map((r, i) => ({ key: `r-${r.id ?? i}`, fullName: r.displayName || '', role: r.role || 'speaker', title: r.title || '', photoPath: r.photoUrl || null })) : []);
+        setPeople(
+          Array.isArray(data.roster)
+            ? data.roster.map((r, i) => ({
+                key: `r-${r.id ?? i}`,
+                fullName: r.displayName || '',
+                role: r.role || 'speaker',
+                title: r.title || '',
+                photoPath: r.photoUrl || null,
+                socialLinks: pickRosterSpeakerSocialInputs(r),
+              }))
+            : [],
+        );
         setSponsorRows(Array.isArray(data.sponsors) ? data.sponsors.map((s, i) => ({ key: `s-${s.id ?? i}`, name: s.name || '', logoPath: s.logo || null })) : []);
         if (data.startsAt || data.startDatetime) setStartDate(new Date(data.startsAt ?? data.startDatetime));
         if (data.endsAt || data.endDatetime) setEndDate(new Date(data.endsAt ?? data.endDatetime));
@@ -409,7 +438,24 @@ export default function CreateEventScreen() {
     onlineLink: locationMode === 'online' ? onlineLink.trim() : undefined,
     audienceGender,
     sponsors: sponsorRows.filter((s) => s.name.trim()).map((s) => ({ name: s.name.trim(), ...(s.logoPath ? { logo: s.logoPath } : {}) })),
-    roster: people.filter((p) => p.fullName.trim()).map((p, idx) => ({ role: p.role, displayName: p.fullName.trim(), title: p.title.trim() || null, sortOrder: idx, photoUrl: p.photoPath || null })),
+    roster: people
+      .filter((p) => p.fullName.trim())
+      .map((p, idx) => {
+        const base = {
+          role: p.role,
+          displayName: p.fullName.trim(),
+          title: p.title.trim() || null,
+          sortOrder: idx,
+          photoUrl: p.photoPath || null,
+        };
+        if (isSpeakerRosterRole(p.role)) {
+          return {
+            ...base,
+            ...buildSpeakerRosterSocialLinksPayload(p.socialLinks || getEmptySocialLinkValues()),
+          };
+        }
+        return base;
+      }),
   };
   }, [values, startDate, endDate, coverImagePath, locationMode, locationPin, ticketPaid, onlineLink, audienceGender, eventFormat, sponsorRows, people]);
 
@@ -470,8 +516,33 @@ export default function CreateEventScreen() {
   const openAddPerson = () => {
     setEditingPersonKey(null);
     setDraftPhotoPick(null);
-    setDraftPerson({ fullName: '', role: eventFormat === 'panel' ? 'panelist' : 'speaker', title: '', photoPath: null });
+    setDraftPerson({
+      fullName: '',
+      role: getDefaultRosterRole(eventFormat),
+      title: '',
+      photoPath: null,
+      socialLinks: getEmptySocialLinkValues(),
+    });
     setPersonModalVisible(true);
+  };
+
+  const handleEventFormatChange = (nextFormat) => {
+    if (nextFormat === eventFormat) return;
+
+    const mismatchIssues = getRosterFormatMismatchIssues(nextFormat, people);
+    if (mismatchIssues.length) {
+      Alert.alert(
+        'Update lineup?',
+        `${formatKeyToDisplayLabel(nextFormat)} uses different roles than your current lineup. You can edit or remove people after switching.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: () => setEventFormat(nextFormat) },
+        ],
+      );
+      return;
+    }
+
+    setEventFormat(nextFormat);
   };
 
   const openEditPerson = (row) => {
@@ -479,7 +550,13 @@ export default function CreateEventScreen() {
     if (!person) return;
     setEditingPersonKey(person.key);
     setDraftPhotoPick(null);
-    setDraftPerson({ fullName: person.fullName || '', role: person.role || 'speaker', title: person.title || '', photoPath: person.photoPath || null });
+    setDraftPerson({
+      fullName: person.fullName || '',
+      role: person.role || 'speaker',
+      title: person.title || '',
+      photoPath: person.photoPath || null,
+      socialLinks: person.socialLinks || pickRosterSpeakerSocialInputs(person),
+    });
     setPersonModalVisible(true);
   };
 
@@ -496,7 +573,15 @@ export default function CreateEventScreen() {
     try {
       let photoPath = draftPerson.photoPath || null;
       if (draftPhotoPick) photoPath = await uploadEventCoverImage(draftPhotoPick);
-      const row = { fullName: draftPerson.fullName.trim(), role: draftPerson.role, title: draftPerson.title.trim(), photoPath: photoPath || null };
+      const row = {
+        fullName: draftPerson.fullName.trim(),
+        role: draftPerson.role,
+        title: draftPerson.title.trim(),
+        photoPath: photoPath || null,
+        socialLinks: isSpeakerRosterRole(draftPerson.role)
+          ? draftPerson.socialLinks || getEmptySocialLinkValues()
+          : getEmptySocialLinkValues(),
+      };
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       if (editingPersonKey) setPeople((prev) => prev.map((p) => (p.key === editingPersonKey ? { ...p, ...row } : p)));
       else setPeople((prev) => [...prev, { key: `np-${Date.now()}`, ...row }]);
@@ -855,51 +940,6 @@ export default function CreateEventScreen() {
             />
             <AudienceDropdown value={audienceGender} onChange={setAudienceGender} />
             <View style={{ marginTop: 24 }}>
-              <Text style={eventStyles.sectionTitle}>Waitlist</Text>
-              <Pressable
-                onPress={() => setEnableWaitlist((v) => !v)}
-                style={{
-                  marginTop: 10,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: enableWaitlist ? '#FF7A00' : '#E5E7EB',
-                  backgroundColor: enableWaitlist ? '#FFF7ED' : '#FAFAFA',
-                  paddingHorizontal: 14,
-                  paddingVertical: 13,
-                }}
-              >
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827' }}>Enable waitlist</Text>
-                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4, lineHeight: 17 }}>
-                    Auto-fill spots when someone cancels a full event.
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    width: 48,
-                    height: 28,
-                    borderRadius: 14,
-                    backgroundColor: enableWaitlist ? '#FF7A00' : '#D1D5DB',
-                    justifyContent: 'center',
-                    paddingHorizontal: 3,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 11,
-                      backgroundColor: '#fff',
-                      alignSelf: enableWaitlist ? 'flex-end' : 'flex-start',
-                    }}
-                  />
-                </View>
-              </Pressable>
-            </View>
-            <View style={{ marginTop: 24 }}>
               <Text style={eventStyles.sectionTitle}>Ticketing & Capacity</Text>
               <View style={{ backgroundColor: '#F9FAFB', borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB', padding: 14, gap: 14 }}>
                 <View>
@@ -1078,7 +1118,7 @@ export default function CreateEventScreen() {
         onSelectCategory={(item) => setValues((p) => ({ ...p, interestId: String(item.id) }))}
         eventFormats={EVENT_FORMAT_OPTIONS}
         selectedEventFormat={eventFormat}
-        onSelectEventFormat={setEventFormat}
+        onSelectEventFormat={handleEventFormatChange}
         primary="#FF7A00"
         primarySoft="#FFF7ED"
       />
@@ -1113,6 +1153,7 @@ export default function CreateEventScreen() {
       <SpeakerEditModal
         visible={personModalVisible}
         onClose={() => setPersonModalVisible(false)}
+        eventFormat={eventFormat}
         personSaving={personSaving}
         editingPersonKey={editingPersonKey}
         draftPerson={draftPerson}
